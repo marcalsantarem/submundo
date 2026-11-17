@@ -1,0 +1,80 @@
+{
+  "version": "0.1.0",
+  "sprites": {
+    "wraith_warrior": {
+      "key": "wraith_warrior",
+      "file": "wraith_warrior.png",
+      "width": 128,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "idle0",
+        "idle1",
+        "attack",
+        "dash"
+      ]
+    },
+    "abyssal_slime": {
+      "key": "abyssal_slime",
+      "file": "abyssal_slime.png",
+      "width": 64,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "idle0",
+        "idle1"
+      ]
+    },
+    "bone_sentinel": {
+      "key": "bone_sentinel",
+      "file": "bone_sentinel.png",
+      "width": 64,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "idle0",
+        "attack"
+      ]
+    },
+    "infernal_warden": {
+      "key": "infernal_warden",
+      "file": "infernal_warden.png",
+      "width": 128,
+      "height": 64,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "frames": [
+        "idle",
+        "slam"
+      ]
+    },
+    "dungeon_tiles": {
+      "key": "dungeon_tiles",
+      "file": "dungeon_tiles.png",
+      "width": 64,
+      "height": 16,
+      "frameWidth": 16,
+      "frameHeight": 16,
+      "frames": [
+        "floor_dark",
+        "floor_cracked",
+        "wall_abyssal",
+        "portal_soul"
+      ]
+    },
+    "soul_orb": {
+      "key": "soul_orb",
+      "file": "soul_orb.png",
+      "width": 16,
+      "height": 16,
+      "frameWidth": 16,
+      "frameHeight": 16,
+      "frames": [
+        "idle"
+      ]
+    }
+  }
+}

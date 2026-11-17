@@ -1,0 +1,46 @@
+{
+  "version": "0.1.0",
+  "locale": "pt-BR",
+  "entries": {
+    "dungeon_enter": {
+      "id": "dungeon_enter",
+      "speaker": "Emissário Celestial",
+      "title": "Fenda do Submundo",
+      "text": "As correntes do Submundo rangem, Guerreiro Espectral. Expurgue as quatro câmaras e reivindique a cabeça do Carcereiro Infernal.",
+      "shortText": "Adentrando a masmorra. Expurgue as câmaras até o Carcereiro Infernal."
+    },
+    "room_clear": {
+      "id": "room_clear",
+      "speaker": "Sistema",
+      "title": "Câmara Expurgada",
+      "text": "O último eco abissal se desfaz em cinzas. As Almas convergem para o seu Selo e o caminho adiante se abre.",
+      "shortText": "Câmara expurgada! O caminho adiante foi liberado."
+    },
+    "boss_intro": {
+      "id": "boss_intro",
+      "speaker": "Carcereiro Infernal",
+      "title": "Sala 5 — O Carcereiro Infernal",
+      "text": "Mais um cão acorrentado pelo Empíreo... Suas cinzas alimentarão minhas fornalhas, Guerreiro Espectral!",
+      "shortText": "Carcereiro Infernal: 'Suas cinzas alimentarão minhas fornalhas, Espectro!'"
+    },
+    "run_victory": {
+      "id": "run_victory",
+      "speaker": "Emissário Celestial",
+      "title": "Carcereiro Abatido — Extração Completa",
+      "text": "O Carcereiro Infernal tombou. Retorne ao Refúgio do Submundo com suas Almas, seus espólios e a Essência tomada.",
+      "shortText": "Vitória! Retornando ao Refúgio do Submundo com Almas e todos os espólios."
+    },
+    "run_death": {
+      "id": "run_death",
+      "speaker": "Emissário Celestial",
+      "title": "Forma Espectral Desfeita",
+      "text": "Sua carcaça etérea se desfez nas sombras. O Selo puxa seu espírito de volta ao Refúgio do Submundo: os espólios ficaram para trás, mas suas Almas permanecem.",
+      "shortText": "Você tombou. Retornando ao Refúgio do Submundo com suas Almas preservadas."
+    }
+  },
+  "dungeon_enter": "As correntes do Submundo rangem, Guerreiro Espectral. Expurgue as quatro câmaras e reivindique a cabeça do Carcereiro Infernal.",
+  "room_clear": "O último eco abissal se desfaz em cinzas. As Almas convergem para o seu Selo e o caminho adiante se abre.",
+  "boss_intro": "Mais um cão acorrentado pelo Empíreo... Suas cinzas alimentarão minhas fornalhas, Guerreiro Espectral!",
+  "run_victory": "O Carcereiro Infernal tombou. Retorne ao Refúgio do Submundo com suas Almas, seus espólios e a Essência tomada.",
+  "run_death": "Sua carcaça etérea se desfez nas sombras. O Selo puxa seu espírito de volta ao Refúgio do Submundo: os espólios ficaram para trás, mas suas Almas permanecem."
+}
