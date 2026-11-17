@@ -39,7 +39,7 @@
 | T-035 | Cena interativa do Refúgio no Submundo (`src/view/scenes/HubScene.ts`) com Portal da Masmorra, Altar, Ferreiro, Baú persistente e movimentação híbrida (tam. M) | M3 | AG02 (UI) | feita |
 | T-036 | Integração `HubScene ⇄ DungeonScene` (aplicar bônus do Altar e gear salvo na entrada, drop de Essência de General no Boss e gravação do retorno ao Hub) em `src/view/scenes/DungeonScene.ts` (tam. M) | M3 | AG01 (Gameplay) | feita |
 | T-037 | Registrar `HubScene` em `src/main.ts` e `BootScene.ts` (pré-carregar `hub_tiles`/`hub_npcs`, iniciar no Refúgio) e subir versão para `0.3.0` (tam. P) | M3 | AG07 (Arquiteto) | feita |
-| T-038 | Validação do M3 (suíte 3x, Playwright percorrendo Hub → Altar/Ferreiro → Masmorra → retorno ao Hub, capturas PC/Mobile, `docs/qa/qa-M3.md`) e tag `v0.3.0` (tam. M) | M3 | AG03 (QA) + AG00 (Líder) | em andamento |
+| T-038 | Validação do M3 (suíte 3x, Playwright percorrendo Hub → Altar/Ferreiro → Masmorra → retorno ao Hub, capturas PC/Mobile, `docs/qa/qa-M3.md`) e tag `v0.3.0` (tam. M) | M3 | AG03 (QA) + AG00 (Líder) | feita (passa com 2 ressalvas menores) |
 | T-039 | Ressalva do QA do M2 na UI: evitar sobreposição de nome longo sobre `statsText` na Mochila em `src/view/ui/InventoryModal.ts` (tam. P) | M3 | AG02 (UI) | feita |
 | T-040 | Ressalva do QA do M2 nos assets: remover cópia redundante `public/assets/icons/submundo_icon_master.png` (`~1,30 MB`) do bundle final `dist/` (tam. P) | M3 | AG08 (Arte) | feita |
 | T-041 | Contratos de tipos da Campanha (Prólogo + Ato 1), Diálogos com Retratos (`PortraitId`, `CampaignStageId`, `CampaignStageDef`) e campos de campanha em `SaveProfile` em `src/core/index.ts` (tam. P) | M4 | AG07 (Arquiteto) | a fazer |
@@ -52,4 +52,5 @@
 | T-048 | Integração dos estágios da Campanha, evento narrativo da Queda da Vila / Pacto Celestial e gatilhos de SFX (`SoundManager`) em `src/view/scenes/DungeonScene.ts` (tam. M) | M4 | AG01 (Gameplay) | a fazer |
 | T-049 | Pré-carregar `portraits`, `village_tiles` e `village_npcs` em `src/view/scenes/BootScene.ts` e subir versão para `0.4.0` em `package.json`, `src/version.ts` e `tests/core/architecture.test.ts` (tam. P) | M4 | AG07 (Arquiteto) | a fazer |
 | T-050 | Validação do M4 (suíte 3x, Playwright validando Prólogo → Transição → Ato 1, retratos 2D, 30+ afixos e SFX Web Audio, capturas PC/Mobile, `docs/qa/qa-M4.md`) e tag `v0.4.0` (tam. M) | M4 | AG03 (QA) + AG00 (Líder) | a fazer |
+| T-051 | Ressalvas menores do QA do M3 no `BlacksmithModal.ts`: ajustar posição/wrap de `costText` no card `Forjar Relíquia Lendária` (`800x600`) e remover sufixo `+N` duplicado em `row.nameText` (tam. P) | M4 | AG02 (UI) | a fazer |
 
