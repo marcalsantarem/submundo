@@ -1,6 +1,7 @@
 import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { GAME_VERSION } from '../../src/version';
 
 test.describe('SUBMUNDO M1 — Real Browser E2E Validation (PC 800x600 & Mobile 9:16)', () => {
   test('renders DungeonScene without console/page errors, validates skills & 5-room Boss progression, and captures PC/Mobile screenshots', async ({
@@ -54,7 +55,7 @@ test.describe('SUBMUNDO M1 — Real Browser E2E Validation (PC 800x600 & Mobile 
       };
     });
 
-    expect(initialCheck.title).toContain('SUBMUNDO v0.1.0');
+    expect(initialCheck.title).toContain(`SUBMUNDO v${GAME_VERSION}`);
     expect(initialCheck.hasCanvas).toBe(true);
     expect(initialCheck.canvasWidth).toBe(800);
     expect(initialCheck.canvasHeight).toBe(600);

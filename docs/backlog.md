@@ -22,8 +22,8 @@
 | T-018 | Sinergias das 3 Forças no combate (`Brasa` 5 cargas, `Sangramento & Roubo de Vida`, `Julgamento & Raio` em críticos) e poderes lendários em `src/core/combat/` (tam. M) | M2 | AG01 (Gameplay) | feita |
 | T-019 | Painel responsivo de Inventário e Equipamentos (4 slots, cores de raridade, comparação de atributos e equipar com 1 toque) em `src/view/ui/` (tam. M) | M2 | AG02 (UI) | feita |
 | T-020 | Drops físicos na `DungeonScene.ts`, coleta de itens, aplicação de equipamentos/sinergias em tempo real e resumo de espólios extraídos/perdidos (tam. M) | M2 | AG01 (Gameplay) | feita |
-| T-021 | Subir versão do projeto para `0.2.0` em `package.json`, `src/version.ts` e `tests/core/architecture.test.ts` (tam. P) | M2 | AG07 (Arquiteto) | em andamento |
-| T-022 | Validação do M2 (suíte 3x, Playwright, capturas PC `800x600` e Mobile `9:16`, `docs/qa/qa-M2.md`) e tag `v0.2.0` (tam. M) | M2 | AG03 (QA) + AG00 (Líder) | a fazer |
+| T-021 | Subir versão do projeto para `0.2.0` em `package.json`, `src/version.ts` e `tests/core/architecture.test.ts` (tam. P) | M2 | AG07 (Arquiteto) | feita |
+| T-022 | Validação do M2 (suíte 3x, Playwright, capturas PC `800x600` e Mobile `9:16`, `docs/qa/qa-M2.md`) e tag `v0.2.0` (tam. M) | M2 | AG03 (QA) + AG00 (Líder) | em andamento |
 | T-023 | Habilitar multi-touch (`input: { activePointers: 4 }`) em `src/main.ts` e `touch-action: none` em `index.html` para uso simultâneo de joystick e skills no celular (tam. P) | M2 | AG07 (Arquiteto) | feita |
 | T-024 | Garantir suporte a múltiplos dedos e `pointercancel` no `VirtualJoystick.ts` e botões do `DungeonHud.ts` (tam. P) | M2 | AG02 (UI) | feita |
 | T-025 | Ajustar balanceamento inicial do Boss (`infernal_warden`) e monstros em `src/data/monsters.json` após feedback de dificuldade no teste real (tam. P) | M2 | AG04 (Sistemas/Meta) | feita |
