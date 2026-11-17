@@ -359,4 +359,246 @@ export class CombatVfxManager {
       },
     });
   }
+
+  public showEmberExplosion(x: number, y: number, radius: number): void {
+    const effectiveRadius = Math.max(20, radius);
+
+    const blast = this.scene.add.graphics({ x, y }).setDepth(41);
+    blast.fillStyle(0xef4444, 0.35);
+    blast.fillCircle(0, 0, effectiveRadius);
+    blast.fillStyle(0xf97316, 0.45);
+    blast.fillCircle(0, 0, effectiveRadius * 0.58);
+    blast.fillStyle(0xfacc15, 0.75);
+    blast.fillCircle(0, 0, effectiveRadius * 0.25);
+    blast.lineStyle(3, 0xf97316, 0.95);
+    blast.strokeCircle(0, 0, effectiveRadius);
+    blast.lineStyle(1.5, 0xef4444, 0.85);
+    blast.strokeCircle(0, 0, effectiveRadius * 0.78);
+    blast.setScale(0.3);
+
+    this.scene.tweens.add({
+      targets: blast,
+      scaleX: 1.15,
+      scaleY: 1.15,
+      alpha: 0,
+      duration: 340,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        blast.destroy();
+      },
+    });
+
+    const sparkCount = 8;
+    for (let i = 0; i < sparkCount; i++) {
+      const angle = (Math.PI * 2 * i) / sparkCount;
+      const spark = this.scene.add.graphics({ x, y }).setDepth(42);
+      const color = i % 2 === 0 ? 0xf97316 : 0xef4444;
+      spark.fillStyle(color, 1);
+      spark.fillCircle(0, 0, 2.5);
+
+      const dist = effectiveRadius * 0.95;
+      this.scene.tweens.add({
+        targets: spark,
+        x: x + Math.cos(angle) * dist,
+        y: y + Math.sin(angle) * dist,
+        alpha: 0,
+        scaleX: 0.4,
+        scaleY: 0.4,
+        duration: 280,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          spark.destroy();
+        },
+      });
+    }
+  }
+
+  public showLightningChain(points: Array<{ x: number; y: number }>): void {
+    if (points.length < 2) {
+      return;
+    }
+
+    const bolt = this.scene.add.graphics().setDepth(43);
+
+    // Outer yellow/cyan aura segments
+    bolt.lineStyle(4, 0xfacc15, 0.75);
+    this.drawAngularChainPath(bolt, points, 6);
+    bolt.strokePath();
+
+    // Inner bright electric core (#e0fbfc)
+    bolt.lineStyle(2, 0xe0fbfc, 1);
+    this.drawAngularChainPath(bolt, points, 3);
+    bolt.strokePath();
+
+    // Impact nodes at chained targets
+    for (let i = 1; i < points.length; i++) {
+      const pt = points[i];
+      bolt.fillStyle(0xe0fbfc, 0.95);
+      bolt.fillCircle(pt.x, pt.y, 4);
+      bolt.lineStyle(1.5, 0xfacc15, 0.9);
+      bolt.strokeCircle(pt.x, pt.y, 8);
+    }
+
+    this.scene.tweens.add({
+      targets: bolt,
+      alpha: 0,
+      duration: 240,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        bolt.destroy();
+      },
+    });
+  }
+
+  public showBleedEffect(x: number, y: number): void {
+    const splatter = this.scene.add.graphics({ x, y }).setDepth(41);
+    splatter.lineStyle(2, 0xef4444, 0.9);
+    splatter.strokeCircle(0, 0, 9);
+    splatter.fillStyle(0x991b1b, 0.45);
+    splatter.fillCircle(0, 0, 6);
+
+    this.scene.tweens.add({
+      targets: splatter,
+      scaleX: 1.4,
+      scaleY: 1.4,
+      alpha: 0,
+      duration: 280,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        splatter.destroy();
+      },
+    });
+
+    const droplets = [
+      { dx: -7, dy: -4, fall: 14, r: 2.2 },
+      { dx: 6, dy: -6, fall: 16, r: 2.0 },
+      { dx: -3, dy: 3, fall: 18, r: 2.5 },
+      { dx: 8, dy: 2, fall: 15, r: 1.8 },
+      { dx: 0, dy: -8, fall: 17, r: 2.2 },
+    ];
+
+    for (const drop of droplets) {
+      const gfx = this.scene.add
+        .graphics({ x: x + drop.dx, y: y + drop.dy })
+        .setDepth(42);
+      gfx.fillStyle(0xef4444, 0.95);
+      gfx.fillCircle(0, 0, drop.r);
+      gfx.fillStyle(0xfca5a5, 0.8);
+      gfx.fillCircle(-0.5, -0.5, drop.r * 0.4);
+
+      this.scene.tweens.add({
+        targets: gfx,
+        x: x + drop.dx * 1.4,
+        y: y + drop.dy + drop.fall,
+        alpha: 0,
+        scaleX: 0.6,
+        scaleY: 0.8,
+        duration: 380,
+        ease: 'Cubic.easeIn',
+        onComplete: () => {
+          gfx.destroy();
+        },
+      });
+    }
+  }
+
+  public showLootDropBeam(
+    x: number,
+    y: number,
+    rarity: 'common' | 'magic' | 'rare' | 'legendary',
+  ): void {
+    const beamConfig: Record<
+      'common' | 'magic' | 'rare' | 'legendary',
+      { color: number; height: number; width: number }
+    > = {
+      common: { color: 0xe4e4e7, height: 34, width: 6 },
+      magic: { color: 0x38bdf8, height: 48, width: 8 },
+      rare: { color: 0xfacc15, height: 64, width: 10 },
+      legendary: { color: 0xf97316, height: 84, width: 12 },
+    };
+
+    const cfg = beamConfig[rarity];
+    const beam = this.scene.add.graphics({ x, y }).setDepth(39);
+
+    // Outer rarity column
+    beam.fillStyle(cfg.color, 0.28);
+    beam.fillRect(-cfg.width / 2, -cfg.height, cfg.width, cfg.height);
+    // Bright inner core pillar
+    beam.fillStyle(0xffffff, 0.65);
+    beam.fillRect(-1.5, -cfg.height * 0.85, 3, cfg.height * 0.85);
+    // Base ring on the dungeon floor
+    beam.lineStyle(2, cfg.color, 0.95);
+    beam.strokeEllipse(0, 0, cfg.width * 2.2, cfg.width * 0.9);
+
+    this.scene.tweens.add({
+      targets: beam,
+      scaleY: 1.18,
+      alpha: 0,
+      duration: rarity === 'legendary' ? 900 : 680,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        beam.destroy();
+      },
+    });
+  }
+
+  public showItemPickupBanner(
+    x: number,
+    y: number,
+    label: string,
+    colorHex: string,
+  ): void {
+    const safeColor = colorHex && colorHex.trim().length > 0 ? colorHex : '#e4e4e7';
+    const banner = this.scene.add
+      .text(x, y - 16, label, {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: safeColor,
+        stroke: '#09090b',
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(48);
+
+    this.scene.tweens.add({
+      targets: banner,
+      y: y - 46,
+      alpha: 0,
+      duration: 950,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        banner.destroy();
+      },
+    });
+  }
+
+  private drawAngularChainPath(
+    graphics: Phaser.GameObjects.Graphics,
+    points: Array<{ x: number; y: number }>,
+    jitter: number,
+  ): void {
+    graphics.beginPath();
+    graphics.moveTo(points[0].x, points[0].y);
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+      const sign = i % 2 === 0 ? 1 : -1;
+
+      const mid1X = a.x + dx * 0.33 + nx * jitter * sign;
+      const mid1Y = a.y + dy * 0.33 + ny * jitter * sign;
+      const mid2X = a.x + dx * 0.67 - nx * jitter * sign;
+      const mid2Y = a.y + dy * 0.67 - ny * jitter * sign;
+
+      graphics.lineTo(mid1X, mid1Y);
+      graphics.lineTo(mid2X, mid2Y);
+      graphics.lineTo(b.x, b.y);
+    }
+  }
 }

@@ -1,4 +1,4 @@
-import type { HeroStats, Vector2D } from '../index';
+import type { HeroStats, LegendaryPowerId, Vector2D } from '../index';
 
 export const DEFAULT_HERO_STATS: HeroStats = {
   maxHp: 120,
@@ -12,11 +12,22 @@ export const DEFAULT_HERO_STATS: HeroStats = {
   critMultiplier: 1.5,
 };
 
+export interface SpectralMinion {
+  id: string;
+  position: Vector2D;
+  attack: number;
+  attackRange: number;
+  attackCooldownMs: number;
+  nextAttackAtMs: number;
+  expiresAtMs: number;
+}
+
 export interface HeroState {
   id: string;
   name: string;
   position: Vector2D;
   facing: Vector2D;
+  baseStats: HeroStats;
   stats: HeroStats;
   souls: number;
   potionCharges: number;
@@ -24,6 +35,12 @@ export interface HeroState {
   invulnerableUntilMs: number;
   basicAttackReadyAtMs: number;
   skillReadyAtMs: Record<string, number>;
+  lifeSteal: number;
+  cooldownReduction: number;
+  luck: number;
+  equippedForces: Record<'inferno' | 'submundo' | 'empireo', number>;
+  activeLegendaryPowers: LegendaryPowerId[];
+  minions: SpectralMinion[];
   isAlive: boolean;
 }
 
@@ -45,6 +62,7 @@ export function createHero(
     name: 'Guerreiro Espectral',
     position: { x: initialPos.x, y: initialPos.y },
     facing: { x: 1, y: 0 },
+    baseStats: { ...stats },
     stats,
     souls: 0,
     potionCharges: 3,
@@ -52,6 +70,16 @@ export function createHero(
     invulnerableUntilMs: 0,
     basicAttackReadyAtMs: 0,
     skillReadyAtMs: {},
+    lifeSteal: 0,
+    cooldownReduction: 0,
+    luck: 0,
+    equippedForces: {
+      inferno: 0,
+      submundo: 0,
+      empireo: 0,
+    },
+    activeLegendaryPowers: [],
+    minions: [],
     isAlive: stats.hp > 0,
   };
 }

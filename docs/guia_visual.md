@@ -39,6 +39,15 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 | `infernal_warden` | `infernal_warden.png` | `128x64` px | `64x64` px | 2 | `0: idle`, `1: slam` |
 | `dungeon_tiles` | `dungeon_tiles.png` | `64x16` px | `16x16` px | 4 | `0: floor_dark`, `1: floor_cracked`, `2: wall_abyssal`, `3: portal_soul` |
 | `soul_orb` | `soul_orb.png` | `16x16` px | `16x16` px | 1 | `0: idle` |
+| `loot_icons` | `loot_icons.png` | `64x16` px | `16x16` px | 4 | `0: icon_weapon`, `1: icon_armor`, `2: icon_amulet`, `3: icon_ring` |
+| `loot_drops` | `loot_drops.png` | `64x16` px | `16x16` px | 4 | `0: common (#e4e4e7)`, `1: magic (#38bdf8)`, `2: rare (#facc15)`, `3: legendary (#f97316)` |
+
+### 3.1. VFX das 3 Forças e Drops (`src/view/sprites/CombatVfx.ts`)
+
+- **Inferno (`showEmberExplosion`):** Anel e centelhas ígneas em `#f97316` / `#ef4444` / `#facc15`.
+- **Empíreo (`showLightningChain`):** Raios angulares em cadeia com halo `#facc15` e núcleo `#e0fbfc`.
+- **Submundo (`showBleedEffect`):** Impacto carmesim e gotículas descendentes em `#ef4444` / `#991b1b` / `#fca5a5`.
+- **Drops e Coleta (`showLootDropBeam`, `showItemPickupBanner`):** Feixe vertical por raridade (`#e4e4e7`, `#38bdf8`, `#facc15`, `#f97316`) e banner flutuante com contorno `#09090b`.
 
 ---
 

@@ -26,6 +26,9 @@ export interface HudSnapshot {
   skillCooldownsMs: Record<string, number>;
   runStatus: 'in_progress' | 'room_cleared' | 'victory' | 'defeat';
   bannerText?: string;
+  bagCount?: number;
+  equippedCount?: number;
+  lootSummaryText?: string;
 }
 
 interface SkillButtonView {
@@ -58,6 +61,7 @@ export class DungeonHud {
   private readonly callbacks: {
     onUseSkill: (skillId: string) => void;
     onRestartRun: () => void;
+    onToggleInventory?: () => void;
   };
 
   private viewport: ViewportConfig;
@@ -72,6 +76,12 @@ export class DungeonHud {
   private soulsText: Phaser.GameObjects.Text;
   private roomText: Phaser.GameObjects.Text;
   private roomTitleText: Phaser.GameObjects.Text;
+
+  // Compact Bag Button
+  private bagBtnContainer: Phaser.GameObjects.Container;
+  private bagBtnBg: Phaser.GameObjects.Graphics;
+  private bagBtnText: Phaser.GameObjects.Text;
+  private bagBtnZone: Phaser.GameObjects.Zone;
 
   // Boss HP Bar
   private bossContainer: Phaser.GameObjects.Container;
@@ -95,6 +105,7 @@ export class DungeonHud {
   private modalTitleText: Phaser.GameObjects.Text;
   private modalBodyText: Phaser.GameObjects.Text;
   private modalSoulsText: Phaser.GameObjects.Text;
+  private modalLootText: Phaser.GameObjects.Text;
   private restartBtnContainer: Phaser.GameObjects.Container;
   private restartBtnBg: Phaser.GameObjects.Graphics;
   private restartBtnText: Phaser.GameObjects.Text;
@@ -117,7 +128,11 @@ export class DungeonHud {
   constructor(
     scene: Phaser.Scene,
     skills: SkillDef[],
-    callbacks: { onUseSkill: (skillId: string) => void; onRestartRun: () => void }
+    callbacks: {
+      onUseSkill: (skillId: string) => void;
+      onRestartRun: () => void;
+      onToggleInventory?: () => void;
+    }
   ) {
     this.scene = scene;
     this.skills = skills;
@@ -177,6 +192,51 @@ export class DungeonHud {
       })
       .setScrollFactor(0)
       .setDepth(1012);
+
+    // Compact Bag Button ("Bolsa (N)")
+    this.bagBtnBg = scene.add.graphics();
+    this.bagBtnBg.fillStyle(0x162033, 0.94);
+    this.bagBtnBg.fillRoundedRect(-52, -14, 104, 28, 6);
+    this.bagBtnBg.lineStyle(1.5, 0x38bdf8, 0.9);
+    this.bagBtnBg.strokeRoundedRect(-52, -14, 104, 28, 6);
+
+    this.bagBtnText = scene.add
+      .text(0, 0, 'Bolsa (0)', {
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        color: '#e0f2fe',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5, 0.5);
+
+    this.bagBtnZone = scene.add
+      .zone(0, 0, 104, 28)
+      .setOrigin(0.5, 0.5)
+      .setInteractive({ useHandCursor: true });
+
+    this.bagBtnZone.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _lx: number,
+        _ly: number,
+        event?: Phaser.Types.Input.EventData
+      ) => {
+        event?.stopPropagation?.();
+        if (
+          this.lastSnapshot.runStatus === 'victory' ||
+          this.lastSnapshot.runStatus === 'defeat'
+        ) {
+          return;
+        }
+        this.callbacks.onToggleInventory?.();
+      }
+    );
+
+    this.bagBtnContainer = scene.add
+      .container(0, 0, [this.bagBtnBg, this.bagBtnText, this.bagBtnZone])
+      .setScrollFactor(0)
+      .setDepth(1020);
 
     // Boss HP Container
     this.bossBarGraphic = scene.add.graphics();
@@ -257,6 +317,17 @@ export class DungeonHud {
       })
       .setOrigin(0.5, 0.5);
 
+    this.modalLootText = scene.add
+      .text(0, 52, '', {
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        color: '#a5f3fc',
+        align: 'center',
+        wordWrap: { width: 290 },
+      })
+      .setOrigin(0.5, 0.5)
+      .setVisible(false);
+
     this.restartBtnBg = scene.add.graphics();
     this.restartBtnBg.fillStyle(0x9d0208, 0.95);
     this.restartBtnBg.fillRoundedRect(-90, -20, 180, 40, 6);
@@ -303,6 +374,7 @@ export class DungeonHud {
         this.modalTitleText,
         this.modalBodyText,
         this.modalSoulsText,
+        this.modalLootText,
         this.restartBtnContainer,
       ])
       .setScrollFactor(0)
@@ -376,12 +448,13 @@ export class DungeonHud {
   public update(snapshot: HudSnapshot): void {
     this.lastSnapshot = snapshot;
 
-    // 1. Hero HP + Souls + Room Indicator
+    // 1. Hero HP + Souls + Room Indicator + Bag Count
     const clampedHp = Math.max(0, Math.min(snapshot.hp, snapshot.maxHp));
     this.hpText.setText(`HP ${Math.ceil(clampedHp)}/${snapshot.maxHp}`);
     this.soulsText.setText(`Almas: ${snapshot.souls}`);
     this.roomText.setText(`Sala ${snapshot.roomNumber}/${snapshot.totalRooms}`);
     this.roomTitleText.setText(snapshot.roomTitle || '');
+    this.bagBtnText.setText(`Bolsa (${snapshot.bagCount ?? 0})`);
 
     this.drawHeroHpBar(clampedHp, snapshot.maxHp);
 
@@ -454,11 +527,29 @@ export class DungeonHud {
         ? dialoguesData.entries.run_victory
         : dialoguesData.entries.run_death;
 
+      const lootText = snapshot.lootSummaryText?.trim() ?? '';
+      const hasLootSummary = lootText.length > 0;
+
       this.modalTitleText.setText(entry.title);
       this.modalTitleText.setColor(isVictory ? '#ffd166' : '#ff4d6d');
       this.modalBodyText.setText(snapshot.bannerText || entry.text);
       this.modalSoulsText.setText(`Almas preservadas: ${snapshot.souls}`);
-      this.drawModalBackground(isVictory);
+
+      if (hasLootSummary) {
+        this.modalTitleText.setY(-92);
+        this.modalBodyText.setY(-40);
+        this.modalSoulsText.setY(14);
+        this.modalLootText.setY(48).setText(lootText).setVisible(true);
+        this.restartBtnContainer.setY(100);
+      } else {
+        this.modalTitleText.setY(-76);
+        this.modalBodyText.setY(-18);
+        this.modalSoulsText.setY(34);
+        this.modalLootText.setVisible(false);
+        this.restartBtnContainer.setY(82);
+      }
+
+      this.drawModalBackground(isVictory, hasLootSummary);
     } else {
       this.modalContainer.setVisible(false);
     }
@@ -485,11 +576,13 @@ export class DungeonHud {
       this.soulsText.setPosition(12, 34);
       this.roomText.setOrigin(1, 0).setPosition(w - 12, 8);
       this.roomTitleText.setOrigin(1, 0).setPosition(w - 12, 30);
+      this.bagBtnContainer.setPosition(w - 58, h - 222);
     } else {
       this.hpText.setPosition(16, 8);
       this.soulsText.setPosition(230, 16);
       this.roomText.setOrigin(1, 0).setPosition(w - 16, 8);
       this.roomTitleText.setOrigin(1, 0).setPosition(w - 16, 28);
+      this.bagBtnContainer.setPosition(462, 26);
     }
 
     // Boss Container Layout
@@ -514,6 +607,7 @@ export class DungeonHud {
     const modalWidth = isMobile ? w - 32 : 440;
     this.modalTitleText.setWordWrapWidth(modalWidth - 32);
     this.modalBodyText.setWordWrapWidth(modalWidth - 36);
+    this.modalLootText.setWordWrapWidth(modalWidth - 36);
 
     this.update(this.lastSnapshot);
   }
@@ -528,6 +622,7 @@ export class DungeonHud {
     this.soulsText.destroy();
     this.roomText.destroy();
     this.roomTitleText.destroy();
+    this.bagBtnContainer.destroy();
     this.bossContainer.destroy();
     this.bannerContainer.destroy();
     this.modalContainer.destroy();
@@ -724,6 +819,11 @@ export class DungeonHud {
       if (potion) {
         this.callbacks.onUseSkill(potion.id);
       }
+      return;
+    }
+
+    if (key === 'i' || key === 'b') {
+      this.callbacks.onToggleInventory?.();
     }
   }
 
@@ -836,12 +936,12 @@ export class DungeonHud {
     }
   }
 
-  private drawModalBackground(isVictory: boolean): void {
+  private drawModalBackground(isVictory: boolean, hasLootSummary = false): void {
     const w = this.viewport.width;
     const h = this.viewport.height;
     const isMobile = this.viewport.mode === 'mobile_portrait';
     const boxW = isMobile ? w - 32 : 440;
-    const boxH = isMobile ? 250 : 230;
+    const boxH = hasLootSummary ? (isMobile ? 284 : 264) : isMobile ? 250 : 230;
 
     this.modalBackdrop.clear();
     this.modalBackdrop.fillStyle(0x04060a, 0.78);
