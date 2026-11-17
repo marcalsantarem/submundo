@@ -584,6 +584,225 @@ function generateLootDrops() {
   return c;
 }
 
+// --- 9. Hub Tiles (64x16, 4 frames 16x16: refuge_floor, refuge_runes, refuge_wall, refuge_brazier) ---
+function generateHubTiles() {
+  const c = new PixelCanvas(64, 16);
+
+  // Frame 0 (0..15): refuge_floor (ruined stone flagstones, low luminance)
+  {
+    const ox = 0;
+    c.fillRect(ox, 0, 16, 16, '#14141b');
+    c.fillRect(ox + 1, 1, 6, 6, '#1b1b26');
+    c.fillRect(ox + 8, 1, 7, 5, '#171721');
+    c.fillRect(ox + 1, 8, 7, 7, '#171721');
+    c.fillRect(ox + 9, 7, 6, 8, '#1b1b26');
+    // Mortar joints & weathered cracks
+    c.drawLine(ox, 7, ox + 7, 7, '#09090b');
+    c.drawLine(ox + 8, 6, ox + 15, 6, '#09090b');
+    c.drawLine(ox + 7, 0, ox + 7, 15, '#09090b');
+    c.setPixel(ox + 3, 4, '#272730');
+    c.setPixel(ox + 11, 10, '#272730');
+    c.drawLine(ox + 10, 2, ox + 12, 4, '#09090b');
+  }
+
+  // Frame 1 (16..31): refuge_runes (carved sanctuary stone with faint spectral blue runes)
+  {
+    const ox = 16;
+    c.fillRect(ox, 0, 16, 16, '#14141b');
+    c.fillRect(ox + 1, 1, 14, 14, '#181824');
+    c.drawLine(ox, 0, ox + 15, 0, '#09090b');
+    c.drawLine(ox, 15, ox + 15, 15, '#09090b');
+    c.drawLine(ox, 0, ox, 15, '#09090b');
+    c.drawLine(ox + 15, 0, ox + 15, 15, '#09090b');
+    // Subtle rune circle & sigil (#0284c7 / #38bdf8)
+    c.drawLine(ox + 5, 3, ox + 10, 3, '#0284c7');
+    c.drawLine(ox + 5, 12, ox + 10, 12, '#0284c7');
+    c.drawLine(ox + 3, 5, ox + 3, 10, '#0284c7');
+    c.drawLine(ox + 12, 5, ox + 12, 10, '#0284c7');
+    c.drawLine(ox + 7, 4, ox + 7, 11, '#38bdf8');
+    c.drawLine(ox + 8, 4, ox + 8, 11, '#0284c7');
+    c.drawLine(ox + 5, 7, ox + 10, 7, '#38bdf8');
+    c.fillRect(ox + 7, 7, 2, 2, '#e0f2fe');
+  }
+
+  // Frame 2 (32..47): refuge_wall (crumbling sanctuary stone wall with top highlight)
+  {
+    const ox = 32;
+    c.fillRect(ox, 0, 16, 16, '#09090b');
+    // Cracked top bevel
+    c.fillRect(ox, 0, 10, 2, '#3f3f4e');
+    c.fillRect(ox + 11, 1, 5, 1, '#52525b');
+    c.fillRect(ox + 1, 2, 6, 5, '#272730');
+    c.fillRect(ox + 8, 2, 7, 5, '#1f1f29');
+    c.fillRect(ox, 8, 4, 6, '#1f1f29');
+    c.fillRect(ox + 5, 8, 6, 6, '#272730');
+    c.fillRect(ox + 12, 8, 4, 6, '#272730');
+    // Ruin moss & weathered edge
+    c.fillRect(ox + 2, 3, 2, 2, '#3f3f4e');
+    c.fillRect(ox + 9, 9, 2, 2, '#1e3a2f');
+    c.fillRect(ox + 6, 12, 2, 2, '#1e3a2f');
+  }
+
+  // Frame 3 (48..63): refuge_brazier (iron brazier with spectral blue spirit flame)
+  {
+    const ox = 48;
+    // Stone floor beneath
+    c.fillRect(ox, 0, 16, 16, '#14141b');
+    // Soft blue aura on floor
+    c.fillCircle(ox + 8, 8, 6, '#0284c7', 75);
+    // Pedestal & iron bowl
+    c.fillRect(ox + 4, 12, 8, 3, '#09090b');
+    c.fillRect(ox + 5, 13, 6, 2, '#272730');
+    c.fillRect(ox + 3, 8, 10, 5, '#09090b');
+    c.fillRect(ox + 4, 9, 8, 3, '#3f3f46');
+    c.drawLine(ox + 4, 9, ox + 11, 9, '#71717a');
+    // Spectral blue flames (#0284c7 / #38bdf8 / #e0f2fe)
+    c.fillRect(ox + 5, 4, 6, 5, '#0284c7');
+    c.fillRect(ox + 6, 3, 4, 6, '#38bdf8');
+    c.fillRect(ox + 7, 2, 2, 5, '#e0f2fe');
+    c.setPixel(ox + 5, 2, '#38bdf8');
+    c.setPixel(ox + 10, 3, '#38bdf8');
+    c.setPixel(ox + 8, 1, '#e0f2fe');
+  }
+
+  return c;
+}
+
+// --- 10. Hub NPCs (128x32, 4 frames 32x32: emissary, blacksmith, soul_altar, rift_portal) ---
+function generateHubNpcs() {
+  const c = new PixelCanvas(128, 32);
+
+  // Frame 0 (ox = 0): emissary (Celestial Emissary with pale/azure robes, ethereal wings & staff)
+  {
+    const ox = 0;
+    // Ground aura
+    c.fillRect(ox + 10, 27, 12, 2, '#0284c7', 140);
+    // Ethereal folded wings
+    c.fillRect(ox + 4, 10, 5, 11, '#09090b');
+    c.fillRect(ox + 23, 10, 5, 11, '#09090b');
+    c.fillRect(ox + 5, 11, 4, 9, '#0284c7');
+    c.fillRect(ox + 23, 11, 4, 9, '#0284c7');
+    c.drawLine(ox + 5, 12, ox + 7, 18, '#38bdf8');
+    c.drawLine(ox + 26, 12, ox + 24, 18, '#38bdf8');
+    // Robe & cloak
+    c.fillRect(ox + 9, 13, 14, 14, '#09090b');
+    c.fillRect(ox + 10, 14, 12, 12, '#1e1b4b');
+    c.fillRect(ox + 12, 14, 8, 11, '#e4e4e7');
+    c.fillRect(ox + 14, 15, 4, 9, '#94a3b8');
+    c.fillRect(ox + 15, 16, 2, 7, '#38bdf8');
+    // Hooded head & celestial halo
+    c.fillRect(ox + 11, 4, 10, 10, '#09090b');
+    c.fillRect(ox + 12, 5, 8, 8, '#e4e4e7');
+    c.fillRect(ox + 13, 7, 6, 5, '#09090b');
+    // Glowing azure eyes
+    c.fillRect(ox + 14, 9, 1, 2, '#38bdf8');
+    c.fillRect(ox + 17, 9, 1, 2, '#38bdf8');
+    c.setPixel(ox + 14, 9, '#e0f2fe');
+    c.setPixel(ox + 17, 9, '#e0f2fe');
+    // Golden halo & staff
+    c.drawLine(ox + 13, 2, ox + 18, 2, '#facc15');
+    c.setPixel(ox + 12, 3, '#facc15');
+    c.setPixel(ox + 19, 3, '#facc15');
+    c.fillRect(ox + 24, 9, 2, 18, '#71717a');
+    c.fillRect(ox + 23, 6, 4, 4, '#09090b');
+    c.fillRect(ox + 24, 7, 2, 2, '#38bdf8');
+    c.setPixel(ox + 24, 7, '#e0f2fe');
+  }
+
+  // Frame 1 (ox = 32): blacksmith (Spectral Blacksmith with hammer & glowing anvil)
+  {
+    const ox = 32;
+    // Floor shadow
+    c.fillRect(ox + 5, 27, 22, 2, '#09090b', 180);
+    // Blacksmith body (left-center)
+    c.fillRect(ox + 6, 13, 12, 14, '#09090b');
+    c.fillRect(ox + 7, 14, 10, 12, '#3f3f46'); // apron & mail
+    c.fillRect(ox + 9, 15, 6, 9, '#7f1d1d'); // dark leather apron
+    c.fillRect(ox + 10, 17, 4, 3, '#f97316'); // forge ember glow on apron
+    // Helmet / head
+    c.fillRect(ox + 7, 6, 10, 8, '#09090b');
+    c.fillRect(ox + 8, 7, 8, 6, '#52525b');
+    c.fillRect(ox + 9, 9, 6, 3, '#09090b');
+    c.fillRect(ox + 10, 10, 2, 1, '#facc15');
+    c.fillRect(ox + 13, 10, 2, 1, '#facc15');
+    // Raised hammer
+    c.fillRect(ox + 17, 10, 3, 7, '#71717a');
+    c.fillRect(ox + 16, 7, 6, 4, '#09090b');
+    c.fillRect(ox + 17, 8, 4, 2, '#e4e4e7');
+    // Anvil on right
+    c.fillRect(ox + 19, 19, 10, 8, '#09090b');
+    c.fillRect(ox + 18, 19, 11, 3, '#52525b');
+    c.drawLine(ox + 19, 19, ox + 28, 19, '#a1a1aa');
+    c.fillRect(ox + 21, 22, 5, 4, '#3f3f46');
+    c.fillRect(ox + 20, 25, 7, 2, '#52525b');
+    // Spectral/ember sparks on anvil
+    c.setPixel(ox + 23, 17, '#facc15');
+    c.setPixel(ox + 25, 16, '#38bdf8');
+    c.setPixel(ox + 21, 18, '#f97316');
+  }
+
+  // Frame 2 (ox = 64): soul_altar (Runic monolith altar with levitating blue soul flame)
+  {
+    const ox = 64;
+    // Aura under altar
+    c.fillCircle(ox + 16, 14, 11, '#0284c7', 70);
+    // Stepped stone base
+    c.fillRect(ox + 5, 25, 22, 4, '#09090b');
+    c.fillRect(ox + 6, 26, 20, 2, '#272730');
+    c.fillRect(ox + 8, 21, 16, 4, '#09090b');
+    c.fillRect(ox + 9, 22, 14, 2, '#3f3f4e');
+    // Altar pillars & rune tablet
+    c.fillRect(ox + 10, 13, 12, 9, '#09090b');
+    c.fillRect(ox + 11, 14, 10, 7, '#272730');
+    c.fillRect(ox + 12, 14, 8, 2, '#52525b');
+    // Engraved glowing blue runes
+    c.fillRect(ox + 13, 17, 2, 3, '#0284c7');
+    c.fillRect(ox + 17, 17, 2, 3, '#0284c7');
+    c.setPixel(ox + 15, 18, '#38bdf8');
+    c.setPixel(ox + 16, 18, '#38bdf8');
+    // Floating Soul Orb / Flame above altar
+    c.fillCircle(ox + 16, 8, 5, '#0284c7', 190);
+    c.fillCircle(ox + 16, 8, 3.5, '#38bdf8', 240);
+    c.fillCircle(ox + 16, 8, 2, '#e0f2fe', 255);
+    c.setPixel(ox + 16, 2, '#38bdf8');
+    c.setPixel(ox + 12, 6, '#e0f2fe');
+    c.setPixel(ox + 20, 7, '#38bdf8');
+  }
+
+  // Frame 3 (ox = 96): rift_portal (Ruined runic arch framing a swirling blue Rift vortex)
+  {
+    const ox = 96;
+    // Outer stone arch outline & pillars
+    c.fillRect(ox + 4, 4, 24, 25, '#09090b');
+    c.fillRect(ox + 6, 2, 20, 4, '#09090b');
+    // Stone arch blocks
+    c.fillRect(ox + 5, 6, 5, 22, '#272730');
+    c.fillRect(ox + 22, 6, 5, 22, '#272730');
+    c.fillRect(ox + 7, 3, 18, 4, '#3f3f4e');
+    c.drawLine(ox + 7, 3, ox + 24, 3, '#52525b');
+    // Glowing runes on arch pillars
+    c.fillRect(ox + 7, 10, 2, 3, '#38bdf8');
+    c.fillRect(ox + 7, 17, 2, 3, '#0284c7');
+    c.fillRect(ox + 23, 10, 2, 3, '#38bdf8');
+    c.fillRect(ox + 23, 17, 2, 3, '#0284c7');
+    c.fillRect(ox + 15, 4, 2, 2, '#e0f2fe');
+    // Dimensional Rift vortex inside arch
+    c.fillRect(ox + 10, 7, 12, 21, '#09090b');
+    c.fillCircle(ox + 16, 17, 7, '#1e1b4b');
+    c.fillCircle(ox + 16, 17, 5.5, '#0284c7');
+    c.fillCircle(ox + 16, 17, 3.5, '#38bdf8');
+    c.fillCircle(ox + 16, 17, 1.8, '#e0f2fe');
+    // Vortex swirl sparks & threshold
+    c.setPixel(ox + 12, 12, '#e0f2fe');
+    c.setPixel(ox + 20, 21, '#e0f2fe');
+    c.setPixel(ox + 13, 22, '#38bdf8');
+    c.setPixel(ox + 19, 12, '#38bdf8');
+    c.fillRect(ox + 8, 27, 16, 2, '#3f3f4e');
+  }
+
+  return c;
+}
+
 function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
@@ -668,10 +887,30 @@ function main() {
       frames: ['common', 'magic', 'rare', 'legendary'],
       build: generateLootDrops,
     },
+    {
+      key: 'hub_tiles',
+      file: 'hub_tiles.png',
+      width: 64,
+      height: 16,
+      frameWidth: 16,
+      frameHeight: 16,
+      frames: ['refuge_floor', 'refuge_runes', 'refuge_wall', 'refuge_brazier'],
+      build: generateHubTiles,
+    },
+    {
+      key: 'hub_npcs',
+      file: 'hub_npcs.png',
+      width: 128,
+      height: 32,
+      frameWidth: 32,
+      frameHeight: 32,
+      frames: ['emissary', 'blacksmith', 'soul_altar', 'rift_portal'],
+      build: generateHubNpcs,
+    },
   ];
 
   const manifest = {
-    version: '0.2.0',
+    version: '0.3.0',
     sprites: {},
   };
 

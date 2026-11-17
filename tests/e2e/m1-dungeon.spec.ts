@@ -23,6 +23,18 @@ test.describe('SUBMUNDO M1 — Real Browser E2E Validation (PC 800x600 & Mobile 
     // 1. Desktop Landscape (800x600)
     await page.setViewportSize({ width: 800, height: 600 });
     await page.goto('/');
+    await page.evaluate(() => {
+      window.localStorage.clear();
+    });
+
+    await page.waitForFunction(
+      () => typeof window.__SUBMUNDO_HUB_DEBUG__ !== 'undefined',
+      undefined,
+      { timeout: 10000 }
+    );
+    await page.evaluate(() => {
+      window.__SUBMUNDO_HUB_DEBUG__!.enterDungeon();
+    });
 
     await page.waitForFunction(
       () =>

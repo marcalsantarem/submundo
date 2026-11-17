@@ -749,13 +749,13 @@ export class InventoryModal {
     card.powerText.setFontSize(isMobile ? 9 : 10);
     card.powerText.setPosition(right, top);
 
-    card.nameText.setFontSize(isMobile ? 10 : 12);
+    card.nameText.setFontSize(isMobile ? 10 : 11);
     card.nameText.setWordWrapWidth(w - 16);
-    card.nameText.setPosition(left, top + (isMobile ? 14 : 17));
+    card.nameText.setPosition(left, top + (isMobile ? 13 : 16));
 
     card.detailText.setFontSize(isMobile ? 9 : 10);
     card.detailText.setWordWrapWidth(w - 16);
-    card.detailText.setPosition(left, top + (isMobile ? 36 : 42));
+    card.detailText.setPosition(left, top + (isMobile ? 31 : 36));
   }
 
   private layoutBagRow(
@@ -776,7 +776,7 @@ export class InventoryModal {
     const top = -h / 2 + 7;
     const bottom = h / 2 - 7;
 
-    row.nameText.setFontSize(isMobile ? 11 : 12);
+    row.nameText.setFontSize(isMobile ? 10 : 11);
     row.nameText.setWordWrapWidth(w - 105);
     row.nameText.setPosition(left, top);
 
@@ -785,7 +785,7 @@ export class InventoryModal {
 
     row.statsText.setFontSize(10);
     row.statsText.setWordWrapWidth(w - 20);
-    row.statsText.setPosition(left, top + 20);
+    row.statsText.setPosition(left, top + 18);
 
     row.metaText.setFontSize(isMobile ? 9 : 10);
     row.metaText.setWordWrapWidth(w - 86);
@@ -833,6 +833,8 @@ export class InventoryModal {
       const item = snap.equipped[card.slot];
       const cardW = (card.container.getData('cardW') as number) || 150;
       const cardH = (card.container.getData('cardH') as number) || 66;
+      const cardTop = -cardH / 2 + 6;
+      const cardBottom = cardH / 2 - 5;
 
       card.bg.clear();
       if (item) {
@@ -848,14 +850,28 @@ export class InventoryModal {
         );
         card.headerText.setColor(FORCE_HEX[item.force]);
         card.powerText.setText(`P:${item.powerScore}`);
-        card.nameText.setText(item.name);
+
+        this.setTextClamped(card.nameText, item.name, 2);
         card.nameText.setColor(borderHex);
+
+        const minDetailY = cardTop + (isMobile ? 30 : 35);
+        const detailY = Math.max(
+          minDetailY,
+          card.nameText.y + card.nameText.height + (isMobile ? 3 : 4)
+        );
+        card.detailText.setY(detailY);
 
         const bonusLine = this.formatItemBonuses(item, isMobile ? 2 : 3);
         const tail = isMobile
           ? bonusLine || 'Toque p/ remover'
           : `${bonusLine}${item.legendaryPower ? ` | ${item.legendaryPower.name}` : ''}`;
-        card.detailText.setText(tail || 'Equipado (toque p/ remover)');
+        const detailLineH = isMobile ? 11 : 13;
+        const maxDetailLines = cardBottom - detailY >= detailLineH * 2 ? 2 : 1;
+        this.setTextClamped(
+          card.detailText,
+          tail || 'Equipado (toque p/ remover)',
+          maxDetailLines
+        );
         card.detailText.setColor('#cbd5e1');
       } else {
         card.bg.fillStyle(0x111622, 0.78);
@@ -868,6 +884,7 @@ export class InventoryModal {
         card.powerText.setText('');
         card.nameText.setText('— Vazio —');
         card.nameText.setColor('#64748b');
+        card.detailText.setY(cardTop + (isMobile ? 31 : 36));
         card.detailText.setText('Nenhum item equipado');
         card.detailText.setColor('#475569');
       }
@@ -899,6 +916,7 @@ export class InventoryModal {
 
       const rowW = (row.container.getData('rowW') as number) || 316;
       const rowH = (row.container.getData('rowH') as number) || 78;
+      const rowTop = -rowH / 2 + 7;
       const borderNum = RARITY_NUM[item.rarity];
       const borderHex = RARITY_HEX[item.rarity];
 
@@ -907,9 +925,6 @@ export class InventoryModal {
       row.bg.fillRoundedRect(-rowW / 2, -rowH / 2, rowW, rowH, 6);
       row.bg.lineStyle(1.5, borderNum, 0.9);
       row.bg.strokeRoundedRect(-rowW / 2, -rowH / 2, rowW, rowH, 6);
-
-      row.nameText.setText(`[${SLOT_LABELS[item.slot]}] ${item.name}`);
-      row.nameText.setColor(borderHex);
 
       const equippedInSlot = snap.equipped[item.slot];
       const currentScore = equippedInSlot ? equippedInSlot.powerScore : 0;
@@ -920,14 +935,36 @@ export class InventoryModal {
       row.compareText.setText(`P:${item.powerScore} (${deltaStr})`);
       row.compareText.setColor(deltaColor);
 
+      const availableNameW = Math.max(
+        120,
+        rowW - 20 - Math.ceil(row.compareText.width) - 10
+      );
+      row.nameText.setWordWrapWidth(availableNameW);
+      this.setTextClamped(
+        row.nameText,
+        `[${SLOT_LABELS[item.slot]}] ${item.name}`,
+        2
+      );
+      row.nameText.setColor(borderHex);
+
+      const statsY = Math.max(
+        rowTop + 18,
+        row.nameText.y + row.nameText.height + 4
+      );
+      row.statsText.setY(statsY);
       const bonusStr = this.formatItemBonuses(item, isMobile ? 3 : 4);
-      row.statsText.setText(bonusStr || 'Sem bônus adicionais');
+      const maxStatsLines = statsY + 26 <= row.metaText.y - 3 ? 2 : 1;
+      this.setTextClamped(
+        row.statsText,
+        bonusStr || 'Sem bônus adicionais',
+        maxStatsLines
+      );
 
       const forceLabel = FORCE_LABELS[item.force];
       const meta = item.legendaryPower
         ? `${forceLabel} · ${item.legendaryPower.name}`
         : `${forceLabel} · ${item.affixes.length} afixo(s)`;
-      row.metaText.setText(meta);
+      this.setTextClamped(row.metaText, meta, 1);
       row.metaText.setColor(FORCE_HEX[item.force]);
     }
 
@@ -959,6 +996,41 @@ export class InventoryModal {
     bg.lineStyle(1, enabled ? 0x64748b : 0x334155, 0.9);
     bg.strokeRoundedRect(-34, -13, 68, 26, 4);
     label.setColor(enabled ? '#f8fafc' : '#475569');
+  }
+
+  private setTextClamped(
+    textObj: Phaser.GameObjects.Text,
+    fullText: string,
+    maxLines: number
+  ): void {
+    const cleanText = fullText.trim();
+    if (!cleanText || maxLines <= 0) {
+      textObj.setText('');
+      return;
+    }
+
+    const wrapped = textObj.getWrappedText(cleanText);
+    if (wrapped.length <= maxLines) {
+      textObj.setText(cleanText);
+      return;
+    }
+
+    let low = 1;
+    let high = cleanText.length - 1;
+    let best = '...';
+
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      const candidate = `${cleanText.slice(0, mid).trimEnd()}...`;
+      if (textObj.getWrappedText(candidate).length <= maxLines) {
+        best = candidate;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    textObj.setText(best);
   }
 
   private formatItemBonuses(item: ItemInstance, maxEntries: number): string {

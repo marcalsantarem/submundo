@@ -108,3 +108,22 @@
 - Chave `extraction_loot_kept`: Confirmação na vitória de que Almas, Essências e equipamentos coletados foram garantidos no **Refúgio do Submundo**.
 - Chave `death_loot_lost`: Aviso de derrota reforçando a regra central: equipamentos não extraídos se perdem na masmorra, mas as **Almas** permanecem.
 
+---
+
+## 7. Refúgio no Submundo: NPCs, Estações e Diálogos (M3)
+
+### 7.1. Glossário do Refúgio (NPCs, Estações e Recursos)
+| ID / Chave | Nome Oficial (pt-BR) | Papel no Refúgio / Loop |
+| :--- | :--- | :--- |
+| `celestial_emissary` | **Emissário Celestial** | Anjo que impôs o Selo ao Espectro; recepciona o herói no Refúgio e orienta a caçada aos Generais. |
+| `spectral_blacksmith` | **Ferreiro Espiritual** | Espírito aliado que aprimora itens (`+1`, `+2`, `+3`) com **Almas** e forja relíquias **Lendárias** com **Essência de General**. |
+| `soul_altar` | **Altar de Almas** | Marco ancestral onde **Almas** preservadas são canalizadas em fortalecimentos permanentes para o Guerreiro Espectral. |
+| `rift_portal` | **Portal da Fenda** | Limiar abissal no Refúgio que inicia uma nova incursão na masmorra (4 salas + Boss). |
+| `general_essence` | **Essência de General** | Recurso raro obtido ao derrotar Bosses (como o **Carcereiro Infernal**) e usado em forjas Lendárias e desbloqueios avançados. |
+
+### 7.2. Diretrizes de Diálogos do Refúgio e Essência (M3)
+- Chave `hub_welcome`: Boas-vindas do **Emissário Celestial** ao **Refúgio do Submundo**, apresentando o papel do Altar e do Ferreiro.
+- Chave `altar_intro`: Orientação do **Altar de Almas** sobre a conversão de **Almas** em bônus permanentes que sobrevivem às mortes.
+- Chave `blacksmith_intro`: Apresentação do **Ferreiro Espiritual** detalhando o aprimoramento `+1/+2/+3` com **Almas** e a forja Lendária via **Essência de General**.
+- Chave `portal_enter`: Chamado do **Portal da Fenda** convidando o Espectro para iniciar uma nova incursão.
+- Chave `boss_essence_drop`: Alerta de conquista ao obter **Essência de General** do **Carcereiro Infernal**, conectando a vitória à forja do Refúgio.

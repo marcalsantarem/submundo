@@ -64,6 +64,41 @@
       "title": "Espólios Perdidos na Escuridão",
       "text": "O Selo resgatou seu espírito e suas Almas, mas os equipamentos coletados durante a incursão ficaram perdidos nos escombros da masmorra.",
       "shortText": "Equipamentos não extraídos foram perdidos; suas Almas permanecem."
+    },
+    "hub_welcome": {
+      "id": "hub_welcome",
+      "speaker": "Emissário Celestial",
+      "title": "O Refúgio do Submundo",
+      "text": "Ergue-te entre as cinzas da tua Vila Natal, Guerreiro Espectral. Neste Refúgio do Submundo, o Altar de Almas e o Ferreiro Espiritual forjam tua lâmina para a próxima caçada.",
+      "shortText": "Bem-vindo ao Refúgio do Submundo. Prepare-se no Altar e no Ferreiro antes da Fenda."
+    },
+    "altar_intro": {
+      "id": "altar_intro",
+      "speaker": "Altar de Almas",
+      "title": "Altar de Almas",
+      "text": "As Almas arrancadas da escuridão nunca se perdem com a queda. Ofereça-as aqui para gravar força, vigor e velocidade permanentes no seu Selo Espectral.",
+      "shortText": "Canalize suas Almas no Altar para elevar atributos permanentes do Espectro."
+    },
+    "blacksmith_intro": {
+      "id": "blacksmith_intro",
+      "speaker": "Ferreiro Espiritual",
+      "title": "Forja do Ferreiro Espiritual",
+      "text": "Minhas brasas azuis temperam o aço que trouxeste das trevas: gaste Almas para aprimorar teus itens em +1, +2 e +3, ou entregue uma Essência de General para forjar relíquias Lendárias.",
+      "shortText": "Aprimore itens (+1/+2/+3) com Almas ou forje relíquias Lendárias com Essência de General."
+    },
+    "portal_enter": {
+      "id": "portal_enter",
+      "speaker": "Portal da Fenda",
+      "title": "Portal da Fenda",
+      "text": "As correntes abissais vibram além do limiar. Atravesse o Portal da Fenda para uma nova incursão — vença o Carcereiro Infernal se quiser extrair seus espólios.",
+      "shortText": "Atravesse o Portal da Fenda para iniciar uma nova incursão na masmorra."
+    },
+    "boss_essence_drop": {
+      "id": "boss_essence_drop",
+      "speaker": "Sistema",
+      "title": "Essência de General Obtida",
+      "text": "O coração abissal do Carcereiro Infernal condensou-se em Essência de General! Leve-a ao Refúgio do Submundo para desbloquear forjas Lendárias com o Ferreiro Espiritual.",
+      "shortText": "Essência de General obtida do Carcereiro Infernal! Use-a na forja do Refúgio."
     }
   },
   "dungeon_enter": "As correntes do Submundo rangem, Guerreiro Espectral. Expurgue as quatro câmaras e reivindique a cabeça do Carcereiro Infernal.",
@@ -74,5 +109,10 @@
   "loot_drop_legendary": "Lendário encontrado! Extraia após o Boss para mantê-lo.",
   "inventory_hint": "Abra o inventário para equipar os 4 slots e combinar as 3 Forças.",
   "extraction_loot_kept": "Extração completa! Todos os equipamentos saqueados foram mantidos.",
-  "death_loot_lost": "Equipamentos não extraídos foram perdidos; suas Almas permanecem."
+  "death_loot_lost": "Equipamentos não extraídos foram perdidos; suas Almas permanecem.",
+  "hub_welcome": "Bem-vindo ao Refúgio do Submundo. Prepare-se no Altar e no Ferreiro antes da Fenda.",
+  "altar_intro": "Canalize suas Almas no Altar para elevar atributos permanentes do Espectro.",
+  "blacksmith_intro": "Aprimore itens (+1/+2/+3) com Almas ou forje relíquias Lendárias com Essência de General.",
+  "portal_enter": "Atravesse o Portal da Fenda para iniciar uma nova incursão na masmorra.",
+  "boss_essence_drop": "Essência de General obtida do Carcereiro Infernal! Use-a na forja do Refúgio."
 }
