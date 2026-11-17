@@ -47,3 +47,17 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 - Os spritesheets seguem grid horizontal estrito (`width = frameWidth * frames.length`, `height = frameHeight`).
 - Para regenerar todos os assets via código: `node scripts/art/generateSprites.mjs`.
 - Qualquer arquivo `.png` em `public/assets/sprites/` pode ser editado ou substituído no LibreSprite/Pixelorama mantendo a mesma chave, dimensão de frame e ordem de índices em `manifest.json`.
+
+---
+
+## 5. Ícone Oficial do App (`public/icons/`)
+
+- **Arte-mestre:** `assets/icons/submundo_icon_master.png` (`1024x1024` px, PNG RGB opaco full-bleed — Guerreiro Espectral envolto em chamas espirituais azuis empunhando lâmina rúnica sobre fundo abissal).
+- **Comando de regeneração:** `python3 scripts/art/generateIcons.py` (utiliza Pillow `Resampling.LANCZOS` e nitidez suave abaixo de `256x256` px).
+
+| Arquivo | Dimensões | Formato | Uso |
+| :--- | :--- | :--- | :--- |
+| `public/icons/icon-512.png` | `512x512` px | PNG RGB | Ícone PWA / Splash em alta resolução |
+| `public/icons/icon-192.png` | `192x192` px | PNG RGB | Ícone padrão Android / Web App Manifest |
+| `public/icons/apple-touch-icon.png` | `180x180` px | PNG RGB (opaco full-bleed) | Ícone de tela inicial iOS / Safari |
+
