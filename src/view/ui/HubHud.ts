@@ -9,6 +9,11 @@ export interface HubHudSnapshot {
   stashCount: number;
   nearbyStationLabel?: string;
   bannerText?: string;
+  locationTitle?: string;
+  stageLabel?: string;
+  canCycleStage?: boolean;
+  isPrologue?: boolean;
+  isMuted?: boolean;
 }
 
 interface MovementKeys {
@@ -33,15 +38,19 @@ interface ActionButtonView {
   height: number;
 }
 
+export interface HubHudCallbacks {
+  onOpenAltar: () => void;
+  onOpenBlacksmith: () => void;
+  onOpenStash: () => void;
+  onEnterDungeon: () => void;
+  onInteract?: () => void;
+  onCycleStage?: () => void;
+  onToggleMute?: () => void;
+}
+
 export class HubHud {
   private readonly scene: Phaser.Scene;
-  private readonly callbacks: {
-    onOpenAltar: () => void;
-    onOpenBlacksmith: () => void;
-    onOpenStash: () => void;
-    onEnterDungeon: () => void;
-    onInteract?: () => void;
-  };
+  private readonly callbacks: HubHudCallbacks;
 
   private viewport: ViewportConfig;
   private readonly joystick: VirtualJoystick;
@@ -63,6 +72,8 @@ export class HubHud {
   private readonly stashBtn: ActionButtonView;
   private readonly enterBtn: ActionButtonView;
   private readonly interactBtn: ActionButtonView;
+  private readonly stageBtn: ActionButtonView;
+  private readonly muteBtn: ActionButtonView;
 
   private lastSnapshot: HubHudSnapshot = {
     souls: 0,
@@ -71,16 +82,7 @@ export class HubHud {
     stashCount: 0,
   };
 
-  constructor(
-    scene: Phaser.Scene,
-    callbacks: {
-      onOpenAltar: () => void;
-      onOpenBlacksmith: () => void;
-      onOpenStash: () => void;
-      onEnterDungeon: () => void;
-      onInteract?: () => void;
-    }
-  ) {
+  constructor(scene: Phaser.Scene, callbacks: HubHudCallbacks) {
     this.scene = scene;
     this.callbacks = callbacks;
     this.viewport = resolveViewportConfig(
@@ -192,6 +194,27 @@ export class HubHud {
     );
     this.interactBtn.container.setVisible(false);
 
+    this.stageBtn = this.createActionButton(
+      'A Gruta da Cachoeira',
+      0x132238,
+      0x64748b,
+      '#e2e8f0',
+      () => {
+        if (this.lastSnapshot.canCycleStage) {
+          this.callbacks.onCycleStage?.();
+        }
+      }
+    );
+    this.stageBtn.container.setVisible(false);
+
+    this.muteBtn = this.createActionButton(
+      'Som',
+      0x0f172a,
+      0x38bdf8,
+      '#e0f2fe',
+      () => this.callbacks.onToggleMute?.()
+    );
+
     // Movement Keys (WASD + Arrows)
     if (scene.input.keyboard) {
       this.movementKeys = {
@@ -256,10 +279,48 @@ export class HubHud {
   public update(snap: HubHudSnapshot): void {
     this.lastSnapshot = snap;
 
+    const isPrologue = Boolean(snap.isPrologue);
+    const locationTitle =
+      snap.locationTitle?.trim() ||
+      (isPrologue ? 'Vila Natal — Campo de Treino' : 'Refúgio do Submundo');
+
+    this.locationText
+      .setText(locationTitle)
+      .setColor(isPrologue ? '#a7f3d0' : '#ffd166');
     this.soulsText.setText(`Almas: ${snap.souls}`);
     this.essencesText.setText(`Essências: ${snap.generalEssences}`);
     this.gearText.setText(`Equip: ${snap.equippedCount}/4 | Baú: ${snap.stashCount}`);
     this.stashBtn.label.setText(`Baú (${snap.stashCount})`);
+    this.altarBtn.label.setText(isPrologue ? 'Santuário' : 'Altar');
+    this.enterBtn.label.setText(
+      isPrologue ? 'Iniciar Missão' : 'Entrar na Fenda'
+    );
+
+    const muted = Boolean(snap.isMuted);
+    this.muteBtn.label
+      .setText(muted ? 'Mudo' : 'Som')
+      .setColor(muted ? '#fca5a5' : '#e0f2fe');
+    this.redrawButtonGraphics(
+      this.muteBtn,
+      muted ? 0x1f2937 : 0x0f172a,
+      muted ? 0xef4444 : 0x38bdf8
+    );
+
+    const stageLabel = snap.stageLabel?.trim() ?? '';
+    if (stageLabel.length > 0) {
+      this.stageBtn.container.setVisible(true);
+      const canCycle = Boolean(snap.canCycleStage);
+      this.stageBtn.label
+        .setText(canCycle ? `⇄ ${stageLabel}` : stageLabel)
+        .setColor(canCycle ? '#fde68a' : '#cbd5e1');
+      this.redrawButtonGraphics(
+        this.stageBtn,
+        canCycle ? 0x1e293b : 0x111827,
+        canCycle ? 0xfbbf24 : 0x475569
+      );
+    } else {
+      this.stageBtn.container.setVisible(false);
+    }
 
     const station = snap.nearbyStationLabel?.trim() ?? '';
     if (station.length > 0) {
@@ -299,10 +360,11 @@ export class HubHud {
     this.topPanelBg.lineBetween(0, topBarHeight, w, topBarHeight);
 
     if (isMobile) {
-      this.locationText.setFontSize(12).setPosition(12, 8);
+      this.locationText.setFontSize(11).setPosition(12, 8);
       this.soulsText.setFontSize(11).setPosition(12, 27);
       this.essencesText.setFontSize(11).setPosition(112, 27);
       this.gearText.setOrigin(0, 0).setFontSize(10).setPosition(12, 45);
+      this.layoutButton(this.muteBtn, w - 38, 18, 54, 22, 10);
 
       this.bannerContainer.setPosition(w / 2, 88);
       this.bannerLabel.setWordWrapWidth(w - 32);
@@ -312,12 +374,14 @@ export class HubHud {
       this.layoutButton(this.altarBtn, 208, h - 168, 84, 38, 11);
       this.layoutButton(this.blacksmithBtn, 302, h - 168, 90, 38, 11);
       this.layoutButton(this.stashBtn, 255, h - 122, 184, 36, 11);
-      this.layoutButton(this.enterBtn, 255, h - 72, 184, 44, 12);
+      this.layoutButton(this.enterBtn, 255, h - 74, 184, 40, 12);
+      this.layoutButton(this.stageBtn, 255, h - 32, 184, 28, 10);
     } else {
-      this.locationText.setFontSize(13).setPosition(16, 16);
-      this.soulsText.setFontSize(12).setPosition(230, 17);
-      this.essencesText.setFontSize(12).setPosition(344, 17);
-      this.gearText.setOrigin(1, 0).setFontSize(11).setPosition(w - 16, 18);
+      this.locationText.setFontSize(12).setPosition(16, 16);
+      this.soulsText.setFontSize(12).setPosition(236, 17);
+      this.essencesText.setFontSize(12).setPosition(340, 17);
+      this.gearText.setOrigin(1, 0).setFontSize(11).setPosition(w - 82, 18);
+      this.layoutButton(this.muteBtn, w - 42, 26, 58, 26, 10);
 
       this.bannerContainer.setPosition(w / 2, 78);
       this.bannerLabel.setWordWrapWidth(480);
@@ -328,6 +392,7 @@ export class HubHud {
       this.layoutButton(this.blacksmithBtn, 422, h - 48, 102, 42, 12);
       this.layoutButton(this.stashBtn, 530, h - 48, 98, 42, 12);
       this.layoutButton(this.enterBtn, 684, h - 48, 192, 46, 13);
+      this.layoutButton(this.stageBtn, 684, h - 92, 192, 28, 10);
     }
 
     this.update(this.lastSnapshot);
@@ -349,6 +414,8 @@ export class HubHud {
     this.stashBtn.container.destroy();
     this.enterBtn.container.destroy();
     this.interactBtn.container.destroy();
+    this.stageBtn.container.destroy();
+    this.muteBtn.container.destroy();
   }
 
   private createActionButton(
@@ -415,12 +482,21 @@ export class HubHud {
     btn.container.setPosition(x, y);
     btn.zone.setSize(width, height);
     btn.label.setFontSize(fontSize);
+    this.redrawButtonGraphics(btn, btn.fillColor, btn.strokeColor);
+  }
 
+  private redrawButtonGraphics(
+    btn: ActionButtonView,
+    fillColor: number,
+    strokeColor: number
+  ): void {
+    btn.fillColor = fillColor;
+    btn.strokeColor = strokeColor;
     btn.bg.clear();
-    btn.bg.fillStyle(btn.fillColor, 0.94);
-    btn.bg.fillRoundedRect(-width / 2, -height / 2, width, height, 6);
-    btn.bg.lineStyle(1.8, btn.strokeColor, 0.95);
-    btn.bg.strokeRoundedRect(-width / 2, -height / 2, width, height, 6);
+    btn.bg.fillStyle(fillColor, 0.94);
+    btn.bg.fillRoundedRect(-btn.width / 2, -btn.height / 2, btn.width, btn.height, 6);
+    btn.bg.lineStyle(1.8, strokeColor, 0.95);
+    btn.bg.strokeRoundedRect(-btn.width / 2, -btn.height / 2, btn.width, btn.height, 6);
   }
 
   private drawBannerBox(): void {

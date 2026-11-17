@@ -3,6 +3,9 @@ import { distanceBetween } from '../../core/combat/CombatEngine';
 import { moveHero, type HeroState } from '../../core/entities/Hero';
 import {
   resolveViewportConfig,
+  type CampaignPhase,
+  type CampaignStageId,
+  type DialogueLine,
   type EquipSlot,
   type HubTransitionData,
   type RunEndReport,
@@ -10,6 +13,14 @@ import {
   type Vector2D,
   type ViewportConfig,
 } from '../../core/index';
+import {
+  ensureCampaignProgress,
+  getAvailableStages,
+  getCampaignStage,
+  getDialogueLine,
+  markDialogueSeen,
+  setCampaignStageOrPhase,
+} from '../../core/progression/CampaignManager';
 import {
   applyRunOutcomeToProfile,
   buildHeroFromProfile,
@@ -25,12 +36,14 @@ import {
   upgradeItemWithBlacksmith,
 } from '../../core/progression/ProfileManager';
 import dialoguesData from '../../data/dialogues.json';
+import { soundManager } from '../audio/SoundManager';
 import { registerGameAnimations } from '../sprites/CombatVfx';
 import { AltarModal, type AltarModalSnapshot } from '../ui/AltarModal';
 import {
   BlacksmithModal,
   type BlacksmithModalSnapshot,
 } from '../ui/BlacksmithModal';
+import { DialogueBox } from '../ui/DialogueBox';
 import { HubHud, type HubHudSnapshot } from '../ui/HubHud';
 import {
   InventoryModal,
@@ -45,8 +58,11 @@ export interface SubmundoHubDebugApi {
   openAltar: () => void;
   openBlacksmith: () => void;
   openStash: () => void;
-  enterDungeon: () => void;
+  enterDungeon: (stageId?: CampaignStageId) => void;
   grantTestResources: (souls: number, essences?: number) => void;
+  setCampaignPhase: (phase: CampaignPhase, stageId?: CampaignStageId) => void;
+  openDialogue: (ids: string[]) => void;
+  getDialogueBox: () => DialogueBox;
 }
 
 declare global {
@@ -74,26 +90,41 @@ interface HubStationView {
   hitZone: Phaser.GameObjects.Zone;
 }
 
-interface EmissaryDialogueModalView {
-  root: Phaser.GameObjects.Container;
-  backdropGraphic: Phaser.GameObjects.Graphics;
-  backdropZone: Phaser.GameObjects.Zone;
-  panelGraphic: Phaser.GameObjects.Graphics;
-  speakerText: Phaser.GameObjects.Text;
-  titleText: Phaser.GameObjects.Text;
-  bodyText: Phaser.GameObjects.Text;
-  hintText: Phaser.GameObjects.Text;
-  closeBg: Phaser.GameObjects.Graphics;
-  closeText: Phaser.GameObjects.Text;
-  closeZone: Phaser.GameObjects.Zone;
-  closeBtnContainer: Phaser.GameObjects.Container;
-  isOpen: boolean;
-}
-
 const TILE_DISPLAY_SIZE = 32;
 const ARENA_PADDING_X = 36;
 const STATION_INTERACT_RADIUS = 58;
 const BANNER_DEFAULT_DURATION_MS = 6500;
+
+const VILLAGE_STATIONS: readonly HubStationConfig[] = [
+  {
+    id: 'emissary',
+    label: 'Mestre de Armas',
+    frameIndex: 0,
+    accentColor: 0x34d399,
+    accentHex: '#6ee7b7',
+  },
+  {
+    id: 'blacksmith',
+    label: 'Ferreiro da Vila',
+    frameIndex: 1,
+    accentColor: 0xf59e0b,
+    accentHex: '#fcd34d',
+  },
+  {
+    id: 'soul_altar',
+    label: 'Santuário da Vila',
+    frameIndex: 2,
+    accentColor: 0x84cc16,
+    accentHex: '#bef264',
+  },
+  {
+    id: 'rift_portal',
+    label: 'Saída da Missão',
+    frameIndex: 3,
+    accentColor: 0xfbbf24,
+    accentHex: '#fde68a',
+  },
+];
 
 const HUB_STATIONS: readonly HubStationConfig[] = [
   {
@@ -126,6 +157,12 @@ const HUB_STATIONS: readonly HubStationConfig[] = [
   },
 ];
 
+const PROLOGUE_NPC_DIALOGUE_KEYS = [
+  'prologue_welcome',
+  'stage_grotto_intro',
+  'prologue_blacksmith',
+] as const;
+
 const EMISSARY_DIALOGUE_KEYS = [
   'hub_welcome',
   'altar_intro',
@@ -143,7 +180,7 @@ export class HubScene extends Phaser.Scene {
   private altarModal!: AltarModal;
   private blacksmithModal!: BlacksmithModal;
   private inventoryModal!: InventoryModal;
-  private dialogueView!: EmissaryDialogueModalView;
+  private dialogueBox!: DialogueBox;
 
   private arenaLayer!: Phaser.GameObjects.Container;
   private lightingGraphics!: Phaser.GameObjects.Graphics;
@@ -153,12 +190,14 @@ export class HubScene extends Phaser.Scene {
   private stations: HubStationView[] = [];
   private nearbyStationId: HubStationId | null = null;
   private emissaryDialogueIndex = 0;
+  private selectedStageId: CampaignStageId = 'prologue_grotto';
 
   private elapsedTimeMs = 0;
   private bannerText?: string;
   private bannerExpiresAtMs = 0;
   private enteringDungeon = false;
 
+  private pointerUnlockHandler?: () => void;
   private keydownHandler?: (event: KeyboardEvent) => void;
   private resizeHandler?: (gameSize: Phaser.Structs.Size) => void;
 
@@ -167,7 +206,6 @@ export class HubScene extends Phaser.Scene {
   }
 
   public create(data?: HubTransitionData): void {
-    this.cameras.main.setBackgroundColor('#090b12');
     this.enteringDungeon = false;
     this.elapsedTimeMs = 0;
     this.nearbyStationId = null;
@@ -181,6 +219,8 @@ export class HubScene extends Phaser.Scene {
     registerGameAnimations(this);
 
     this.profile = loadOrCreateProfile();
+    const campaign = ensureCampaignProgress(this.profile);
+
     const transitionExt = data as
       | (HubTransitionData & { applyOutcome?: boolean })
       | undefined;
@@ -195,11 +235,17 @@ export class HubScene extends Phaser.Scene {
         9000
       );
     } else {
-      this.showTimedBanner(
-        dialoguesData.entries.hub_welcome.shortText,
-        BANNER_DEFAULT_DURATION_MS
-      );
+      const welcomeText =
+        campaign.phase === 'prologue'
+          ? dialoguesData.entries.prologue_welcome.shortText
+          : dialoguesData.entries.hub_welcome.shortText;
+      this.showTimedBanner(welcomeText, BANNER_DEFAULT_DURATION_MS);
     }
+
+    this.syncSelectedStage(transitionExt?.stageId);
+    this.cameras.main.setBackgroundColor(
+      campaign.phase === 'prologue' ? '#121a14' : '#090b12'
+    );
 
     const spawnPos = this.getInitialHeroSpawn(this.viewport);
     this.hero = buildHeroFromProfile(this.profile, spawnPos);
@@ -229,12 +275,23 @@ export class HubScene extends Phaser.Scene {
           this.interactWithNearbyStation();
         }
       },
+      onCycleStage: () => this.cycleSelectedStage(),
+      onToggleMute: () => {
+        soundManager.unlock();
+        soundManager.toggleMute();
+        if (!soundManager.isMuted()) {
+          soundManager.play('ui_click');
+        }
+        this.updateHud();
+      },
     });
 
     this.altarModal = new AltarModal(this, {
       onPurchaseUpgrade: (upgradeId) => {
+        soundManager.unlock();
         const result = purchaseAltarUpgrade(this.profile, upgradeId);
         if (result.ok) {
+          soundManager.play('altar');
           persistProfile(this.profile);
           this.refreshHeroFromProfile();
           this.altarModal.update(this.buildAltarSnapshot());
@@ -243,19 +300,23 @@ export class HubScene extends Phaser.Scene {
             3200
           );
         } else if (result.reason) {
+          soundManager.play('ui_click');
           this.showTimedBanner(result.reason, 2600);
         }
         this.updateHud();
       },
       onClose: () => {
+        soundManager.play('ui_click');
         this.updateHud();
       },
     });
 
     this.blacksmithModal = new BlacksmithModal(this, {
       onUpgradeItem: (instanceId) => {
+        soundManager.unlock();
         const result = upgradeItemWithBlacksmith(this.profile, instanceId);
         if (result.ok) {
+          soundManager.play('forge');
           persistProfile(this.profile);
           this.refreshHeroFromProfile();
           this.blacksmithModal.update(this.buildBlacksmithSnapshot());
@@ -264,13 +325,16 @@ export class HubScene extends Phaser.Scene {
             3200
           );
         } else if (result.reason) {
+          soundManager.play('ui_click');
           this.showTimedBanner(result.reason, 2600);
         }
         this.updateHud();
       },
       onForgeRecipe: (recipeId) => {
+        soundManager.unlock();
         const result = forgeItemWithBlacksmith(this.profile, recipeId);
         if (result.ok) {
+          soundManager.play('forge');
           persistProfile(this.profile);
           this.refreshHeroFromProfile();
           this.blacksmithModal.update(this.buildBlacksmithSnapshot());
@@ -279,18 +343,22 @@ export class HubScene extends Phaser.Scene {
             3800
           );
         } else if (result.reason) {
+          soundManager.play('ui_click');
           this.showTimedBanner(result.reason, 2800);
         }
         this.updateHud();
       },
       onClose: () => {
+        soundManager.play('ui_click');
         this.updateHud();
       },
     });
 
     this.inventoryModal = new InventoryModal(this, {
       onEquipItem: (instanceId) => {
+        soundManager.unlock();
         if (equipStashItem(this.profile, instanceId)) {
+          soundManager.play('ui_click');
           persistProfile(this.profile);
           this.refreshHeroFromProfile();
           this.inventoryModal.update(this.buildInventorySnapshot());
@@ -298,32 +366,33 @@ export class HubScene extends Phaser.Scene {
         }
       },
       onUnequipSlot: (slot: EquipSlot) => {
+        soundManager.unlock();
         if (!unequipProfileSlot(this.profile, slot)) {
           this.showTimedBanner('Baú cheio para desequipar este item.', 2600);
           this.updateHud();
           return;
         }
+        soundManager.play('ui_click');
         persistProfile(this.profile);
         this.refreshHeroFromProfile();
         this.inventoryModal.update(this.buildInventorySnapshot());
         this.updateHud();
       },
       onClose: () => {
+        soundManager.play('ui_click');
         this.updateHud();
       },
     });
 
-    this.dialogueView = this.createEmissaryDialogueModal(this.viewport);
+    this.pointerUnlockHandler = () => {
+      soundManager.unlock();
+    };
+    this.input.on('pointerdown', this.pointerUnlockHandler);
 
+    // Register HubScene keydown BEFORE DialogueBox so Space checks dialogueBox.isOpen() first
     this.keydownHandler = (event: KeyboardEvent) => {
-      if (this.dialogueView.isOpen) {
-        if (event.code === 'Escape' || event.code === 'Space' || event.code === 'Enter') {
-          this.closeEmissaryDialogue();
-        }
-        return;
-      }
-
-      if (this.isAnyModalOpen()) {
+      soundManager.unlock();
+      if (this.dialogueBox?.isOpen() || this.isAnyModalOpen()) {
         return;
       }
 
@@ -333,6 +402,8 @@ export class HubScene extends Phaser.Scene {
       }
     };
     this.input.keyboard?.on('keydown', this.keydownHandler);
+
+    this.dialogueBox = new DialogueBox(this);
 
     this.resizeHandler = (gameSize: Phaser.Structs.Size) => {
       this.handleViewportResize(gameSize.width, gameSize.height);
@@ -350,13 +421,19 @@ export class HubScene extends Phaser.Scene {
         openAltar: () => this.openAltar(),
         openBlacksmith: () => this.openBlacksmith(),
         openStash: () => this.openStash(),
-        enterDungeon: () => this.enterDungeon(),
+        enterDungeon: (stageId?: CampaignStageId) => this.enterDungeon(stageId),
         grantTestResources: (souls: number, essences = 0) => {
           this.grantTestResources(souls, essences);
         },
+        setCampaignPhase: (phase: CampaignPhase, stageId?: CampaignStageId) => {
+          this.setCampaignPhase(phase, stageId);
+        },
+        openDialogue: (ids: string[]) => this.openDialogue(ids),
+        getDialogueBox: () => this.dialogueBox,
       };
     }
 
+    this.triggerAutomaticEntryDialogues(transitionExt);
     this.updateProximityState();
     this.syncVisuals();
     this.updateHud();
@@ -401,6 +478,8 @@ export class HubScene extends Phaser.Scene {
     if (this.enteringDungeon) {
       return;
     }
+    soundManager.unlock();
+    soundManager.play('ui_click');
     this.closeAllModalsExcept('altar');
     this.altarModal.open(this.buildAltarSnapshot());
     this.updateHud();
@@ -410,6 +489,8 @@ export class HubScene extends Phaser.Scene {
     if (this.enteringDungeon) {
       return;
     }
+    soundManager.unlock();
+    soundManager.play('ui_click');
     this.closeAllModalsExcept('blacksmith');
     this.blacksmithModal.open(this.buildBlacksmithSnapshot());
     this.updateHud();
@@ -419,8 +500,30 @@ export class HubScene extends Phaser.Scene {
     if (this.enteringDungeon) {
       return;
     }
+    soundManager.unlock();
+    soundManager.play('ui_click');
     this.closeAllModalsExcept('stash');
     this.inventoryModal.open(this.buildInventorySnapshot());
+    this.updateHud();
+  }
+
+  public openDialogue(ids: string[], onComplete?: () => void): void {
+    if (this.enteringDungeon) {
+      return;
+    }
+    const lines = ids
+      .map((id) => getDialogueLine(id))
+      .filter((line): line is DialogueLine => line !== null);
+    if (lines.length === 0) {
+      onComplete?.();
+      return;
+    }
+
+    this.closeAllModalsExcept('dialogue');
+    this.dialogueBox.openLines(lines, () => {
+      this.updateHud();
+      onComplete?.();
+    });
     this.updateHud();
   }
 
@@ -428,31 +531,41 @@ export class HubScene extends Phaser.Scene {
     if (this.enteringDungeon) {
       return;
     }
-    this.closeAllModalsExcept('dialogue');
-
-    const key =
-      EMISSARY_DIALOGUE_KEYS[
-        this.emissaryDialogueIndex % EMISSARY_DIALOGUE_KEYS.length
-      ];
+    const phase = this.getCampaignPhase();
+    const keys =
+      phase === 'prologue' ? PROLOGUE_NPC_DIALOGUE_KEYS : EMISSARY_DIALOGUE_KEYS;
+    const key = keys[this.emissaryDialogueIndex % keys.length];
     this.emissaryDialogueIndex += 1;
-
-    const entry = dialoguesData.entries[key];
-    this.dialogueView.speakerText.setText(entry.speaker.toUpperCase());
-    this.dialogueView.titleText.setText(entry.title);
-    this.dialogueView.bodyText.setText(entry.text);
-    this.dialogueView.isOpen = true;
-    this.dialogueView.root.setVisible(true);
-    this.updateHud();
+    this.openDialogue([key]);
   }
 
-  public enterDungeon(): void {
+  public setCampaignPhase(phase: CampaignPhase, stageId?: CampaignStageId): void {
+    setCampaignStageOrPhase(this.profile, phase, stageId);
+    this.syncSelectedStage(stageId);
+    persistProfile(this.profile);
+    this.rebuildPhaseScenario();
+  }
+
+  public enterDungeon(stageId?: CampaignStageId): void {
     if (this.enteringDungeon) {
       return;
     }
+    soundManager.unlock();
+    soundManager.play('ui_click');
+
+    const targetStageId = stageId ?? this.selectedStageId;
+    if (stageId) {
+      this.selectedStageId = stageId;
+      ensureCampaignProgress(this.profile).currentStageId = stageId;
+    }
+
     this.enteringDungeon = true;
     this.closeAllModalsExcept(null);
     persistProfile(this.profile);
-    this.scene.start('DungeonScene', { profileSnapshot: this.profile });
+    this.scene.start('DungeonScene', {
+      profileSnapshot: this.profile,
+      stageId: targetStageId,
+    });
   }
 
   public grantTestResources(souls: number, essences = 0): void {
@@ -486,6 +599,7 @@ export class HubScene extends Phaser.Scene {
   }
 
   private activateStation(stationId: HubStationId): void {
+    soundManager.unlock();
     switch (stationId) {
       case 'emissary':
         this.openEmissaryDialogue();
@@ -502,15 +616,6 @@ export class HubScene extends Phaser.Scene {
     }
   }
 
-  private closeEmissaryDialogue(): void {
-    if (!this.dialogueView.isOpen) {
-      return;
-    }
-    this.dialogueView.isOpen = false;
-    this.dialogueView.root.setVisible(false);
-    this.updateHud();
-  }
-
   private closeAllModalsExcept(
     keep: 'altar' | 'blacksmith' | 'stash' | 'dialogue' | null
   ): void {
@@ -523,9 +628,8 @@ export class HubScene extends Phaser.Scene {
     if (keep !== 'stash' && this.inventoryModal?.isOpen()) {
       this.inventoryModal.close();
     }
-    if (keep !== 'dialogue' && this.dialogueView?.isOpen) {
-      this.dialogueView.isOpen = false;
-      this.dialogueView.root.setVisible(false);
+    if (keep !== 'dialogue' && this.dialogueBox?.isOpen()) {
+      this.dialogueBox.close();
     }
   }
 
@@ -534,7 +638,7 @@ export class HubScene extends Phaser.Scene {
       Boolean(this.altarModal?.isOpen()) ||
       Boolean(this.blacksmithModal?.isOpen()) ||
       Boolean(this.inventoryModal?.isOpen()) ||
-      Boolean(this.dialogueView?.isOpen)
+      Boolean(this.dialogueBox?.isOpen())
     );
   }
 
@@ -595,6 +699,13 @@ export class HubScene extends Phaser.Scene {
       (station) => station.config.id === this.nearbyStationId
     );
 
+    const campaign = ensureCampaignProgress(this.profile);
+    const isPrologue = campaign.phase === 'prologue';
+    const availableStages = getAvailableStages(this.profile);
+    const selectedStage =
+      availableStages.find((stage) => stage.id === this.selectedStageId) ??
+      availableStages[0];
+
     const snapshot: HubHudSnapshot = {
       souls: this.profile.souls,
       generalEssences: this.profile.generalEssences,
@@ -602,6 +713,13 @@ export class HubScene extends Phaser.Scene {
       stashCount: this.profile.stash.length,
       nearbyStationLabel: nearbyStation?.config.label,
       bannerText: this.bannerText,
+      locationTitle: isPrologue
+        ? 'Vila Natal — Campo de Treino'
+        : 'Refúgio do Submundo',
+      stageLabel: selectedStage?.name,
+      canCycleStage: availableStages.length > 1,
+      isPrologue,
+      isMuted: soundManager.isMuted(),
     };
 
     this.hud.update(snapshot);
@@ -622,6 +740,121 @@ export class HubScene extends Phaser.Scene {
     this.nearbyStationId = closestId;
   }
 
+  private getCampaignPhase(): CampaignPhase {
+    return ensureCampaignProgress(this.profile).phase;
+  }
+
+  private syncSelectedStage(preferredStageId?: CampaignStageId): void {
+    const available = getAvailableStages(this.profile);
+    const campaign = ensureCampaignProgress(this.profile);
+    const candidates: Array<CampaignStageId | undefined> = [
+      preferredStageId,
+      campaign.currentStageId,
+      this.selectedStageId,
+    ];
+
+    for (const candidate of candidates) {
+      if (candidate && available.some((stage) => stage.id === candidate)) {
+        this.selectedStageId = candidate;
+        return;
+      }
+    }
+
+    this.selectedStageId = available[0]?.id ?? 'prologue_grotto';
+  }
+
+  private cycleSelectedStage(): void {
+    const available = getAvailableStages(this.profile);
+    if (available.length <= 1) {
+      return;
+    }
+
+    soundManager.unlock();
+    soundManager.play('ui_click');
+
+    const currentIdx = available.findIndex(
+      (stage) => stage.id === this.selectedStageId
+    );
+    const nextIdx = (currentIdx + 1) % available.length;
+    const nextStage = available[nextIdx];
+    if (!nextStage) {
+      return;
+    }
+
+    this.selectedStageId = nextStage.id;
+    ensureCampaignProgress(this.profile).currentStageId = nextStage.id;
+    persistProfile(this.profile);
+
+    this.showTimedBanner(`Fase selecionada: ${nextStage.name}`, 2800);
+    this.updateHud();
+  }
+
+  private rebuildPhaseScenario(): void {
+    const phase = this.getCampaignPhase();
+    this.cameras.main.setBackgroundColor(
+      phase === 'prologue' ? '#121a14' : '#090b12'
+    );
+    this.buildArenaTilesAndLighting(this.viewport);
+    this.createStations(this.viewport);
+    this.updateProximityState();
+    this.syncVisuals();
+    this.updateHud();
+  }
+
+  private triggerAutomaticEntryDialogues(
+    transitionExt?: HubTransitionData & { applyOutcome?: boolean }
+  ): void {
+    const campaign = ensureCampaignProgress(this.profile);
+    const fromRun = transitionExt?.fromRun;
+
+    if (fromRun?.triggeredVillageFall) {
+      const fallIds = ['village_fall_boss', 'village_fall_pact', 'act1_briefing'];
+      let changed = false;
+      for (const id of fallIds) {
+        if (markDialogueSeen(this.profile, id)) {
+          changed = true;
+        }
+      }
+      if (changed) {
+        persistProfile(this.profile);
+      }
+      this.openDialogue(fallIds);
+      return;
+    }
+
+    if (fromRun?.victory && fromRun.stageId) {
+      try {
+        const stageDef = getCampaignStage(fromRun.stageId);
+        const unseenVictoryIds = stageDef.victoryDialogueIds.filter(
+          (id) => !campaign.seenDialogues.includes(id)
+        );
+        if (unseenVictoryIds.length > 0) {
+          for (const id of unseenVictoryIds) {
+            markDialogueSeen(this.profile, id);
+          }
+          persistProfile(this.profile);
+          this.openDialogue(unseenVictoryIds);
+          return;
+        }
+      } catch {
+        // Ignore unknown stageId safely.
+      }
+    }
+
+    if (
+      !fromRun &&
+      campaign.phase === 'prologue' &&
+      !campaign.seenDialogues.includes('prologue_welcome')
+    ) {
+      const introIds = ['prologue_welcome', 'stage_grotto_intro'];
+      for (const id of introIds) {
+        markDialogueSeen(this.profile, id);
+      }
+      persistProfile(this.profile);
+      this.openDialogue(introIds);
+    }
+  }
+
   private syncVisuals(): void {
     if (!this.heroSprite || !this.hero) {
       return;
@@ -630,9 +863,11 @@ export class HubScene extends Phaser.Scene {
     this.heroSprite.setPosition(this.hero.position.x, this.hero.position.y);
     this.heroSprite.setFlipX(this.hero.facing.x < 0);
 
+    const isPrologue = this.getCampaignPhase() === 'prologue';
+    const auraColor = isPrologue ? 0xfbbf24 : 0x38bdf8;
     const pulse = 0.14 + Math.sin(this.elapsedTimeMs * 0.005) * 0.04;
     this.heroAura.clear();
-    this.heroAura.fillStyle(0x38bdf8, pulse);
+    this.heroAura.fillStyle(auraColor, pulse);
     this.heroAura.fillCircle(this.hero.position.x, this.hero.position.y + 4, 19);
 
     const highlightPulse = 0.28 + Math.sin(this.elapsedTimeMs * 0.007) * 0.08;
@@ -659,19 +894,24 @@ export class HubScene extends Phaser.Scene {
   private createStations(viewport: ViewportConfig): void {
     this.destroyStations();
 
+    const isPrologue = this.getCampaignPhase() === 'prologue';
+    const stationConfigs = isPrologue ? VILLAGE_STATIONS : HUB_STATIONS;
+    const npcTextureKey = isPrologue ? 'village_npcs' : 'hub_npcs';
     const positions = this.getStationPositions(viewport);
-    const hasNpcFrames =
-      this.textures.exists('hub_npcs') &&
-      this.textures.get('hub_npcs').frameTotal > 4;
+    const hasNpcTexture = this.textures.exists(npcTextureKey);
+    const npcTexture = hasNpcTexture ? this.textures.get(npcTextureKey) : null;
 
-    for (const config of HUB_STATIONS) {
+    for (const config of stationConfigs) {
       const pos = positions[config.id];
       const aura = this.add.graphics();
 
       let visual: Phaser.GameObjects.GameObject;
-      if (this.textures.exists('hub_npcs')) {
+      if (hasNpcTexture && npcTexture) {
+        const frameArg = npcTexture.has(String(config.frameIndex))
+          ? config.frameIndex
+          : 0;
         visual = this.add
-          .sprite(0, 0, 'hub_npcs', hasNpcFrames ? config.frameIndex : 0)
+          .sprite(0, 0, npcTextureKey, frameArg)
           .setScale(1.5);
       } else {
         const gfx = this.add.graphics();
@@ -767,26 +1007,28 @@ export class HubScene extends Phaser.Scene {
   private buildArenaTilesAndLighting(viewport: ViewportConfig): void {
     this.arenaLayer.removeAll(true);
 
+    const isPrologue = this.getCampaignPhase() === 'prologue';
+    const tileKey = isPrologue ? 'village_tiles' : 'hub_tiles';
     const width = viewport.width;
     const height = viewport.height;
     const cols = Math.ceil(width / TILE_DISPLAY_SIZE);
     const rows = Math.ceil(height / TILE_DISPLAY_SIZE);
 
-    const hasHubTiles = this.textures.exists('hub_tiles');
-    const hasTileFrames =
-      hasHubTiles && this.textures.get('hub_tiles').frameTotal > 4;
+    const hasTiles = this.textures.exists(tileKey);
+    const tileTexture = hasTiles ? this.textures.get(tileKey) : null;
+    const hasTileFrames = Boolean(tileTexture && tileTexture.frameTotal > 4);
 
-    if (hasHubTiles) {
+    if (hasTiles) {
       for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
           const isWall =
             row === 0 || row === rows - 1 || col === 0 || col === cols - 1;
-          const isCenterRune =
+          const isCenterFeature =
             !isWall &&
             Math.abs(col - Math.floor(cols / 2)) <= 1 &&
             Math.abs(row - Math.floor(rows / 2)) <= 1;
           const hash = (col * 29 + row * 19) % 9;
-          const frameIndex = isWall ? 2 : isCenterRune || hash === 0 ? 1 : 0;
+          const frameIndex = isWall ? 2 : isCenterFeature || hash === 0 ? 1 : 0;
 
           const tileX = col * TILE_DISPLAY_SIZE + TILE_DISPLAY_SIZE / 2;
           const tileY = row * TILE_DISPLAY_SIZE + TILE_DISPLAY_SIZE / 2;
@@ -794,7 +1036,7 @@ export class HubScene extends Phaser.Scene {
           const tile = this.add.image(
             tileX,
             tileY,
-            'hub_tiles',
+            tileKey,
             hasTileFrames ? frameIndex : undefined
           );
           tile.setDisplaySize(TILE_DISPLAY_SIZE, TILE_DISPLAY_SIZE);
@@ -807,8 +1049,22 @@ export class HubScene extends Phaser.Scene {
         for (let col = 0; col < cols; col++) {
           const isWall =
             row === 0 || row === rows - 1 || col === 0 || col === cols - 1;
-          const isRune = !isWall && (col * 29 + row * 19) % 9 === 0;
-          const color = isWall ? 0x090d16 : isRune ? 0x1a2336 : 0x111622;
+          const isFeature =
+            !isWall &&
+            ((Math.abs(col - Math.floor(cols / 2)) <= 1 &&
+              Math.abs(row - Math.floor(rows / 2)) <= 1) ||
+              (col * 29 + row * 19) % 9 === 0);
+          const color = isPrologue
+            ? isWall
+              ? 0x2b1d14
+              : isFeature
+                ? 0x363b2e
+                : 0x182a1c
+            : isWall
+              ? 0x090d16
+              : isFeature
+                ? 0x1a2336
+                : 0x111622;
           fallbackBg.fillStyle(color, 1);
           fallbackBg.fillRect(
             col * TILE_DISPLAY_SIZE,
@@ -821,12 +1077,16 @@ export class HubScene extends Phaser.Scene {
       this.arenaLayer.add(fallbackBg);
     }
 
-    // Sanctuary Lighting & Corner Braziers
+    // Sanctuary / Village Lighting & Corner Braziers/Lanterns
     this.lightingGraphics.clear();
-    this.lightingGraphics.lineStyle(18, 0x05070c, 0.58);
+    this.lightingGraphics.lineStyle(
+      18,
+      isPrologue ? 0x0b120c : 0x05070c,
+      isPrologue ? 0.42 : 0.58
+    );
     this.lightingGraphics.strokeRect(9, 9, width - 18, height - 18);
 
-    this.lightingGraphics.lineStyle(2, 0x38bdf8, 0.28);
+    this.lightingGraphics.lineStyle(2, isPrologue ? 0xf59e0b : 0x38bdf8, 0.28);
     this.lightingGraphics.strokeRect(
       TILE_DISPLAY_SIZE,
       TILE_DISPLAY_SIZE,
@@ -837,9 +1097,9 @@ export class HubScene extends Phaser.Scene {
     const bounds = this.getMovementBounds(viewport);
     const centerX = Math.round((bounds.minX + bounds.maxX) / 2);
     const centerY = Math.round((bounds.minY + bounds.maxY) / 2);
-    this.lightingGraphics.lineStyle(1.5, 0x48cae4, 0.22);
+    this.lightingGraphics.lineStyle(1.5, isPrologue ? 0xfbbf24 : 0x48cae4, 0.22);
     this.lightingGraphics.strokeCircle(centerX, centerY, 56);
-    this.lightingGraphics.lineStyle(1, 0xffd166, 0.16);
+    this.lightingGraphics.lineStyle(1, isPrologue ? 0x6ee7b7 : 0xffd166, 0.16);
     this.lightingGraphics.strokeCircle(centerX, centerY, 42);
 
     const brazierTopY = viewport.mode === 'mobile_portrait' ? 124 : 96;
@@ -853,186 +1113,25 @@ export class HubScene extends Phaser.Scene {
     ];
 
     for (const brazier of braziers) {
-      if (hasHubTiles && hasTileFrames) {
+      if (hasTiles && hasTileFrames) {
         const img = this.add
-          .image(brazier.x, brazier.y, 'hub_tiles', 3)
+          .image(brazier.x, brazier.y, tileKey, 3)
           .setDisplaySize(24, 24);
         this.arenaLayer.add(img);
       }
-      this.lightingGraphics.fillStyle(0xf97316, 0.15);
-      this.lightingGraphics.fillCircle(brazier.x, brazier.y, 40);
-      this.lightingGraphics.fillStyle(0xffba08, 0.26);
+      this.lightingGraphics.fillStyle(
+        isPrologue ? 0xf59e0b : 0xf97316,
+        isPrologue ? 0.2 : 0.15
+      );
+      this.lightingGraphics.fillCircle(brazier.x, brazier.y, isPrologue ? 44 : 40);
+      this.lightingGraphics.fillStyle(
+        isPrologue ? 0xfbbf24 : 0xffba08,
+        isPrologue ? 0.34 : 0.26
+      );
       this.lightingGraphics.fillCircle(brazier.x, brazier.y, 18);
-      this.lightingGraphics.fillStyle(0xfef3c7, 0.72);
+      this.lightingGraphics.fillStyle(0xfef3c7, isPrologue ? 0.85 : 0.72);
       this.lightingGraphics.fillCircle(brazier.x, brazier.y, 4);
     }
-  }
-
-  private createEmissaryDialogueModal(
-    viewport: ViewportConfig
-  ): EmissaryDialogueModalView {
-    const backdropGraphic = this.add.graphics();
-    const backdropZone = this.add
-      .zone(0, 0, viewport.width, viewport.height)
-      .setOrigin(0.5)
-      .setInteractive();
-    backdropZone.on(
-      'pointerdown',
-      (
-        _pointer: Phaser.Input.Pointer,
-        _lx: number,
-        _ly: number,
-        event?: Phaser.Types.Input.EventData
-      ) => {
-        event?.stopPropagation?.();
-      }
-    );
-
-    const panelGraphic = this.add.graphics();
-    const speakerText = this.add.text(0, 0, 'EMISSÁRIO CELESTIAL', {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: '#90e0ef',
-      fontStyle: 'bold',
-    });
-    const titleText = this.add.text(0, 0, 'O Refúgio do Submundo', {
-      fontFamily: 'monospace',
-      fontSize: '15px',
-      color: '#ffd166',
-      fontStyle: 'bold',
-    });
-    const bodyText = this.add.text(0, 0, '', {
-      fontFamily: 'monospace',
-      fontSize: '12px',
-      color: '#e2e8f0',
-      lineSpacing: 5,
-    });
-    const hintText = this.add.text(
-      0,
-      0,
-      'Dica: Interaja novamente com o Emissário para ouvir mais orientações.',
-      {
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        color: '#94a3b8',
-      }
-    );
-
-    const closeBg = this.add.graphics();
-    const closeText = this.add
-      .text(0, 0, 'Continuar', {
-        fontFamily: 'monospace',
-        fontSize: '12px',
-        color: '#ffffff',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5);
-    const closeZone = this.add
-      .zone(0, 0, 110, 32)
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-    closeZone.on(
-      'pointerdown',
-      (
-        _pointer: Phaser.Input.Pointer,
-        _lx: number,
-        _ly: number,
-        event?: Phaser.Types.Input.EventData
-      ) => {
-        event?.stopPropagation?.();
-        this.closeEmissaryDialogue();
-      }
-    );
-    const closeBtnContainer = this.add.container(0, 0, [
-      closeBg,
-      closeText,
-      closeZone,
-    ]);
-
-    const root = this.add
-      .container(viewport.width / 2, viewport.height / 2, [
-        backdropGraphic,
-        backdropZone,
-        panelGraphic,
-        speakerText,
-        titleText,
-        bodyText,
-        hintText,
-        closeBtnContainer,
-      ])
-      .setScrollFactor(0)
-      .setDepth(1085)
-      .setVisible(false);
-
-    const view: EmissaryDialogueModalView = {
-      root,
-      backdropGraphic,
-      backdropZone,
-      panelGraphic,
-      speakerText,
-      titleText,
-      bodyText,
-      hintText,
-      closeBg,
-      closeText,
-      closeZone,
-      closeBtnContainer,
-      isOpen: false,
-    };
-
-    this.layoutEmissaryDialogueModal(view, viewport);
-    return view;
-  }
-
-  private layoutEmissaryDialogueModal(
-    view: EmissaryDialogueModalView,
-    viewport: ViewportConfig
-  ): void {
-    const w = viewport.width;
-    const h = viewport.height;
-    const isMobile = viewport.mode === 'mobile_portrait';
-
-    view.root.setPosition(w / 2, h / 2);
-
-    view.backdropGraphic.clear();
-    view.backdropGraphic.fillStyle(0x04060a, 0.78);
-    view.backdropGraphic.fillRect(-w / 2, -h / 2, w, h);
-    view.backdropZone.setSize(w, h);
-
-    const boxW = isMobile ? w - 24 : 580;
-    const boxH = isMobile ? 250 : 210;
-
-    view.panelGraphic.clear();
-    view.panelGraphic.fillStyle(0x0f172a, 0.97);
-    view.panelGraphic.fillRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 8);
-    view.panelGraphic.lineStyle(2, 0x38bdf8, 0.9);
-    view.panelGraphic.strokeRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 8);
-
-    const left = -boxW / 2 + 18;
-    const right = boxW / 2 - 18;
-    const top = -boxH / 2 + 16;
-    const innerW = boxW - 36;
-
-    view.speakerText.setPosition(left, top);
-    view.titleText.setFontSize(isMobile ? 13 : 15).setPosition(left, top + 18);
-    view.bodyText
-      .setFontSize(isMobile ? 11 : 12)
-      .setWordWrapWidth(innerW)
-      .setPosition(left, top + 46);
-    view.hintText
-      .setFontSize(isMobile ? 9 : 10)
-      .setWordWrapWidth(innerW - (isMobile ? 0 : 120))
-      .setPosition(left, boxH / 2 - (isMobile ? 64 : 34));
-
-    const btnW = isMobile ? 116 : 112;
-    const btnH = 32;
-    view.closeBtnContainer.setPosition(right - btnW / 2, boxH / 2 - 26);
-    view.closeZone.setSize(btnW, btnH);
-    view.closeBg.clear();
-    view.closeBg.fillStyle(0x155e75, 0.96);
-    view.closeBg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 6);
-    view.closeBg.lineStyle(1.5, 0x48cae4, 1);
-    view.closeBg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 6);
   }
 
   private getStationPositions(
@@ -1107,9 +1206,7 @@ export class HubScene extends Phaser.Scene {
     this.altarModal?.resize(this.viewport);
     this.blacksmithModal?.resize(this.viewport);
     this.inventoryModal?.resize(this.viewport);
-    if (this.dialogueView) {
-      this.layoutEmissaryDialogueModal(this.dialogueView, this.viewport);
-    }
+    this.dialogueBox?.handleResize();
 
     this.updateProximityState();
     this.syncVisuals();
@@ -1145,6 +1242,10 @@ export class HubScene extends Phaser.Scene {
       this.scale.off('resize', this.resizeHandler);
       this.resizeHandler = undefined;
     }
+    if (this.pointerUnlockHandler) {
+      this.input.off('pointerdown', this.pointerUnlockHandler);
+      this.pointerUnlockHandler = undefined;
+    }
     if (this.keydownHandler) {
       this.input.keyboard?.off('keydown', this.keydownHandler);
       this.keydownHandler = undefined;
@@ -1156,7 +1257,7 @@ export class HubScene extends Phaser.Scene {
     this.heroAura?.destroy();
     this.heroSprite?.destroy();
 
-    this.dialogueView?.root.destroy();
+    this.dialogueBox?.destroy();
     this.altarModal?.destroy();
     this.blacksmithModal?.destroy();
     this.inventoryModal?.destroy();
