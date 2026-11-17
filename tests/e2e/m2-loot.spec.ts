@@ -33,7 +33,9 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 
       { timeout: 10000 }
     );
     await page.evaluate(() => {
-      window.__SUBMUNDO_HUB_DEBUG__!.enterDungeon();
+      const hub = window.__SUBMUNDO_HUB_DEBUG__!;
+      hub.setCampaignPhase('act1', 'act1_submundo');
+      hub.enterDungeon('act1_submundo');
     });
 
     await page.waitForFunction(
@@ -79,7 +81,7 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 
     });
 
     expect(pwaCheck.title).toBe(`SUBMUNDO v${GAME_VERSION}`);
-    expect(pwaCheck.title).toBe('SUBMUNDO v0.3.0');
+    expect(pwaCheck.title).toBe('SUBMUNDO v0.4.0');
     expect(pwaCheck.manifestHref).toBe('./manifest.webmanifest');
     expect(pwaCheck.appleIconHref).toBe('./icons/apple-touch-icon.png');
     expect(pwaCheck.icon192Href).toBe('./icons/icon-192.png');
@@ -333,6 +335,7 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 
       dbg.restartRun();
       const hero = dbg.getHero();
       hero.invulnerableUntilMs = 999999;
+      hero.basicAttackReadyAtMs = 999999;
       dbg.spawnTestDrop('legendary');
       dbg.spawnTestDrop('rare');
     });
@@ -357,7 +360,12 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 
       hero.baseStats.defense = 0;
       hero.stats.defense = 0;
       hero.stats.hp = 1;
+      hero.basicAttackReadyAtMs = 999999;
+      hero.minions = [];
       const attacker = monsters.find((m) => m.isAlive)!;
+      attacker.hp = Math.max(attacker.hp, 500);
+      attacker.stunnedUntilMs = 0;
+      attacker.bleedDps = 0;
       attacker.position = { x: hero.position.x, y: hero.position.y };
       attacker.nextAttackAtMs = 0;
     });
