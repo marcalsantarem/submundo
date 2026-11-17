@@ -67,6 +67,7 @@ import {
   CombatVfxManager,
   registerGameAnimations,
 } from '../sprites/CombatVfx';
+import { SceneCameraRig } from '../ui/CameraRig';
 import { DungeonHud, type HudSnapshot } from '../ui/DungeonHud';
 import {
   InventoryModal,
@@ -137,6 +138,8 @@ export class DungeonScene extends Phaser.Scene {
   private vfx!: CombatVfxManager;
   private hud!: DungeonHud;
   private inventoryModal!: InventoryModal;
+  private cameraRig?: SceneCameraRig;
+  private viewport = resolveViewportConfig(800, 600);
 
   private arenaLayer!: Phaser.GameObjects.Container;
   private lightingGraphics!: Phaser.GameObjects.Graphics;
@@ -214,7 +217,20 @@ export class DungeonScene extends Phaser.Scene {
       },
     });
 
+    this.viewport = resolveViewportConfig(
+      this.scale.width || 800,
+      this.scale.height || 600
+    );
+    this.cameraRig = new SceneCameraRig(this, {
+      width: this.viewport.width,
+      height: this.viewport.height,
+      worldZoom: this.getWorldZoom(this.viewport.mode),
+      boundsWidth: this.viewport.width,
+      boundsHeight: this.viewport.height,
+    });
+
     this.startNewRun(data);
+    this.cameraRig.syncLayers();
 
     const onResize = (gameSize: Phaser.Structs.Size) => {
       this.handleViewportResize(gameSize.width, gameSize.height);
@@ -235,6 +251,8 @@ export class DungeonScene extends Phaser.Scene {
       this.heroFlipX = false;
       this.bannerText = undefined;
       this.bannerExpiresAtMs = 0;
+      this.cameraRig?.destroy();
+      this.cameraRig = undefined;
       this.inventoryModal?.destroy();
       this.hud?.destroy();
     });
@@ -267,6 +285,7 @@ export class DungeonScene extends Phaser.Scene {
       this.heroIsMoving = false;
       this.syncVisuals(this.elapsedTimeMs);
       this.updateHud(this.elapsedTimeMs);
+      this.cameraRig?.syncLayers();
       return;
     }
 
@@ -320,6 +339,7 @@ export class DungeonScene extends Phaser.Scene {
 
     this.syncVisuals(nowMs);
     this.updateHud(nowMs);
+    this.cameraRig?.syncLayers();
   }
 
   public handleUseSkill(skillIdOrSlot: string): CombatEvent[] {
@@ -482,18 +502,19 @@ export class DungeonScene extends Phaser.Scene {
     if (!this.heroSprite || !this.heroSprite.scene) {
       this.heroSprite = this.add
         .sprite(this.hero.position.x, this.hero.position.y, heroKey, 0)
-        .setScale(1.1)
+        .setScale(1.35)
         .setDepth(20);
     } else {
       this.heroSprite
         .setTexture(heroKey, 0)
         .setPosition(this.hero.position.x, this.hero.position.y)
-        .setScale(1.1)
+        .setScale(1.35)
         .setDepth(20)
         .setAlpha(1)
         .clearTint();
     }
 
+    this.cameraRig?.follow(this.heroSprite);
     this.updateHeroLocomotionAnim();
 
     this.loadCurrentRoom();
@@ -1240,12 +1261,17 @@ export class DungeonScene extends Phaser.Scene {
     this.hud.update(snapshot);
   }
 
+  private getWorldZoom(mode: 'desktop_landscape' | 'mobile_portrait'): number {
+    return mode === 'mobile_portrait' ? 1.45 : 1.65;
+  }
+
   private handleViewportResize(width: number, height: number): void {
     if (!this.runState || !this.hero || !this.hud) {
       return;
     }
 
     const viewport = resolveViewportConfig(width, height);
+    this.viewport = viewport;
     const currentRoom = getCurrentRoom(this.runState);
     this.buildArenaTilesAndLighting(
       width,
@@ -1288,10 +1314,18 @@ export class DungeonScene extends Phaser.Scene {
       drop.glow.setPosition(drop.position.x, drop.position.y);
     }
 
+    this.cameraRig?.resize(
+      viewport.width,
+      viewport.height,
+      this.getWorldZoom(viewport.mode),
+      viewport.width,
+      viewport.height
+    );
     this.hud.resize(viewport);
     this.inventoryModal?.resize(viewport);
     this.syncVisuals(this.elapsedTimeMs);
     this.updateHud(this.elapsedTimeMs);
+    this.cameraRig?.syncLayers();
   }
 
   private toggleInventoryModal(): void {

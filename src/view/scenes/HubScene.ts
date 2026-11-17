@@ -45,6 +45,7 @@ import {
   type BlacksmithModalSnapshot,
 } from '../ui/BlacksmithModal';
 import { DialogueBox } from '../ui/DialogueBox';
+import { SceneCameraRig } from '../ui/CameraRig';
 import { HubHud, type HubHudSnapshot } from '../ui/HubHud';
 import {
   InventoryModal,
@@ -182,6 +183,7 @@ export class HubScene extends Phaser.Scene {
   private blacksmithModal!: BlacksmithModal;
   private inventoryModal!: InventoryModal;
   private dialogueBox!: DialogueBox;
+  private cameraRig?: SceneCameraRig;
 
   private arenaLayer!: Phaser.GameObjects.Container;
   private lightingGraphics!: Phaser.GameObjects.Graphics;
@@ -264,7 +266,7 @@ export class HubScene extends Phaser.Scene {
     this.heroSpriteKey = heroKey;
     this.heroSprite = this.add
       .sprite(this.hero.position.x, this.hero.position.y, this.heroSpriteKey, 0)
-      .setScale(1.1)
+      .setScale(1.35)
       .setDepth(20);
     if (this.anims.exists(`${this.heroSpriteKey}_idle`)) {
       this.heroSprite.play(`${this.heroSpriteKey}_idle`, true);
@@ -411,6 +413,16 @@ export class HubScene extends Phaser.Scene {
 
     this.dialogueBox = new DialogueBox(this);
 
+    this.cameraRig = new SceneCameraRig(this, {
+      width: this.viewport.width,
+      height: this.viewport.height,
+      worldZoom: this.getWorldZoom(this.viewport.mode),
+      boundsWidth: this.viewport.width,
+      boundsHeight: this.viewport.height,
+    });
+    this.cameraRig.follow(this.heroSprite);
+    this.cameraRig.syncLayers();
+
     this.resizeHandler = (gameSize: Phaser.Structs.Size) => {
       this.handleViewportResize(gameSize.width, gameSize.height);
     };
@@ -496,6 +508,7 @@ export class HubScene extends Phaser.Scene {
     }
 
     this.syncVisuals();
+    this.cameraRig?.syncLayers();
     this.updateHud();
   }
 
@@ -826,7 +839,7 @@ export class HubScene extends Phaser.Scene {
     const phase = this.getCampaignPhase();
     this.heroSpriteKey = phase === 'prologue' ? 'hero_living' : 'hero_wraith';
     if (this.heroSprite) {
-      this.heroSprite.setTexture(this.heroSpriteKey, 0).setScale(1.1);
+      this.heroSprite.setTexture(this.heroSpriteKey, 0).setScale(1.35);
       if (this.anims.exists(`${this.heroSpriteKey}_idle`)) {
         this.heroSprite.play(`${this.heroSpriteKey}_idle`, true);
       }
@@ -1229,6 +1242,10 @@ export class HubScene extends Phaser.Scene {
     };
   }
 
+  private getWorldZoom(mode: ViewportConfig['mode']): number {
+    return mode === 'mobile_portrait' ? 1.45 : 1.65;
+  }
+
   private handleViewportResize(width: number, height: number): void {
     if (!this.hero || !this.hud) {
       return;
@@ -1248,6 +1265,14 @@ export class HubScene extends Phaser.Scene {
       Math.min(bounds.maxY, this.hero.position.y)
     );
 
+    this.cameraRig?.resize(
+      this.viewport.width,
+      this.viewport.height,
+      this.getWorldZoom(this.viewport.mode),
+      this.viewport.width,
+      this.viewport.height
+    );
+
     this.hud.resize(this.viewport);
     this.altarModal?.resize(this.viewport);
     this.blacksmithModal?.resize(this.viewport);
@@ -1256,6 +1281,7 @@ export class HubScene extends Phaser.Scene {
 
     this.updateProximityState();
     this.syncVisuals();
+    this.cameraRig?.syncLayers();
     this.updateHud();
   }
 
@@ -1305,6 +1331,9 @@ export class HubScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown', this.keydownHandler);
       this.keydownHandler = undefined;
     }
+
+    this.cameraRig?.destroy();
+    this.cameraRig = undefined;
 
     this.destroyStations();
     this.arenaLayer?.destroy();

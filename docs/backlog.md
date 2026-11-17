@@ -84,4 +84,5 @@
 | T-080 | Pré-carregar novos assets de UI/retratos em `BootScene.ts` e subir versão para `0.8.0` em `package.json`, `src/version.ts` e `tests/core/architecture.test.ts` (tam. P) | M8 | AG07 (Arquiteto) | a fazer |
 | T-081 | Validação do M8 (suíte 3x, Playwright validando HUD, modais e retratos 2D em PC/Mobile, `docs/qa/qa-M8.md`) e tag `v0.8.0` (tam. M) | M8 | AG03 (QA) + AG00 (Líder) | a fazer |
 | T-082 | Botão `Resetar` save no `HubHud.ts` (confirmação em 2 cliques, PC e Mobile) conectado a `clearProfileStorage()` + `scene.restart({})` na `HubScene.ts` para retestar a Vila Natal (tam. P) | M5 | AG02 (UI) | feita |
+| T-083 | Câmera com zoom (`1.45x` Mobile / `1.65x` PC) seguindo o Herói (`SceneCameraRig` + `uiCamera` fixa em `zoom=1`) e escala `1.35` do Herói na `HubScene.ts` e `DungeonScene.ts` para alinhar perspectiva ao mockup (tam. M) | M5 | AG02 (UI) + AG01 (Gameplay) | feita |
 
