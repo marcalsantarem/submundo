@@ -45,6 +45,8 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 
 | Key | Arquivo | Dimensões Totais | Frame (`LxA`) | Qtd. Frames | Convenção de Frames (Índice: Nome) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| `hero_living` | `hero_living.png` | `768x48` px | `48x48` px | 16 | `0..3: idle0..3`, `4..7: walk0..3`, `8..11: attack0..3`, `12..13: dash0..1`, `14..15: hit0..1` |
+| `hero_wraith` | `hero_wraith.png` | `768x48` px | `48x48` px | 16 | `0..3: idle0..3`, `4..7: walk0..3`, `8..11: attack0..3`, `12..13: dash0..1`, `14..15: hit0..1` |
 | `wraith_warrior` | `wraith_warrior.png` | `128x32` px | `32x32` px | 4 | `0: idle0`, `1: idle1`, `2: attack`, `3: dash` |
 | `abyssal_slime` | `abyssal_slime.png` | `64x32` px | `32x32` px | 2 | `0: idle0`, `1: idle1` |
 | `bone_sentinel` | `bone_sentinel.png` | `64x32` px | `32x32` px | 2 | `0: idle0`, `1: attack` |
