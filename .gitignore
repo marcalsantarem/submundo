@@ -22,3 +22,6 @@ playwright-report/
 test-results/
 *.log
 .DS_Store
+
+# Clones e symlinks do ambiente
+marcalsantarem/
