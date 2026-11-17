@@ -3,7 +3,7 @@
 - **Data:** 2026-11-17
 - **Responsável:** AG03 (QA)
 - **Briefing:** `BRF-052_AG03_validacao-m4.md` (T-050)
-- **Veredito:** **NÃO PASSA** — *1 bloqueante, 0 graves, 0 menores*.
+- **Veredito:** **PASSA** — *0 bloqueantes, 0 graves, 0 menores* (reteste pós-`T-053`; 1ª rodada teve 1 bloqueante corrigido na `T-053`).
 
 ---
 
@@ -93,3 +93,16 @@ Comando executado: `tsc --noEmit && vite build` (`65 ms`, zero erros). Total em 
 2. **Desbloqueio e Transição para o Ato 1:**
    - Vença a Gruta da Cachoeira e confirme o desbloqueio da **Mina Abandonada**; avance até vencer **O Selo Antigo** (4 salas, boss Arauto do Abismo).
    - Ao retornar, confirme o diálogo do **Pacto Celestial** com retrato do **Emissário Celestial** e a mudança do cenário para o **Refúgio no Submundo (Ato 1)**.
+
+---
+
+## Reteste (Após T-053)
+
+- **Data:** 2026-11-17
+- **Correção verificada:** `T-053` em `src/core/progression/ProfileManager.ts` (`loadOrCreateProfile()` preserva e normaliza `campaign`).
+- **Typecheck & Build:** `npm run typecheck` (`0` erros) e `npm run build` (`65 ms`, `dist/index.html` `1.07 kB`, `dist/assets/app.js` `1549.56 kB`, total `dist/` = **`2.2M`**).
+- **Estabilidade 3x (`npm test`):** **12/12 arquivos, 55/55 testes verdes nas 3 execuções** (`50` `core` + `5` E2E, incluindo `tests/e2e/m4-campaign.spec.ts` **2/2**):
+  - **1ª Execução:** `12 passed (12)`, `55 passed (55)` em `21723 ms` (`m4-campaign.spec.ts`: `6393 ms`) — ✅
+  - **2ª Execução:** `12 passed (12)`, `55 passed (55)` em `21322 ms` (`m4-campaign.spec.ts`: `6638 ms`) — ✅
+  - **3ª Execução:** `12 passed (12)`, `55 passed (55)` em `23101 ms` (`m4-campaign.spec.ts`: `7086 ms`) — ✅
+- **Veredito Final:** **PASSA** — `0` bloqueantes, `0` graves, `0` menores.
