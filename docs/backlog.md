@@ -9,6 +9,6 @@
 | T-005 | Guia visual (`docs/guia_visual.md`) e gerador via código de spritesheets/tilesets Pixel Art (`.png` em `assets/`) para herói, monstros e masmorra (tam. M) | M1 | AG08 (Arte) | feita |
 | T-006 | Lógica pura de entidades, atributos, ataque básico automático, Dash, 2 Skills, Poção e IA dos 3 monstros em `src/core/entities/` e `src/core/combat/` (tam. M) | M1 | AG01 (Gameplay) | feita |
 | T-007 | Gerador de incursão de 4 salas + 1 Boss, progressão de ondas e estado da run (vitória/morte) em `src/core/dungeon/` (tam. M) | M1 | AG01 (Gameplay) | feita |
-| T-008 | HUD responsivo (`800x600` PC / `9:16` Mobile), joystick virtual flutuante de 1 polegar, botões de Dash/Skills/Poção e input `WASD`/Setas em `src/view/ui/` (tam. M) | M1 | AG02 (UI) | em andamento |
-| T-009 | `DungeonScene` integrando `src/core/`, renderização das 4 salas + Boss, animações de sprites e VFX de combate em `src/view/scenes/DungeonScene.ts` e `src/view/sprites/` (tam. M) | M1 | AG01 (Gameplay) + AG08 (Arte) | em andamento |
-| T-010 | Validação do M1 (suíte 3x, Playwright no navegador real, capturas PC `800x600` e Mobile `9:16`, `docs/qa/qa-M1.md`) e tag `v0.1.0` (tam. M) | M1 | AG03 (QA) + AG00 (Líder) | a fazer |
+| T-008 | HUD responsivo (`800x600` PC / `9:16` Mobile), joystick virtual flutuante de 1 polegar, botões de Dash/Skills/Poção e input `WASD`/Setas em `src/view/ui/` (tam. M) | M1 | AG02 (UI) | feita |
+| T-009 | `DungeonScene` integrando `src/core/`, renderização das 4 salas + Boss, animações de sprites e VFX de combate em `src/view/scenes/DungeonScene.ts` e `src/view/sprites/` (tam. M) | M1 | AG01 (Gameplay) + AG08 (Arte) | feita |
+| T-010 | Validação do M1 (suíte 3x, Playwright no navegador real, capturas PC `800x600` e Mobile `9:16`, `docs/qa/qa-M1.md`) e tag `v0.1.0` (tam. M) | M1 | AG03 (QA) + AG00 (Líder) | em andamento |

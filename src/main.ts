@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { resolveViewportConfig, type ViewportConfig } from './core';
 import { GAME_VERSION } from './version';
 import { BootScene } from './view/scenes/BootScene';
+import { DungeonScene } from './view/scenes/DungeonScene';
 
 export function createGameConfig(viewport: ViewportConfig): Phaser.Types.Core.GameConfig {
   return {
@@ -18,7 +19,7 @@ export function createGameConfig(viewport: ViewportConfig): Phaser.Types.Core.Ga
       width: viewport.width,
       height: viewport.height,
     },
-    scene: [BootScene],
+    scene: [BootScene, DungeonScene],
   };
 }
 

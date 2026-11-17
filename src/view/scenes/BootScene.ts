@@ -1,21 +1,57 @@
 import Phaser from 'phaser';
 import { GAME_VERSION } from '../../version';
 
-interface FallbackSpriteSpec {
+interface SpritesheetSpec {
   key: string;
-  color: number;
-  size: number;
+  file: string;
+  frameWidth: number;
+  frameHeight: number;
+  fallbackColor: number;
 }
 
-const FALLBACK_SPRITES: FallbackSpriteSpec[] = [
-  { key: 'hero', color: 0x38bdf8, size: 24 },
-  { key: 'imp', color: 0xef4444, size: 20 },
-  { key: 'skeleton', color: 0xe4e4e7, size: 22 },
-  { key: 'hellhound', color: 0xf97316, size: 22 },
-  { key: 'boss_azaroth', color: 0xdc2626, size: 40 },
-  { key: 'floor_tile', color: 0x18181b, size: 32 },
-  { key: 'wall_tile', color: 0x3f3f46, size: 32 },
-  { key: 'portal', color: 0xa855f7, size: 32 },
+const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
+  {
+    key: 'wraith_warrior',
+    file: 'assets/sprites/wraith_warrior.png',
+    frameWidth: 32,
+    frameHeight: 32,
+    fallbackColor: 0x38bdf8,
+  },
+  {
+    key: 'abyssal_slime',
+    file: 'assets/sprites/abyssal_slime.png',
+    frameWidth: 32,
+    frameHeight: 32,
+    fallbackColor: 0xef4444,
+  },
+  {
+    key: 'bone_sentinel',
+    file: 'assets/sprites/bone_sentinel.png',
+    frameWidth: 32,
+    frameHeight: 32,
+    fallbackColor: 0xe4e4e7,
+  },
+  {
+    key: 'infernal_warden',
+    file: 'assets/sprites/infernal_warden.png',
+    frameWidth: 64,
+    frameHeight: 64,
+    fallbackColor: 0xdc2626,
+  },
+  {
+    key: 'dungeon_tiles',
+    file: 'assets/sprites/dungeon_tiles.png',
+    frameWidth: 16,
+    frameHeight: 16,
+    fallbackColor: 0x18181b,
+  },
+  {
+    key: 'soul_orb',
+    file: 'assets/sprites/soul_orb.png',
+    frameWidth: 16,
+    frameHeight: 16,
+    fallbackColor: 0x38bdf8,
+  },
 ];
 
 export class BootScene extends Phaser.Scene {
@@ -25,11 +61,14 @@ export class BootScene extends Phaser.Scene {
 
   public preload(): void {
     this.load.on('loaderror', () => {
-      // Fallback textures will be generated in create() for any missing sprites.
+      // Fallback textures are generated in create() if any spritesheet fails to load.
     });
 
-    for (const spec of FALLBACK_SPRITES) {
-      this.load.image(spec.key, `assets/sprites/${spec.key}.png`);
+    for (const spec of SPRITESHEET_SPECS) {
+      this.load.spritesheet(spec.key, spec.file, {
+        frameWidth: spec.frameWidth,
+        frameHeight: spec.frameHeight,
+      });
     }
   }
 
@@ -61,16 +100,17 @@ export class BootScene extends Phaser.Scene {
   }
 
   private ensureFallbackTextures(): void {
-    for (const spec of FALLBACK_SPRITES) {
+    for (const spec of SPRITESHEET_SPECS) {
       if (!this.textures.exists(spec.key)) {
         const gfx = this.make.graphics({ x: 0, y: 0 });
-        gfx.fillStyle(spec.color, 1);
-        gfx.fillRect(0, 0, spec.size, spec.size);
+        gfx.fillStyle(spec.fallbackColor, 1);
+        gfx.fillRect(0, 0, spec.frameWidth, spec.frameHeight);
         gfx.lineStyle(2, 0x09090b, 1);
-        gfx.strokeRect(0, 0, spec.size, spec.size);
-        gfx.generateTexture(spec.key, spec.size, spec.size);
+        gfx.strokeRect(0, 0, spec.frameWidth, spec.frameHeight);
+        gfx.generateTexture(spec.key, spec.frameWidth, spec.frameHeight);
         gfx.destroy();
       }
     }
   }
 }
+
