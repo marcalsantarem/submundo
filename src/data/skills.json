@@ -1,0 +1,42 @@
+[
+  {
+    "id": "spectral_dash",
+    "name": "Esquiva Espectral",
+    "slot": "dash",
+    "force": "none",
+    "cooldownMs": 3000,
+    "invulnerabilityMs": 350,
+    "dashDistance": 120,
+    "description": "Avança rapidamente na direção do movimento, atravessando inimigos com invulnerabilidade espectral."
+  },
+  {
+    "id": "crimson_cleave",
+    "name": "Golpe Carmesim",
+    "slot": "active_1",
+    "force": "submundo",
+    "cooldownMs": 6000,
+    "damageMultiplier": 2.2,
+    "radius": 80,
+    "description": "Desfere um corte circular banhado em sangue do Submundo, atingindo todos os inimigos próximos."
+  },
+  {
+    "id": "infernal_eruption",
+    "name": "Erupção Infernal",
+    "slot": "active_2",
+    "force": "inferno",
+    "cooldownMs": 14000,
+    "damageMultiplier": 3.8,
+    "radius": 130,
+    "description": "Detona o solo com chamas abissais do Inferno, causando dano devastador em grande área."
+  },
+  {
+    "id": "soul_potion",
+    "name": "Poção de Alma",
+    "slot": "potion",
+    "force": "none",
+    "cooldownMs": 2000,
+    "healPercent": 0.4,
+    "maxCharges": 3,
+    "description": "Consome essência condensada para restaurar instantaneamente 40% da vida máxima."
+  }
+]

@@ -1,0 +1,41 @@
+[
+  {
+    "id": "abyssal_slime",
+    "name": "Limo Abissal",
+    "type": "normal",
+    "maxHp": 45,
+    "attack": 9,
+    "defense": 2,
+    "moveSpeed": 85,
+    "attackRange": 32,
+    "attackCooldownMs": 1100,
+    "soulReward": 8,
+    "spriteKey": "abyssal_slime"
+  },
+  {
+    "id": "bone_sentinel",
+    "name": "Sentinela Ósseo",
+    "type": "normal",
+    "maxHp": 85,
+    "attack": 14,
+    "defense": 4,
+    "moveSpeed": 105,
+    "attackRange": 44,
+    "attackCooldownMs": 950,
+    "soulReward": 15,
+    "spriteKey": "bone_sentinel"
+  },
+  {
+    "id": "infernal_warden",
+    "name": "Carcereiro Infernal",
+    "type": "boss",
+    "maxHp": 420,
+    "attack": 24,
+    "defense": 6,
+    "moveSpeed": 115,
+    "attackRange": 58,
+    "attackCooldownMs": 1200,
+    "soulReward": 100,
+    "spriteKey": "infernal_warden"
+  }
+]
