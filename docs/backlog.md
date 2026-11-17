@@ -53,4 +53,5 @@
 | T-049 | Pré-carregar `portraits`, `village_tiles` e `village_npcs` em `src/view/scenes/BootScene.ts` e subir versão para `0.4.0` em `package.json`, `src/version.ts` e `tests/core/architecture.test.ts` (tam. P) | M4 | AG07 (Arquiteto) | feita |
 | T-050 | Validação do M4 (suíte 3x, Playwright validando Prólogo → Transição → Ato 1, retratos 2D, 30+ afixos e SFX Web Audio, capturas PC/Mobile, `docs/qa/qa-M4.md`) e tag `v0.4.0` (tam. M) | M4 | AG03 (QA) + AG00 (Líder) | a fazer |
 | T-051 | Ressalvas menores do QA do M3 no `BlacksmithModal.ts`: ajustar posição/wrap de `costText` no card `Forjar Relíquia Lendária` (`800x600`) e remover sufixo `+N` duplicado em `row.nameText` (tam. P) | M4 | AG02 (UI) | feita |
+| T-052 | Ajuste visual em `village_tiles.png` (frame 0 `grass_path`): substituir faixa vertical marrom por textura orgânica de grama/musgo contínua 16x16 sem listras repetitivas (tam. P) | M4 | AG08 (Arte) | em andamento |
 
