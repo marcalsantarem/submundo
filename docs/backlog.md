@@ -27,3 +27,6 @@
 | T-023 | Habilitar multi-touch (`input: { activePointers: 4 }`) em `src/main.ts` e `touch-action: none` em `index.html` para uso simultâneo de joystick e skills no celular (tam. P) | M2 | AG07 (Arquiteto) | a fazer |
 | T-024 | Garantir suporte a múltiplos dedos e `pointercancel` no `VirtualJoystick.ts` e botões do `DungeonHud.ts` (tam. P) | M2 | AG02 (UI) | a fazer |
 | T-025 | Ajustar balanceamento inicial do Boss (`infernal_warden`) e monstros em `src/data/monsters.json` após feedback de dificuldade no teste real (tam. P) | M2 | AG04 (Sistemas/Meta) | a fazer |
+| T-026 | Gerador via código e PNGs do ícone oficial do app SUBMUNDO (`public/icons/icon-192.png`, `icon-512.png`, `apple-touch-icon.png` 180x180) (tam. P) | M2 | AG08 (Arte) | a fazer |
+| T-027 | Configurar PWA instalável (`public/manifest.webmanifest`, `public/sw.js` e cabeçalhos PWA em `netlify.toml`) (tam. P) | M2 | AG10 (Plataforma) | a fazer |
+| T-028 | Adicionar meta tags iOS (`apple-mobile-web-app-capable`, `apple-touch-icon`, `viewport-fit=cover`) em `index.html` e registro do Service Worker em `src/main.ts` (tam. P) | M2 | AG07 (Arquiteto) | a fazer |
