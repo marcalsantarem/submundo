@@ -66,6 +66,20 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
     frameHeight: 16,
     fallbackColor: 0xf97316,
   },
+  {
+    key: 'hub_tiles',
+    file: 'assets/sprites/hub_tiles.png',
+    frameWidth: 16,
+    frameHeight: 16,
+    fallbackColor: 0x1e293b,
+  },
+  {
+    key: 'hub_npcs',
+    file: 'assets/sprites/hub_npcs.png',
+    frameWidth: 32,
+    frameHeight: 32,
+    fallbackColor: 0x48cae4,
+  },
 ];
 
 export class BootScene extends Phaser.Scene {
@@ -108,7 +122,9 @@ export class BootScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    if ('DungeonScene' in this.scene.manager.keys) {
+    if ('HubScene' in this.scene.manager.keys) {
+      this.scene.start('HubScene');
+    } else if ('DungeonScene' in this.scene.manager.keys) {
       this.scene.start('DungeonScene');
     }
   }

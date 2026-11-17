@@ -38,7 +38,7 @@
 | T-034 | Modais responsivos e HUD do Refúgio (`AltarModal.ts`, `BlacksmithModal.ts` e `HubHud.ts` para PC `800x600` e Mobile `360x640`) em `src/view/ui/` (tam. M) | M3 | AG02 (UI) | feita |
 | T-035 | Cena interativa do Refúgio no Submundo (`src/view/scenes/HubScene.ts`) com Portal da Masmorra, Altar, Ferreiro, Baú persistente e movimentação híbrida (tam. M) | M3 | AG02 (UI) | feita |
 | T-036 | Integração `HubScene ⇄ DungeonScene` (aplicar bônus do Altar e gear salvo na entrada, drop de Essência de General no Boss e gravação do retorno ao Hub) em `src/view/scenes/DungeonScene.ts` (tam. M) | M3 | AG01 (Gameplay) | feita |
-| T-037 | Registrar `HubScene` em `src/main.ts` e `BootScene.ts` (pré-carregar `hub_tiles`/`hub_npcs`, iniciar no Refúgio) e subir versão para `0.3.0` (tam. P) | M3 | AG07 (Arquiteto) | em andamento |
+| T-037 | Registrar `HubScene` em `src/main.ts` e `BootScene.ts` (pré-carregar `hub_tiles`/`hub_npcs`, iniciar no Refúgio) e subir versão para `0.3.0` (tam. P) | M3 | AG07 (Arquiteto) | feita |
 | T-038 | Validação do M3 (suíte 3x, Playwright percorrendo Hub → Altar/Ferreiro → Masmorra → retorno ao Hub, capturas PC/Mobile, `docs/qa/qa-M3.md`) e tag `v0.3.0` (tam. M) | M3 | AG03 (QA) + AG00 (Líder) | a fazer |
 | T-039 | Ressalva do QA do M2 na UI: evitar sobreposição de nome longo sobre `statsText` na Mochila em `src/view/ui/InventoryModal.ts` (tam. P) | M3 | AG02 (UI) | feita |
 | T-040 | Ressalva do QA do M2 nos assets: remover cópia redundante `public/assets/icons/submundo_icon_master.png` (`~1,30 MB`) do bundle final `dist/` (tam. P) | M3 | AG08 (Arte) | feita |
