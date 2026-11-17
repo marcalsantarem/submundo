@@ -149,5 +149,25 @@ describe('Architecture & Viewport Contracts (T-001)', () => {
     expect(powerIds).toHaveLength(6);
     expect(gear.weapon?.legendaryPower?.id).toBe('inferno_dash_trail');
   });
+
+  it('configures iOS/PWA meta tags and links in index.html and registers ./sw.js on load in src/main.ts (T-028)', () => {
+    const htmlPath = resolve(process.cwd(), 'index.html');
+    const html = readFileSync(htmlPath, 'utf-8');
+    expect(html).toContain('viewport-fit=cover');
+    expect(html).toContain('<meta name="theme-color" content="#09090b" />');
+    expect(html).toContain('<meta name="apple-mobile-web-app-capable" content="yes" />');
+    expect(html).toContain('<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />');
+    expect(html).toContain('<meta name="apple-mobile-web-app-title" content="SUBMUNDO" />');
+    expect(html).toContain('<link rel="manifest" href="./manifest.webmanifest" />');
+    expect(html).toContain('<link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />');
+    expect(html).toContain('<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />');
+
+    const mainPath = resolve(process.cwd(), 'src/main.ts');
+    const mainContent = readFileSync(mainPath, 'utf-8');
+    expect(mainContent).toContain("'serviceWorker' in navigator");
+    expect(mainContent).toContain("addEventListener('load'");
+    expect(mainContent).toContain("navigator.serviceWorker.register('./sw.js')");
+    expect(mainContent).toContain('.catch(');
+  });
 });
 
