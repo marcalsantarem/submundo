@@ -11,5 +11,16 @@
 | T-007 | Gerador de incursão de 4 salas + 1 Boss, progressão de ondas e estado da run (vitória/morte) em `src/core/dungeon/` (tam. M) | M1 | AG01 (Gameplay) | feita |
 | T-008 | HUD responsivo (`800x600` PC / `9:16` Mobile), joystick virtual flutuante de 1 polegar, botões de Dash/Skills/Poção e input `WASD`/Setas em `src/view/ui/` (tam. M) | M1 | AG02 (UI) | feita |
 | T-009 | `DungeonScene` integrando `src/core/`, renderização das 4 salas + Boss, animações de sprites e VFX de combate em `src/view/scenes/DungeonScene.ts` e `src/view/sprites/` (tam. M) | M1 | AG01 (Gameplay) + AG08 (Arte) | feita |
-| T-010 | Validação do M1 (suíte 3x, Playwright no navegador real, capturas PC `800x600` e Mobile `9:16`, `docs/qa/qa-M1.md`) e preparação `v0.1.0` (tam. M) | M1 | AG03 (QA) + AG00 (Líder) | feita (passa com 2 ressalvas menores) |
-| T-011 | Ressalvas menores do QA do M1: ocultar rótulo do botão de skill durante cooldown (`DungeonHud.ts`) e retorno em `forceClearRoom` (`DungeonScene.ts`) (tam. P) | M2 | AG02 (UI) + AG01 (Gameplay) | a fazer |
+| T-010 | Validação do M1 (suíte 3x, Playwright no navegador real, capturas PC `800x600` e Mobile `9:16`, `docs/qa/qa-M1.md`) e tag `v0.1.0` (tam. M) | M1 | AG03 (QA) + AG00 (Líder) | feita (passa com 2 ressalvas menores) |
+| T-011 | Ressalva do QA do M1 no HUD: ocultar rótulo do botão de skill durante o cooldown em `src/view/ui/DungeonHud.ts` (tam. P) | M2 | AG02 (UI) | a fazer |
+| T-012 | Ressalva do QA do M1 na cena: adicionar `return;` após `advanceRoomNow()` em `forceClearRoom` em `src/view/scenes/DungeonScene.ts` (tam. P) | M2 | AG01 (Gameplay) | a fazer |
+| T-013 | Contratos de tipos em `src/core/index.ts` para Equipamentos (`EquipSlot`, `Rarity`, `AffixDef`, `ItemDef`, `ItemInstance`, `StatusEffectType`, `LegendaryPowerId`) (tam. P) | M2 | AG07 (Arquiteto) | a fazer |
+| T-014 | Glossário e textos canônicos de itens base, afixos, poderes lendários e das 3 Forças (`Inferno`, `Submundo`, `Empíreo`) em `docs/narrativa.md` e `src/data/dialogues.json` (tam. P) | M2 | AG06 (Narrativa) | a fazer |
+| T-015 | Catálogo JSON de equipamentos base (4 slots: Arma, Armadura, Amuleto, Anel) e afixos/poderes lendários em `src/data/items.json` e `src/data/affixes.json` (tam. P) | M2 | AG04 (Sistemas/Meta) | a fazer |
+| T-016 | Ícones Pixel Art/2D para os 4 slots de equipamento e drops por raridade em `public/assets/sprites/` + VFX das 3 Forças em `src/view/sprites/CombatVfx.ts` (tam. M) | M2 | AG08 (Arte) | a fazer |
+| T-017 | Gerador determinístico de loot (4 raridades), inventário da run, cálculo de bônus equipados e perda de loot da run na morte em `src/core/loot/` (tam. M) | M2 | AG04 (Sistemas/Meta) | a fazer |
+| T-018 | Sinergias das 3 Forças no combate (`Brasa` 5 cargas, `Sangramento & Roubo de Vida`, `Julgamento & Raio` em críticos) e poderes lendários em `src/core/combat/` (tam. M) | M2 | AG01 (Gameplay) | a fazer |
+| T-019 | Painel responsivo de Inventário e Equipamentos (4 slots, cores de raridade, comparação de atributos e equipar com 1 toque) em `src/view/ui/` (tam. M) | M2 | AG02 (UI) | a fazer |
+| T-020 | Drops físicos na `DungeonScene.ts`, coleta de itens, aplicação de equipamentos/sinergias em tempo real e resumo de espólios extraídos/perdidos (tam. M) | M2 | AG01 (Gameplay) | a fazer |
+| T-021 | Subir versão do projeto para `0.2.0` em `package.json`, `src/version.ts` e `tests/core/architecture.test.ts` (tam. P) | M2 | AG07 (Arquiteto) | a fazer |
+| T-022 | Validação do M2 (suíte 3x, Playwright, capturas PC `800x600` e Mobile `9:16`, `docs/qa/qa-M2.md`) e tag `v0.2.0` (tam. M) | M2 | AG03 (QA) + AG00 (Líder) | a fazer |
