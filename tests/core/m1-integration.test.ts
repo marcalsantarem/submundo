@@ -218,6 +218,8 @@ describe('M1 Full Dungeon Run Integration (T-010)', () => {
       'abyssal_slime',
       'bone_sentinel',
       'infernal_warden',
+      'cave_bat',
+      'abyss_herald',
     ]);
     expect(SKILL_DEFS.map((s) => s.id)).toEqual([
       'spectral_dash',

@@ -1,3 +1,5 @@
+import type { BiomeId, CampaignStageDef } from '../index';
+
 export interface RoomSpawn {
   defId: string;
   x: number;
@@ -9,6 +11,8 @@ export interface RoomSpec {
   isBossRoom: boolean;
   title: string;
   spawns: RoomSpawn[];
+  biome?: BiomeId;
+  difficultyScale?: number;
 }
 
 const DEFAULT_ARENA_WIDTH = 800;
@@ -116,13 +120,81 @@ function computeSafeSpawnPoint(
   return { x: fallbackX, y: fallbackY };
 }
 
+function generateStageRooms(
+  stage: CampaignStageDef,
+  rng: () => number,
+  arenaWidth: number,
+  arenaHeight: number,
+  margin: number,
+  heroStartX: number,
+  heroStartY: number,
+  minHeroDist: number
+): RoomSpec[] {
+  const totalRooms = Math.max(1, Math.floor(stage.totalRooms));
+  const pool = stage.monsterPool.length > 0 ? stage.monsterPool : ['abyssal_slime'];
+  const rooms: RoomSpec[] = [];
+
+  for (let roomIndex = 0; roomIndex < totalRooms; roomIndex++) {
+    const roomNumber = roomIndex + 1;
+    const isBossRoom = roomIndex === totalRooms - 1;
+    const monsterIds: string[] = [];
+
+    if (isBossRoom) {
+      monsterIds.push(stage.bossId);
+      const escortCount = stage.difficultyScale >= 0.85 ? 2 : 1;
+      for (let i = 0; i < escortCount; i++) {
+        const pick = pool[Math.floor(rng() * pool.length)];
+        monsterIds.push(pick);
+      }
+    } else {
+      const count = 2 + roomIndex + (stage.difficultyScale >= 1 ? 1 : 0);
+      for (let i = 0; i < count; i++) {
+        const pick = pool[Math.floor(rng() * pool.length)];
+        monsterIds.push(pick);
+      }
+    }
+
+    const spawns: RoomSpawn[] = monsterIds.map((defId) => {
+      const pos = computeSafeSpawnPoint(
+        rng,
+        arenaWidth,
+        arenaHeight,
+        margin,
+        heroStartX,
+        heroStartY,
+        minHeroDist
+      );
+      return {
+        defId,
+        x: pos.x,
+        y: pos.y,
+      };
+    });
+
+    rooms.push({
+      roomNumber,
+      isBossRoom,
+      title: isBossRoom
+        ? `Sala ${roomNumber} — ${stage.name} (Chefe)`
+        : `Sala ${roomNumber} — ${stage.name}`,
+      spawns,
+      biome: stage.biome,
+      difficultyScale: stage.difficultyScale,
+    });
+  }
+
+  return rooms;
+}
+
 /**
- * Gera exatamente 5 salas (Salas 1 a 4 normais progressivas + Sala 5 Boss com escolta).
+ * Gera exatamente 5 salas padrão (Salas 1 a 4 normais progressivas + Sala 5 Boss com escolta)
+ * ou salas configuradas pelo estágio da campanha quando `stage` é fornecido.
  */
 export function generateDungeonRooms(
   arenaWidth: number = DEFAULT_ARENA_WIDTH,
   arenaHeight: number = DEFAULT_ARENA_HEIGHT,
-  seed: number = DEFAULT_SEED
+  seed: number = DEFAULT_SEED,
+  stage?: CampaignStageDef
 ): RoomSpec[] {
   const rng = createSeededRng(seed);
   const margin = Math.min(
@@ -135,6 +207,19 @@ export function generateDungeonRooms(
     SAFE_HERO_RADIUS,
     Math.floor(Math.min(arenaWidth, arenaHeight) * 0.28)
   );
+
+  if (stage) {
+    return generateStageRooms(
+      stage,
+      rng,
+      arenaWidth,
+      arenaHeight,
+      margin,
+      heroStartX,
+      heroStartY,
+      minHeroDist
+    );
+  }
 
   return ROOM_TEMPLATES.map((template) => {
     const spawns: RoomSpawn[] = template.monsters.map((defId) => {

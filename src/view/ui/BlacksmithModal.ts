@@ -801,6 +801,8 @@ export class BlacksmithModal {
       card.descText.setPosition(left, top + 16);
 
       card.costText.setFontSize(9);
+      card.costText.setOrigin(0, 0);
+      card.costText.setWordWrapWidth(w - btnW - 24);
       card.costText.setPosition(left, bottom - 13);
 
       card.btnContainer.setPosition(right - btnW / 2, bottom - btnH / 2 + 1);
@@ -810,7 +812,9 @@ export class BlacksmithModal {
       card.descText.setPosition(left, top + 20);
 
       card.costText.setFontSize(10);
-      card.costText.setPosition(left, bottom - 22);
+      card.costText.setOrigin(0, 0.5);
+      card.costText.setWordWrapWidth(w - btnW - 30);
+      card.costText.setPosition(left, bottom - btnH / 2);
 
       card.btnContainer.setPosition(right - btnW / 2, bottom - btnH / 2);
     }
@@ -928,7 +932,8 @@ export class BlacksmithModal {
       row.bg.lineStyle(1.5, borderNum, 0.9);
       row.bg.strokeRoundedRect(-rowW / 2, -rowH / 2, rowW, rowH, 6);
 
-      const suffix = level > 0 ? ` +${level}` : '';
+      const suffix =
+        level > 0 && !item.name.includes(`(+${level})`) ? ` (+${level})` : '';
       this.setTextClamped(
         row.nameText,
         `[${SLOT_LABELS[item.slot]}] ${item.name}${suffix}`,
