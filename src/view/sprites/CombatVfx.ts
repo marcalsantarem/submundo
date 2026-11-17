@@ -11,6 +11,79 @@ interface AnimationSpec {
 }
 
 const ANIMATION_SPECS: readonly AnimationSpec[] = [
+  // Hero Living (Prologue) — 768x48 (16 frames of 48x48)
+  {
+    key: 'hero_living_idle',
+    texture: 'hero_living',
+    frames: [0, 1, 2, 3],
+    frameRate: 6,
+    repeat: -1,
+  },
+  {
+    key: 'hero_living_walk',
+    texture: 'hero_living',
+    frames: [4, 5, 6, 7],
+    frameRate: 10,
+    repeat: -1,
+  },
+  {
+    key: 'hero_living_attack',
+    texture: 'hero_living',
+    frames: [8, 9, 10, 11],
+    frameRate: 14,
+    repeat: 0,
+  },
+  {
+    key: 'hero_living_dash',
+    texture: 'hero_living',
+    frames: [12, 13],
+    frameRate: 12,
+    repeat: 0,
+  },
+  {
+    key: 'hero_living_hit',
+    texture: 'hero_living',
+    frames: [14, 15],
+    frameRate: 12,
+    repeat: 0,
+  },
+  // Hero Wraith (Act 1+) — 768x48 (16 frames of 48x48)
+  {
+    key: 'hero_wraith_idle',
+    texture: 'hero_wraith',
+    frames: [0, 1, 2, 3],
+    frameRate: 6,
+    repeat: -1,
+  },
+  {
+    key: 'hero_wraith_walk',
+    texture: 'hero_wraith',
+    frames: [4, 5, 6, 7],
+    frameRate: 10,
+    repeat: -1,
+  },
+  {
+    key: 'hero_wraith_attack',
+    texture: 'hero_wraith',
+    frames: [8, 9, 10, 11],
+    frameRate: 14,
+    repeat: 0,
+  },
+  {
+    key: 'hero_wraith_dash',
+    texture: 'hero_wraith',
+    frames: [12, 13],
+    frameRate: 12,
+    repeat: 0,
+  },
+  {
+    key: 'hero_wraith_hit',
+    texture: 'hero_wraith',
+    frames: [14, 15],
+    frameRate: 12,
+    repeat: 0,
+  },
+  // Legacy fallback specs if wraith_warrior exists
   {
     key: 'wraith_idle',
     texture: 'wraith_warrior',
@@ -230,37 +303,75 @@ export class CombatVfxManager {
     fromY: number,
     toX: number,
     toY: number,
+    isWraith = true,
   ): void {
     const angle = Math.atan2(toY - fromY, toX - fromX);
     const midX = fromX + (toX - fromX) * 0.65;
     const midY = fromY + (toY - fromY) * 0.65;
 
+    const outerColor = isWraith ? 0x38bdf8 : 0xfacc15;
+    const innerColor = isWraith ? 0xe0f2fe : 0xe2e8f0;
+
     const slash = this.scene.add.graphics({ x: midX, y: midY }).setDepth(42);
     slash.setRotation(angle);
 
-    // Outer spectral glow arc (#38bdf8)
-    slash.lineStyle(4, 0x38bdf8, 0.9);
+    // Outer runic glow arc (traço externo)
+    slash.lineStyle(4, outerColor, 0.9);
     slash.beginPath();
-    slash.arc(0, 0, 16, -0.85, 0.85, false);
+    slash.arc(0, 0, 18, -0.9, 0.9, false);
     slash.strokePath();
 
-    // Inner bright blade core (#e0f2fe)
-    slash.lineStyle(2, 0xe0f2fe, 1);
+    // Secondary trailing arc (traço duplo)
+    slash.lineStyle(2.5, outerColor, 0.55);
     slash.beginPath();
-    slash.arc(2, 0, 15, -0.65, 0.65, false);
+    slash.arc(-3, 0, 14, -0.75, 0.75, false);
+    slash.strokePath();
+
+    // Inner bright blade core
+    slash.lineStyle(2, innerColor, 1);
+    slash.beginPath();
+    slash.arc(2, 0, 16, -0.68, 0.68, false);
     slash.strokePath();
 
     this.scene.tweens.add({
       targets: slash,
-      scaleX: 1.25,
-      scaleY: 1.25,
+      scaleX: 1.28,
+      scaleY: 1.28,
       alpha: 0,
-      duration: 160,
+      duration: 165,
       ease: 'Quad.easeOut',
       onComplete: () => {
         slash.destroy();
       },
     });
+
+    // Subtle spark particles along the slash arc
+    const sparkOffsets = [-0.65, -0.2, 0.25, 0.65];
+    for (let i = 0; i < sparkOffsets.length; i++) {
+      const sparkAngle = angle + sparkOffsets[i];
+      const startDist = 14;
+      const endDist = 26;
+      const sx = midX + Math.cos(sparkAngle) * startDist;
+      const sy = midY + Math.sin(sparkAngle) * startDist;
+
+      const spark = this.scene.add.graphics({ x: sx, y: sy }).setDepth(43);
+      spark.fillStyle(i % 2 === 0 ? innerColor : outerColor, 0.95);
+      spark.fillCircle(0, 0, 1.8);
+
+      this.scene.tweens.add({
+        targets: spark,
+        x: midX + Math.cos(sparkAngle) * endDist,
+        y: midY + Math.sin(sparkAngle) * endDist,
+        alpha: 0,
+        scaleX: 0.4,
+        scaleY: 0.4,
+        duration: 160,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          spark.destroy();
+        },
+      });
+    }
   }
 
   public showSkillAreaEffect(

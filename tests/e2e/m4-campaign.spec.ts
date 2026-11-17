@@ -67,8 +67,8 @@ test.describe('SUBMUNDO M4 — Campaign (Prologue -> Village Fall -> Act 1), 2D 
       };
     });
 
-    expect(GAME_VERSION).toBe('0.4.0');
-    expect(prologueBootCheck.title).toBe('SUBMUNDO v0.4.0');
+    expect(GAME_VERSION).toBe('0.5.0');
+    expect(prologueBootCheck.title).toBe('SUBMUNDO v0.5.0');
     expect(prologueBootCheck.phase).toBe('prologue');
     expect(prologueBootCheck.currentStageId).toBe('prologue_grotto');
     expect(prologueBootCheck.dialogueOpen).toBe(true);

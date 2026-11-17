@@ -142,6 +142,10 @@ export class DungeonScene extends Phaser.Scene {
   private lightingGraphics!: Phaser.GameObjects.Graphics;
   private heroAura!: Phaser.GameObjects.Graphics;
   private heroSprite?: Phaser.GameObjects.Sprite;
+  private heroSpriteKey: 'hero_living' | 'hero_wraith' = 'hero_wraith';
+  private isHeroActionAnimPlaying = false;
+  private heroIsMoving = false;
+  private heroFlipX = false;
   private readonly monsterVisuals = new Map<string, MonsterVisual>();
   private readonly minionVisuals = new Map<string, Phaser.GameObjects.Graphics>();
   private groundDrops: GroundDrop[] = [];
@@ -226,6 +230,9 @@ export class DungeonScene extends Phaser.Scene {
       this.clearMinionVisuals();
       this.destroyPortal();
       this.heroSprite = undefined;
+      this.isHeroActionAnimPlaying = false;
+      this.heroIsMoving = false;
+      this.heroFlipX = false;
       this.bannerText = undefined;
       this.bannerExpiresAtMs = 0;
       this.inventoryModal?.destroy();
@@ -257,6 +264,7 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     if (this.inventoryModal?.isOpen()) {
+      this.heroIsMoving = false;
       this.syncVisuals(this.elapsedTimeMs);
       this.updateHud(this.elapsedTimeMs);
       return;
@@ -273,6 +281,14 @@ export class DungeonScene extends Phaser.Scene {
     };
 
     const moveDir = this.hud.getMoveVector();
+    const canMove =
+      this.hero.isAlive &&
+      (this.runState.status === 'in_progress' ||
+        this.runState.status === 'room_cleared');
+    this.heroIsMoving = canMove && (moveDir.x !== 0 || moveDir.y !== 0);
+    if (canMove && moveDir.x !== 0) {
+      this.heroFlipX = moveDir.x < 0;
+    }
 
     if (this.runState.status === 'in_progress' && this.hero.isAlive) {
       this.runState.elapsedMs += clampedDelta;
@@ -456,21 +472,29 @@ export class DungeonScene extends Phaser.Scene {
     }
     this.recalculateHeroGear();
 
+    const heroKey: 'hero_living' | 'hero_wraith' =
+      this.activeStage.phase === 'prologue' ? 'hero_living' : 'hero_wraith';
+    this.heroSpriteKey = heroKey;
+    this.isHeroActionAnimPlaying = false;
+    this.heroIsMoving = false;
+    this.heroFlipX = this.hero.facing.x < 0;
+
     if (!this.heroSprite || !this.heroSprite.scene) {
       this.heroSprite = this.add
-        .sprite(this.hero.position.x, this.hero.position.y, 'wraith_warrior', 0)
-        .setScale(1.5)
+        .sprite(this.hero.position.x, this.hero.position.y, heroKey, 0)
+        .setScale(1.1)
         .setDepth(20);
     } else {
       this.heroSprite
+        .setTexture(heroKey, 0)
         .setPosition(this.hero.position.x, this.hero.position.y)
+        .setScale(1.1)
+        .setDepth(20)
         .setAlpha(1)
-        .setTint(0xffffff);
+        .clearTint();
     }
 
-    if (this.anims.exists('wraith_idle')) {
-      this.heroSprite.play('wraith_idle', true);
-    }
+    this.updateHeroLocomotionAnim();
 
     this.loadCurrentRoom();
 
@@ -680,40 +704,26 @@ export class DungeonScene extends Phaser.Scene {
       switch (event.type) {
         case 'hero_basic_attack': {
           soundManager.play(event.isCrit ? 'crit' : 'attack');
+          const dx = event.position.x - this.hero.position.x;
+          if (Math.abs(dx) > 0.5) {
+            this.heroFlipX = dx < 0;
+            this.heroSprite?.setFlipX(this.heroFlipX);
+          }
           this.vfx.showSlashEffect(
             this.hero.position.x,
             this.hero.position.y,
             event.position.x,
-            event.position.y
+            event.position.y,
+            this.heroSpriteKey === 'hero_wraith'
           );
-          if (this.anims.exists('wraith_attack') && this.heroSprite) {
-            this.heroSprite.play('wraith_attack');
-            this.heroSprite.once(
-              Phaser.Animations.Events.ANIMATION_COMPLETE,
-              () => {
-                if (this.hero.isAlive && this.anims.exists('wraith_idle')) {
-                  this.heroSprite?.play('wraith_idle', true);
-                }
-              }
-            );
-          }
+          this.playHeroActionAnim('attack');
           break;
         }
 
         case 'hero_dash': {
           soundManager.play('dash');
           this.vfx.showDashTrail(event.position.x, event.position.y);
-          if (this.anims.exists('wraith_dash') && this.heroSprite) {
-            this.heroSprite.play('wraith_dash');
-            this.heroSprite.once(
-              Phaser.Animations.Events.ANIMATION_COMPLETE,
-              () => {
-                if (this.hero.isAlive && this.anims.exists('wraith_idle')) {
-                  this.heroSprite?.play('wraith_idle', true);
-                }
-              }
-            );
-          }
+          this.playHeroActionAnim('dash');
           break;
         }
 
@@ -874,10 +884,21 @@ export class DungeonScene extends Phaser.Scene {
             false,
             true
           );
+          this.playHeroActionAnim('hit');
+          if (this.heroSprite && this.hero.isAlive) {
+            this.heroSprite.setTint(0xfca5a5);
+            this.time.delayedCall(120, () => {
+              if (this.hero.isAlive) {
+                this.heroSprite?.clearTint();
+              }
+            });
+          }
           break;
         }
 
         case 'hero_killed': {
+          this.isHeroActionAnimPlaying = false;
+          this.heroSprite?.stop();
           this.heroSprite?.setTint(0xef4444);
           this.heroSprite?.setAlpha(0.45);
           break;
@@ -1079,7 +1100,8 @@ export class DungeonScene extends Phaser.Scene {
   private syncVisuals(nowMs: number): void {
     // Sync Hero Sprite & Aura
     this.heroSprite?.setPosition(this.hero.position.x, this.hero.position.y);
-    this.heroSprite?.setFlipX(this.hero.facing.x < 0);
+    this.heroSprite?.setFlipX(this.heroFlipX);
+    this.updateHeroLocomotionAnim();
 
     const isInvulnerable = nowMs < this.hero.invulnerableUntilMs;
     if (this.hero.isAlive) {
@@ -1504,6 +1526,58 @@ export class DungeonScene extends Phaser.Scene {
       visual.hpBar.destroy();
     }
     this.monsterVisuals.clear();
+  }
+
+  private playHeroActionAnim(action: 'attack' | 'dash' | 'hit'): void {
+    if (!this.heroSprite || !this.hero.isAlive) {
+      return;
+    }
+
+    const animKey = `${this.heroSpriteKey}_${action}`;
+    const fallbackKey =
+      action === 'attack'
+        ? 'wraith_attack'
+        : action === 'dash'
+          ? 'wraith_dash'
+          : undefined;
+    const resolvedKey = this.anims.exists(animKey)
+      ? animKey
+      : fallbackKey && this.anims.exists(fallbackKey)
+        ? fallbackKey
+        : undefined;
+
+    if (!resolvedKey) {
+      return;
+    }
+
+    this.isHeroActionAnimPlaying = true;
+    this.heroSprite.off(Phaser.Animations.Events.ANIMATION_COMPLETE);
+    this.heroSprite.play(resolvedKey);
+    this.heroSprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      this.isHeroActionAnimPlaying = false;
+      this.updateHeroLocomotionAnim();
+    });
+  }
+
+  private updateHeroLocomotionAnim(): void {
+    if (!this.heroSprite || !this.hero.isAlive || this.isHeroActionAnimPlaying) {
+      return;
+    }
+
+    const desiredKey = this.heroIsMoving
+      ? `${this.heroSpriteKey}_walk`
+      : `${this.heroSpriteKey}_idle`;
+    const resolvedKey = this.anims.exists(desiredKey)
+      ? desiredKey
+      : this.anims.exists(`${this.heroSpriteKey}_idle`)
+        ? `${this.heroSpriteKey}_idle`
+        : this.anims.exists('wraith_idle')
+          ? 'wraith_idle'
+          : undefined;
+
+    if (resolvedKey && this.heroSprite.anims.currentAnim?.key !== resolvedKey) {
+      this.heroSprite.play(resolvedKey, true);
+    }
   }
 
   private resolveMonsterIdleAnim(spriteKey: string): string | null {

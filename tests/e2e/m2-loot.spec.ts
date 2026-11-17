@@ -81,7 +81,7 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 
     });
 
     expect(pwaCheck.title).toBe(`SUBMUNDO v${GAME_VERSION}`);
-    expect(pwaCheck.title).toBe('SUBMUNDO v0.4.0');
+    expect(pwaCheck.title).toBe('SUBMUNDO v0.5.0');
     expect(pwaCheck.manifestHref).toBe('./manifest.webmanifest');
     expect(pwaCheck.appleIconHref).toBe('./icons/apple-touch-icon.png');
     expect(pwaCheck.icon192Href).toBe('./icons/icon-192.png');

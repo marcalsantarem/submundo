@@ -186,6 +186,7 @@ export class HubScene extends Phaser.Scene {
   private lightingGraphics!: Phaser.GameObjects.Graphics;
   private heroAura!: Phaser.GameObjects.Graphics;
   private heroSprite!: Phaser.GameObjects.Sprite;
+  private heroSpriteKey: 'hero_living' | 'hero_wraith' = 'hero_living';
 
   private stations: HubStationView[] = [];
   private nearbyStationId: HubStationId | null = null;
@@ -257,12 +258,15 @@ export class HubScene extends Phaser.Scene {
     this.buildArenaTilesAndLighting(this.viewport);
     this.createStations(this.viewport);
 
+    const heroKey =
+      campaign.phase === 'prologue' ? 'hero_living' : 'hero_wraith';
+    this.heroSpriteKey = heroKey;
     this.heroSprite = this.add
-      .sprite(this.hero.position.x, this.hero.position.y, 'wraith_warrior', 0)
-      .setScale(1.5)
+      .sprite(this.hero.position.x, this.hero.position.y, this.heroSpriteKey, 0)
+      .setScale(1.1)
       .setDepth(20);
-    if (this.anims.exists('wraith_idle')) {
-      this.heroSprite.play('wraith_idle', true);
+    if (this.anims.exists(`${this.heroSpriteKey}_idle`)) {
+      this.heroSprite.play(`${this.heroSpriteKey}_idle`, true);
     }
 
     this.hud = new HubHud(this, {
@@ -451,9 +455,14 @@ export class HubScene extends Phaser.Scene {
       this.bannerText = undefined;
     }
 
+    let dx = 0;
+    let dy = 0;
+
     if (!this.isAnyModalOpen()) {
       const moveDir = this.hud.getMoveVector();
       const bounds = this.getMovementBounds(this.viewport);
+      const prevX = this.hero.position.x;
+      const prevY = this.hero.position.y;
       moveHero(this.hero, moveDir, clampedDelta, {
         width: this.viewport.width,
         height: this.viewport.height,
@@ -467,7 +476,21 @@ export class HubScene extends Phaser.Scene {
         bounds.minY,
         Math.min(bounds.maxY, this.hero.position.y)
       );
+      dx = this.hero.position.x - prevX;
+      dy = this.hero.position.y - prevY;
       this.updateProximityState();
+    }
+
+    if (Math.abs(dx) > 0.5) {
+      this.heroSprite.setFlipX(dx < 0);
+    }
+    if (
+      Math.hypot(dx, dy) > 0.5 &&
+      this.anims.exists(`${this.heroSpriteKey}_walk`)
+    ) {
+      this.heroSprite.play(`${this.heroSpriteKey}_walk`, true);
+    } else if (this.anims.exists(`${this.heroSpriteKey}_idle`)) {
+      this.heroSprite.play(`${this.heroSpriteKey}_idle`, true);
     }
 
     this.syncVisuals();
@@ -791,6 +814,13 @@ export class HubScene extends Phaser.Scene {
 
   private rebuildPhaseScenario(): void {
     const phase = this.getCampaignPhase();
+    this.heroSpriteKey = phase === 'prologue' ? 'hero_living' : 'hero_wraith';
+    if (this.heroSprite) {
+      this.heroSprite.setTexture(this.heroSpriteKey, 0).setScale(1.1);
+      if (this.anims.exists(`${this.heroSpriteKey}_idle`)) {
+        this.heroSprite.play(`${this.heroSpriteKey}_idle`, true);
+      }
+    }
     this.cameras.main.setBackgroundColor(
       phase === 'prologue' ? '#121a14' : '#090b12'
     );
@@ -861,14 +891,20 @@ export class HubScene extends Phaser.Scene {
     }
 
     this.heroSprite.setPosition(this.hero.position.x, this.hero.position.y);
-    this.heroSprite.setFlipX(this.hero.facing.x < 0);
 
     const isPrologue = this.getCampaignPhase() === 'prologue';
     const auraColor = isPrologue ? 0xfbbf24 : 0x38bdf8;
-    const pulse = 0.14 + Math.sin(this.elapsedTimeMs * 0.005) * 0.04;
+    const pulse = isPrologue
+      ? 0.06 + Math.sin(this.elapsedTimeMs * 0.004) * 0.02
+      : 0.14 + Math.sin(this.elapsedTimeMs * 0.005) * 0.04;
+    const auraRadius = isPrologue ? 16 : 19;
     this.heroAura.clear();
     this.heroAura.fillStyle(auraColor, pulse);
-    this.heroAura.fillCircle(this.hero.position.x, this.hero.position.y + 4, 19);
+    this.heroAura.fillCircle(
+      this.hero.position.x,
+      this.hero.position.y + 6,
+      auraRadius
+    );
 
     const highlightPulse = 0.28 + Math.sin(this.elapsedTimeMs * 0.007) * 0.08;
     for (const station of this.stations) {
@@ -1226,13 +1262,22 @@ export class HubScene extends Phaser.Scene {
   }
 
   private ensureRequiredFallbackTextures(): void {
-    if (!this.textures.exists('wraith_warrior')) {
+    if (!this.textures.exists('hero_living')) {
+      const gfx = this.make.graphics({ x: 0, y: 0 });
+      gfx.fillStyle(0xd97706, 1);
+      gfx.fillRect(8, 6, 32, 36);
+      gfx.lineStyle(2, 0xfef3c7, 1);
+      gfx.strokeRect(8, 6, 32, 36);
+      gfx.generateTexture('hero_living', 48, 48);
+      gfx.destroy();
+    }
+    if (!this.textures.exists('hero_wraith')) {
       const gfx = this.make.graphics({ x: 0, y: 0 });
       gfx.fillStyle(0x38bdf8, 1);
-      gfx.fillRect(0, 0, 32, 32);
+      gfx.fillRect(8, 6, 32, 36);
       gfx.lineStyle(2, 0x09090b, 1);
-      gfx.strokeRect(0, 0, 32, 32);
-      gfx.generateTexture('wraith_warrior', 32, 32);
+      gfx.strokeRect(8, 6, 32, 36);
+      gfx.generateTexture('hero_wraith', 48, 48);
       gfx.destroy();
     }
   }

@@ -18,6 +18,20 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
     fallbackColor: 0x38bdf8,
   },
   {
+    key: 'hero_living',
+    file: 'assets/sprites/hero_living.png',
+    frameWidth: 48,
+    frameHeight: 48,
+    fallbackColor: 0xe2e8f0,
+  },
+  {
+    key: 'hero_wraith',
+    file: 'assets/sprites/hero_wraith.png',
+    frameWidth: 48,
+    frameHeight: 48,
+    fallbackColor: 0x38bdf8,
+  },
+  {
     key: 'abyssal_slime',
     file: 'assets/sprites/abyssal_slime.png',
     frameWidth: 32,
