@@ -118,7 +118,7 @@ describe('Entities & CombatEngine (T-006)', () => {
     // 18 * 2.2 = 39.6; 39.6 - 2 = 37.6 -> 38 damage -> 45 - 38 = 7 HP
     expect(m1.hp).toBe(7);
     expect(m2.hp).toBe(85);
-    expect(m3.hp).toBe(420);
+    expect(m3.hp).toBe(WARDEN_DEF.maxHp);
 
     // active_2: radius 130, mult 3.8 -> hits m1 (killing it) and m2, misses m3
     const eruptionEvents = triggerHeroSkill(hero, 'active_2', [m1, m2, m3], 1000, {
@@ -131,7 +131,7 @@ describe('Entities & CombatEngine (T-006)', () => {
     expect(m1.isAlive).toBe(false);
     expect(hero.souls).toBe(SLIME_DEF.soulReward);
     expect(m2.hp).toBeLessThan(85);
-    expect(m3.hp).toBe(420);
+    expect(m3.hp).toBe(WARDEN_DEF.maxHp);
   });
 
   it('consumes Soul Potion (potion) charges, heals 40% maxHp, and enforces cooldown/charge limit', () => {
@@ -160,26 +160,26 @@ describe('Entities & CombatEngine (T-006)', () => {
   });
 
   it('runs monster AI chase, monster attacks, soul collection on kill, and hero death', () => {
-    const hero = createHero({ x: 100, y: 100 }, { hp: 25, maxHp: 120 });
+    const hero = createHero({ x: 100, y: 100 }, { hp: 15, maxHp: 120 });
     const slime = spawnMonster(SLIME_DEF, 'slime_killer', { x: 200, y: 100 });
 
     // Slime is at dist 100 (attackRange 32); after 500ms at 85px/s it moves 42.5px closer -> x = 157.5
     tickCombat(hero, [slime], 500, 500, () => 0.99);
     expect(slime.position.x).toBeCloseTo(157.5);
-    expect(hero.stats.hp).toBe(25);
+    expect(hero.stats.hp).toBe(15);
 
     // Move slime into attack range (1000ms -> reaches attackRange 32 at x = 132) and attacks hero
     const eventsAttack1 = tickCombat(hero, [slime], 1000, 1500, () => 0.99);
     expect(slime.position.x).toBeCloseTo(132);
     expect(eventsAttack1.some((e) => e.type === 'hero_damaged')).toBe(true);
-    // Slime attack 9 - hero defense 4 = 5 dmg -> 20 HP left
-    expect(hero.stats.hp).toBe(20);
+    // Slime attack 9 - hero defense 4 = 5 dmg -> 10 HP left
+    expect(hero.stats.hp).toBe(10);
 
     // Deal lethal damage to slime via applyDamageToMonster / tickCombat to verify soul collection
     applyDamageToMonster(slime, 20);
     expect(slime.hp).toBeGreaterThan(0);
 
-    // Boss hits hero for lethal damage (24 attack - 4 defense = 20 damage -> 0 HP)
+    // Boss hits hero for lethal damage (17 attack - 4 defense = 13 damage -> 0 HP)
     const boss = spawnMonster(WARDEN_DEF, 'warden_1', { x: 120, y: 100 });
     const deathEvents = tickCombat(hero, [boss], 16, 3000, () => 0.99);
     expect(hero.stats.hp).toBe(0);

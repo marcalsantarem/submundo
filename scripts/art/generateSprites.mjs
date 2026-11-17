@@ -395,6 +395,195 @@ function generateSoulOrb() {
   return c;
 }
 
+// --- 7. Loot Icons (64x16, 4 frames 16x16: icon_weapon, icon_armor, icon_amulet, icon_ring) ---
+function generateLootIcons() {
+  const c = new PixelCanvas(64, 16);
+
+  // Frame 0 (ox = 0): icon_weapon (Dark Fantasy spectral/steel blade)
+  {
+    const ox = 0;
+    // Outline along diagonal blade & hilt
+    for (let i = 0; i < 8; i++) {
+      const bx = ox + 12 - i;
+      const by = 2 + i;
+      c.fillRect(bx - 1, by - 1, 3, 3, '#09090b');
+    }
+    // Crossguard & grip outline
+    c.fillRect(ox + 2, 8, 6, 6, '#09090b');
+    c.fillRect(ox + 1, 12, 3, 3, '#09090b');
+    // Blade steel + spectral edge
+    for (let i = 0; i < 8; i++) {
+      const bx = ox + 12 - i;
+      const by = 2 + i;
+      c.setPixel(bx, by, '#e4e4e7');
+      c.setPixel(bx + 1, by, '#38bdf8');
+      c.setPixel(bx, by + 1, '#a1a1aa');
+    }
+    c.setPixel(ox + 13, 2, '#e0f2fe');
+    c.setPixel(ox + 12, 2, '#e0f2fe');
+    // Crossguard
+    c.drawLine(ox + 3, 8, ox + 7, 12, '#facc15');
+    c.drawLine(ox + 3, 9, ox + 6, 12, '#71717a');
+    // Grip & pommel
+    c.setPixel(ox + 3, 12, '#3f3f46');
+    c.setPixel(ox + 2, 13, '#facc15');
+  }
+
+  // Frame 1 (ox = 16): icon_armor (Dark iron cuirass with spectral core)
+  {
+    const ox = 16;
+    // Dark outline
+    c.fillRect(ox + 2, 2, 12, 12, '#09090b');
+    c.fillRect(ox + 5, 2, 6, 2, '#09090b');
+    // Neck opening cut
+    c.fillRect(ox + 6, 2, 4, 2, '#000000', 0);
+    // Shoulders / pauldrons
+    c.fillRect(ox + 2, 3, 4, 4, '#52525b');
+    c.fillRect(ox + 10, 3, 4, 4, '#52525b');
+    c.fillRect(ox + 3, 3, 2, 2, '#e4e4e7');
+    c.fillRect(ox + 11, 3, 2, 2, '#e4e4e7');
+    // Chestplate body
+    c.fillRect(ox + 4, 4, 8, 8, '#3f3f46');
+    c.fillRect(ox + 5, 5, 6, 6, '#71717a');
+    c.fillRect(ox + 5, 11, 6, 2, '#52525b');
+    // Rib highlight & center ridge
+    c.drawLine(ox + 5, 5, ox + 10, 5, '#e4e4e7');
+    c.drawLine(ox + 7, 5, ox + 7, 12, '#3f3f46');
+    // Spectral core gem
+    c.fillRect(ox + 7, 7, 2, 2, '#38bdf8');
+    c.setPixel(ox + 7, 7, '#e0f2fe');
+  }
+
+  // Frame 2 (ox = 32): icon_amulet (Pendant chain + gold bezel + crimson ruby)
+  {
+    const ox = 32;
+    // Chain arc
+    c.drawLine(ox + 4, 5, ox + 6, 2, '#a1a1aa');
+    c.drawLine(ox + 6, 2, ox + 9, 2, '#e4e4e7');
+    c.drawLine(ox + 9, 2, ox + 11, 5, '#a1a1aa');
+    c.setPixel(ox + 5, 4, '#71717a');
+    c.setPixel(ox + 10, 4, '#71717a');
+    // Pendant outline
+    c.fillRect(ox + 4, 6, 8, 8, '#09090b');
+    c.fillRect(ox + 5, 5, 6, 10, '#09090b');
+    // Gold bezel
+    c.fillRect(ox + 5, 6, 6, 8, '#ca8a04');
+    c.fillRect(ox + 6, 6, 4, 7, '#facc15');
+    // Crimson/ruby core
+    c.fillRect(ox + 6, 8, 4, 4, '#991b1b');
+    c.fillRect(ox + 7, 8, 2, 3, '#ef4444');
+    c.setPixel(ox + 7, 8, '#fca5a5');
+  }
+
+  // Frame 3 (ox = 48): icon_ring (Signet band + spectral gem)
+  {
+    const ox = 48;
+    // Outer shadow ring
+    c.fillCircle(ox + 8, 9, 5, '#09090b');
+    // Gold/silver band
+    c.fillCircle(ox + 8, 9, 4, '#ca8a04');
+    c.fillCircle(ox + 8, 9, 3, '#facc15');
+    // Inner hole (transparent)
+    c.fillCircle(ox + 8, 9, 1.8, '#000000', 0);
+    // Gem socket at top
+    c.fillRect(ox + 6, 2, 4, 4, '#09090b');
+    c.fillRect(ox + 7, 3, 2, 2, '#38bdf8');
+    c.setPixel(ox + 7, 3, '#e0f2fe');
+    c.setPixel(ox + 5, 8, '#fef08a');
+  }
+
+  return c;
+}
+
+// --- 8. Loot Drops (64x16, 4 frames 16x16: common, magic, rare, legendary) ---
+function generateLootDrops() {
+  const c = new PixelCanvas(64, 16);
+
+  const tiers = [
+    {
+      // 0: common (#e4e4e7)
+      ox: 0,
+      glow: '#71717a',
+      shadow: '#3f3f46',
+      mid: '#a1a1aa',
+      primary: '#e4e4e7',
+      highlight: '#fafafa',
+      flair: 0,
+    },
+    {
+      // 1: magic (#38bdf8)
+      ox: 16,
+      glow: '#0284c7',
+      shadow: '#0c4a6e',
+      mid: '#0284c7',
+      primary: '#38bdf8',
+      highlight: '#e0f2fe',
+      flair: 1,
+    },
+    {
+      // 2: rare (#facc15)
+      ox: 32,
+      glow: '#ca8a04',
+      shadow: '#713f12',
+      mid: '#eab308',
+      primary: '#facc15',
+      highlight: '#fef08a',
+      flair: 2,
+    },
+    {
+      // 3: legendary (#f97316)
+      ox: 48,
+      glow: '#dc2626',
+      shadow: '#7f1d1d',
+      mid: '#ea580c',
+      primary: '#f97316',
+      highlight: '#fed7aa',
+      flair: 3,
+    },
+  ];
+
+  for (const t of tiers) {
+    const cx = t.ox + 8;
+
+    // Soft outer aura
+    c.fillCircle(cx, 8, 6, t.glow, 95);
+
+    // Dark outline + iron pedestal base
+    c.fillCircle(cx, 8, 5, '#09090b');
+    c.fillRect(t.ox + 4, 11, 8, 3, '#09090b');
+    c.fillRect(t.ox + 5, 12, 6, 1, '#52525b');
+
+    // Faceted relic orb core
+    c.fillCircle(cx, 7.5, 3.8, t.shadow);
+    c.fillCircle(cx, 7, 3, t.mid);
+    c.fillCircle(cx - 0.5, 6.5, 2.2, t.primary);
+    c.setPixel(cx - 1, 5, t.highlight);
+    c.setPixel(cx - 2, 6, t.highlight);
+
+    // Tier visual progression
+    if (t.flair >= 1) {
+      c.setPixel(t.ox + 2, 7, t.primary);
+      c.setPixel(t.ox + 13, 7, t.primary);
+    }
+    if (t.flair >= 2) {
+      c.setPixel(cx, 1, t.highlight);
+      c.setPixel(t.ox + 3, 3, t.primary);
+      c.setPixel(t.ox + 12, 3, t.primary);
+    }
+    if (t.flair >= 3) {
+      // Blazing crown & side embers for legendary
+      c.fillRect(cx - 1, 1, 2, 2, '#facc15');
+      c.setPixel(cx, 0, '#fef08a');
+      c.setPixel(t.ox + 1, 5, '#f97316');
+      c.setPixel(t.ox + 14, 5, '#f97316');
+      c.setPixel(t.ox + 2, 10, '#facc15');
+      c.setPixel(t.ox + 13, 10, '#facc15');
+    }
+  }
+
+  return c;
+}
+
 function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
@@ -459,10 +648,30 @@ function main() {
       frames: ['idle'],
       build: generateSoulOrb,
     },
+    {
+      key: 'loot_icons',
+      file: 'loot_icons.png',
+      width: 64,
+      height: 16,
+      frameWidth: 16,
+      frameHeight: 16,
+      frames: ['icon_weapon', 'icon_armor', 'icon_amulet', 'icon_ring'],
+      build: generateLootIcons,
+    },
+    {
+      key: 'loot_drops',
+      file: 'loot_drops.png',
+      width: 64,
+      height: 16,
+      frameWidth: 16,
+      frameHeight: 16,
+      frames: ['common', 'magic', 'rare', 'legendary'],
+      build: generateLootDrops,
+    },
   ];
 
   const manifest = {
-    version: '0.1.0',
+    version: '0.2.0',
     sprites: {},
   };
 

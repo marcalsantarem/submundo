@@ -1,0 +1,203 @@
+[
+  {
+    "id": "spectral_shortblade",
+    "name": "Lâmina Espectral Gasta",
+    "slot": "weapon",
+    "force": "none",
+    "baseBonuses": {
+      "attack": 4,
+      "attackRange": 4
+    },
+    "iconKey": "icon_weapon",
+    "description": "Espada curta marcada por batalhas antigas, equilibrada para cortes rápidos no Submundo."
+  },
+  {
+    "id": "cinder_greatsword",
+    "name": "Montante das Cinzas",
+    "slot": "weapon",
+    "force": "inferno",
+    "baseBonuses": {
+      "attack": 7,
+      "attackRange": 8,
+      "critChance": 0.03
+    },
+    "iconKey": "icon_weapon",
+    "description": "Lâmina forjada em brasas abissais que incendeia o ar a cada golpe."
+  },
+  {
+    "id": "crimson_reaper_scythe",
+    "name": "Foice Carmesim",
+    "slot": "weapon",
+    "force": "submundo",
+    "baseBonuses": {
+      "attack": 6,
+      "attackRange": 12,
+      "lifeSteal": 0.04
+    },
+    "iconKey": "icon_weapon",
+    "description": "Foice curva banhada em icor sombrio que drena a vitalidade dos abatidos."
+  },
+  {
+    "id": "empyrean_spear",
+    "name": "Lança do Julgamento",
+    "slot": "weapon",
+    "force": "empireo",
+    "baseBonuses": {
+      "attack": 6,
+      "attackRange": 14,
+      "critChance": 0.05
+    },
+    "iconKey": "icon_weapon",
+    "description": "Haste angelical corrompida que perfura à distância com estalos de raio."
+  },
+  {
+    "id": "tattered_shroud",
+    "name": "Mortalha do Vigia",
+    "slot": "armor",
+    "force": "none",
+    "baseBonuses": {
+      "maxHp": 20,
+      "defense": 2
+    },
+    "iconKey": "icon_armor",
+    "description": "Armadura leve envolta em panos funerários que protege o corpo espectral."
+  },
+  {
+    "id": "ashen_plate",
+    "name": "Couraça de Escória",
+    "slot": "armor",
+    "force": "inferno",
+    "baseBonuses": {
+      "maxHp": 30,
+      "defense": 4,
+      "attack": 2
+    },
+    "iconKey": "icon_armor",
+    "description": "Placas incandescentes do Inferno que convertem impacto em calor destrutivo."
+  },
+  {
+    "id": "bloodbound_mail",
+    "name": "Malha Sanguínea",
+    "slot": "armor",
+    "force": "submundo",
+    "baseBonuses": {
+      "maxHp": 28,
+      "defense": 3,
+      "lifeSteal": 0.03
+    },
+    "iconKey": "icon_armor",
+    "description": "Cota de malha tecida com sombras vivas que regenera o portador no combate."
+  },
+  {
+    "id": "corrupted_seraph_aegis",
+    "name": "Égide Seráfica Corrompida",
+    "slot": "armor",
+    "force": "empireo",
+    "baseBonuses": {
+      "maxHp": 26,
+      "defense": 5,
+      "cooldownReduction": 0.04
+    },
+    "iconKey": "icon_armor",
+    "description": "Armadura celestial profanada cujas runas aceleram o fluxo de poder."
+  },
+  {
+    "id": "cracked_bone_seal",
+    "name": "Selo de Osso Rachado",
+    "slot": "amulet",
+    "force": "none",
+    "baseBonuses": {
+      "maxHp": 12,
+      "cooldownReduction": 0.05
+    },
+    "iconKey": "icon_amulet",
+    "description": "Talismã rudimentar entalhado em osso que estabiliza a energia espiritual."
+  },
+  {
+    "id": "pyre_ember_talisman",
+    "name": "Talismã da Pira",
+    "slot": "amulet",
+    "force": "inferno",
+    "baseBonuses": {
+      "attack": 3,
+      "cooldownReduction": 0.08
+    },
+    "iconKey": "icon_amulet",
+    "description": "Amuleto pulsante com cinzas vivas que alimenta habilidades ofensivas."
+  },
+  {
+    "id": "soul_drain_pendant",
+    "name": "Pingente Sorvedor de Almas",
+    "slot": "amulet",
+    "force": "submundo",
+    "baseBonuses": {
+      "cooldownReduction": 0.07,
+      "lifeSteal": 0.04
+    },
+    "iconKey": "icon_amulet",
+    "description": "Relíquia sombria que extrai vigor do sangue derramado na masmorra."
+  },
+  {
+    "id": "celestial_brand_seal",
+    "name": "Selo da Marca Celestial",
+    "slot": "amulet",
+    "force": "empireo",
+    "baseBonuses": {
+      "cooldownReduction": 0.1,
+      "critMultiplier": 0.15
+    },
+    "iconKey": "icon_amulet",
+    "description": "Símbolo do Empíreo que canaliza recarga acelerada e punições críticas."
+  },
+  {
+    "id": "iron_soul_band",
+    "name": "Anel de Ferro Espectral",
+    "slot": "ring",
+    "force": "none",
+    "baseBonuses": {
+      "moveSpeed": 8,
+      "luck": 0.06
+    },
+    "iconKey": "icon_ring",
+    "description": "Aro frio que agiliza os passos do Espectro e atrai relíquias perdidas."
+  },
+  {
+    "id": "blazing_signet",
+    "name": "Sinete Incandescente",
+    "slot": "ring",
+    "force": "inferno",
+    "baseBonuses": {
+      "attack": 3,
+      "critChance": 0.05,
+      "moveSpeed": 6
+    },
+    "iconKey": "icon_ring",
+    "description": "Anel marcado pelo selo de um general demoníaco, letal em investidas rápidas."
+  },
+  {
+    "id": "umbral_blood_ring",
+    "name": "Anel do Pacto Umbral",
+    "slot": "ring",
+    "force": "submundo",
+    "baseBonuses": {
+      "critChance": 0.04,
+      "lifeSteal": 0.03,
+      "moveSpeed": 8
+    },
+    "iconKey": "icon_ring",
+    "description": "Joia carmesim que une velocidade nas sombras e sustentação contínua."
+  },
+  {
+    "id": "storm_judgment_ring",
+    "name": "Anel do Relâmpago",
+    "slot": "ring",
+    "force": "empireo",
+    "baseBonuses": {
+      "critChance": 0.06,
+      "critMultiplier": 0.2,
+      "luck": 0.08
+    },
+    "iconKey": "icon_ring",
+    "description": "Anel carregado de estática celestial que amplifica impactos críticos."
+  }
+]

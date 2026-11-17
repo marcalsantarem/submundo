@@ -52,6 +52,20 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
     frameHeight: 16,
     fallbackColor: 0x38bdf8,
   },
+  {
+    key: 'loot_icons',
+    file: 'assets/sprites/loot_icons.png',
+    frameWidth: 16,
+    frameHeight: 16,
+    fallbackColor: 0xfacc15,
+  },
+  {
+    key: 'loot_drops',
+    file: 'assets/sprites/loot_drops.png',
+    frameWidth: 16,
+    frameHeight: 16,
+    fallbackColor: 0xf97316,
+  },
 ];
 
 export class BootScene extends Phaser.Scene {

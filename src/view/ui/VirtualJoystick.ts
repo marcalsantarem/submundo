@@ -18,13 +18,21 @@ export class VirtualJoystick {
   private readonly maxRadius = 46;
   private readonly deadZone = 7;
 
-  private readonly onPointerDownBound: (pointer: Phaser.Input.Pointer) => void;
+  private readonly onPointerDownBound: (
+    pointer: Phaser.Input.Pointer,
+    currentlyOver?: Phaser.GameObjects.GameObject[]
+  ) => void;
   private readonly onPointerMoveBound: (pointer: Phaser.Input.Pointer) => void;
   private readonly onPointerUpBound: (pointer: Phaser.Input.Pointer) => void;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     this.viewport = resolveViewportConfig(scene.scale.width || 800, scene.scale.height || 600);
+
+    const totalPointers = scene.input.manager?.pointersTotal ?? 2;
+    if (totalPointers < 4) {
+      scene.input.addPointer?.(4 - totalPointers);
+    }
 
     this.baseGraphic = scene.add.graphics();
     this.baseGraphic.setScrollFactor(0);
@@ -44,7 +52,10 @@ export class VirtualJoystick {
       .setScrollFactor(0)
       .setDepth(1001);
 
-    this.onPointerDownBound = (pointer: Phaser.Input.Pointer) => this.handlePointerDown(pointer);
+    this.onPointerDownBound = (
+      pointer: Phaser.Input.Pointer,
+      currentlyOver?: Phaser.GameObjects.GameObject[]
+    ) => this.handlePointerDown(pointer, currentlyOver);
     this.onPointerMoveBound = (pointer: Phaser.Input.Pointer) => this.handlePointerMove(pointer);
     this.onPointerUpBound = (pointer: Phaser.Input.Pointer) => this.handlePointerUp(pointer);
 
@@ -52,12 +63,14 @@ export class VirtualJoystick {
     scene.input.on('pointermove', this.onPointerMoveBound);
     scene.input.on('pointerup', this.onPointerUpBound);
     scene.input.on('pointerupoutside', this.onPointerUpBound);
+    scene.input.on('pointercancel', this.onPointerUpBound);
 
     this.resetRestingPosition();
     this.render();
   }
 
   public getDirection(): Vector2D {
+    this.syncActivePointer();
     return { x: this.direction.x, y: this.direction.y };
   }
 
@@ -74,6 +87,7 @@ export class VirtualJoystick {
     this.scene.input.off('pointermove', this.onPointerMoveBound);
     this.scene.input.off('pointerup', this.onPointerUpBound);
     this.scene.input.off('pointerupoutside', this.onPointerUpBound);
+    this.scene.input.off('pointercancel', this.onPointerUpBound);
 
     this.baseGraphic.destroy();
     this.thumbGraphic.destroy();
@@ -108,12 +122,37 @@ export class VirtualJoystick {
     return x <= this.viewport.width * 0.55 || y >= this.viewport.height * 0.45;
   }
 
-  private handlePointerDown(pointer: Phaser.Input.Pointer): void {
-    if (this.activePointerId !== null) {
+  private syncActivePointer(): void {
+    if (this.activePointerId === null) {
+      return;
+    }
+
+    const pointers = this.scene.input.manager?.pointers;
+    if (!pointers || pointers.length === 0) {
+      return;
+    }
+
+    const active = pointers.find((p) => p.id === this.activePointerId);
+    if (!active || !active.isDown) {
+      this.releasePointer();
+    }
+  }
+
+  private handlePointerDown(
+    pointer: Phaser.Input.Pointer,
+    currentlyOver?: Phaser.GameObjects.GameObject[]
+  ): void {
+    this.syncActivePointer();
+
+    if (currentlyOver && currentlyOver.length > 0) {
       return;
     }
 
     if (!this.isEligibleTouchZone(pointer.x, pointer.y)) {
+      return;
+    }
+
+    if (this.activePointerId !== null && this.activePointerId !== pointer.id) {
       return;
     }
 
@@ -156,7 +195,10 @@ export class VirtualJoystick {
   private handlePointerUp(pointer: Phaser.Input.Pointer): void {
     if (this.activePointerId !== null && pointer.id === this.activePointerId) {
       this.releasePointer();
+      return;
     }
+
+    this.syncActivePointer();
   }
 
   private releasePointer(): void {

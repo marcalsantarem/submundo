@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "sprites": {
     "wraith_warrior": {
       "key": "wraith_warrior",
@@ -74,6 +74,34 @@
       "frameHeight": 16,
       "frames": [
         "idle"
+      ]
+    },
+    "loot_icons": {
+      "key": "loot_icons",
+      "file": "loot_icons.png",
+      "width": 64,
+      "height": 16,
+      "frameWidth": 16,
+      "frameHeight": 16,
+      "frames": [
+        "icon_weapon",
+        "icon_armor",
+        "icon_amulet",
+        "icon_ring"
+      ]
+    },
+    "loot_drops": {
+      "key": "loot_drops",
+      "file": "loot_drops.png",
+      "width": 64,
+      "height": 16,
+      "frameWidth": 16,
+      "frameHeight": 16,
+      "frames": [
+        "common",
+        "magic",
+        "rare",
+        "legendary"
       ]
     }
   }

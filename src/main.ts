@@ -13,6 +13,9 @@ export function createGameConfig(viewport: ViewportConfig): Phaser.Types.Core.Ga
     backgroundColor: '#09090b',
     pixelArt: true,
     roundPixels: true,
+    input: {
+      activePointers: 4,
+    },
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -41,6 +44,24 @@ export function bootstrapGame(): Phaser.Game {
   return game;
 }
 
+export function registerServiceWorker(): void {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return;
+  }
+  if (!('serviceWorker' in navigator)) {
+    return;
+  }
+
+  window.addEventListener('load', () => {
+    try {
+      void navigator.serviceWorker.register('./sw.js').catch(() => {});
+    } catch {
+      // Safe fallback for dev/test environments
+    }
+  });
+}
+
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   bootstrapGame();
+  registerServiceWorker();
 }

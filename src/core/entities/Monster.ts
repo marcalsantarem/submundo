@@ -16,6 +16,11 @@ export interface MonsterInstance {
   attackCooldownMs: number;
   soulReward: number;
   nextAttackAtMs: number;
+  emberStacks: number;
+  bleedUntilMs: number;
+  bleedDps: number;
+  lastBleedTickAtMs: number;
+  stunnedUntilMs: number;
   isAlive: boolean;
 }
 
@@ -40,6 +45,11 @@ export function spawnMonster(
     attackCooldownMs: def.attackCooldownMs,
     soulReward: def.soulReward,
     nextAttackAtMs: 0,
+    emberStacks: 0,
+    bleedUntilMs: 0,
+    bleedDps: 0,
+    lastBleedTickAtMs: 0,
+    stunnedUntilMs: 0,
     isAlive: def.maxHp > 0,
   };
 }

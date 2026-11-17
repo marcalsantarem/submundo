@@ -39,6 +39,15 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 | `infernal_warden` | `infernal_warden.png` | `128x64` px | `64x64` px | 2 | `0: idle`, `1: slam` |
 | `dungeon_tiles` | `dungeon_tiles.png` | `64x16` px | `16x16` px | 4 | `0: floor_dark`, `1: floor_cracked`, `2: wall_abyssal`, `3: portal_soul` |
 | `soul_orb` | `soul_orb.png` | `16x16` px | `16x16` px | 1 | `0: idle` |
+| `loot_icons` | `loot_icons.png` | `64x16` px | `16x16` px | 4 | `0: icon_weapon`, `1: icon_armor`, `2: icon_amulet`, `3: icon_ring` |
+| `loot_drops` | `loot_drops.png` | `64x16` px | `16x16` px | 4 | `0: common (#e4e4e7)`, `1: magic (#38bdf8)`, `2: rare (#facc15)`, `3: legendary (#f97316)` |
+
+### 3.1. VFX das 3 Forças e Drops (`src/view/sprites/CombatVfx.ts`)
+
+- **Inferno (`showEmberExplosion`):** Anel e centelhas ígneas em `#f97316` / `#ef4444` / `#facc15`.
+- **Empíreo (`showLightningChain`):** Raios angulares em cadeia com halo `#facc15` e núcleo `#e0fbfc`.
+- **Submundo (`showBleedEffect`):** Impacto carmesim e gotículas descendentes em `#ef4444` / `#991b1b` / `#fca5a5`.
+- **Drops e Coleta (`showLootDropBeam`, `showItemPickupBanner`):** Feixe vertical por raridade (`#e4e4e7`, `#38bdf8`, `#facc15`, `#f97316`) e banner flutuante com contorno `#09090b`.
 
 ---
 
@@ -47,3 +56,17 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 - Os spritesheets seguem grid horizontal estrito (`width = frameWidth * frames.length`, `height = frameHeight`).
 - Para regenerar todos os assets via código: `node scripts/art/generateSprites.mjs`.
 - Qualquer arquivo `.png` em `public/assets/sprites/` pode ser editado ou substituído no LibreSprite/Pixelorama mantendo a mesma chave, dimensão de frame e ordem de índices em `manifest.json`.
+
+---
+
+## 5. Ícone Oficial do App (`public/icons/`)
+
+- **Arte-mestre:** `assets/icons/submundo_icon_master.png` (`1024x1024` px, PNG RGB opaco full-bleed — Guerreiro Espectral envolto em chamas espirituais azuis empunhando lâmina rúnica sobre fundo abissal).
+- **Comando de regeneração:** `python3 scripts/art/generateIcons.py` (utiliza Pillow `Resampling.LANCZOS` e nitidez suave abaixo de `256x256` px).
+
+| Arquivo | Dimensões | Formato | Uso |
+| :--- | :--- | :--- | :--- |
+| `public/icons/icon-512.png` | `512x512` px | PNG RGB | Ícone PWA / Splash em alta resolução |
+| `public/icons/icon-192.png` | `192x192` px | PNG RGB | Ícone padrão Android / Web App Manifest |
+| `public/icons/apple-touch-icon.png` | `180x180` px | PNG RGB (opaco full-bleed) | Ícone de tela inicial iOS / Safari |
+

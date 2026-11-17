@@ -1,0 +1,323 @@
+{
+  "affixes": [
+    {
+      "id": "of_vitality",
+      "name": "da Vitalidade",
+      "force": "none",
+      "allowedSlots": ["armor", "amulet", "ring"],
+      "minRarity": "magic",
+      "bonuses": {
+        "maxHp": 18
+      },
+      "description": "+18 de Vida Máxima."
+    },
+    {
+      "id": "of_iron_skin",
+      "name": "da Pele Férrea",
+      "force": "none",
+      "allowedSlots": ["armor", "amulet"],
+      "minRarity": "magic",
+      "bonuses": {
+        "defense": 2,
+        "maxHp": 10
+      },
+      "description": "+2 de Defesa e +10 de Vida Máxima."
+    },
+    {
+      "id": "of_swift_steps",
+      "name": "dos Passos Céleres",
+      "force": "none",
+      "allowedSlots": ["ring", "armor"],
+      "minRarity": "magic",
+      "bonuses": {
+        "moveSpeed": 12
+      },
+      "description": "+12 de Velocidade de Movimento."
+    },
+    {
+      "id": "of_keen_edge",
+      "name": "do Gume Afiado",
+      "force": "none",
+      "allowedSlots": ["weapon", "ring"],
+      "minRarity": "magic",
+      "bonuses": {
+        "attack": 3
+      },
+      "description": "+3 de Ataque."
+    },
+    {
+      "id": "of_fortune",
+      "name": "da Fortuna Sombria",
+      "force": "none",
+      "allowedSlots": ["ring", "amulet"],
+      "minRarity": "magic",
+      "bonuses": {
+        "luck": 0.1
+      },
+      "description": "+10% de Sorte na obtenção de loot."
+    },
+    {
+      "id": "of_long_reach",
+      "name": "do Alcance Longo",
+      "force": "none",
+      "allowedSlots": ["weapon"],
+      "minRarity": "rare",
+      "bonuses": {
+        "attackRange": 10,
+        "attack": 2
+      },
+      "description": "+10 de Alcance de Ataque e +2 de Ataque."
+    },
+    {
+      "id": "of_cinders",
+      "name": "das Cinzas",
+      "force": "inferno",
+      "allowedSlots": ["weapon", "ring"],
+      "minRarity": "magic",
+      "bonuses": {
+        "attack": 4
+      },
+      "description": "+4 de Ataque inflamado pelo Inferno."
+    },
+    {
+      "id": "of_ember_spark",
+      "name": "da Centelha",
+      "force": "inferno",
+      "allowedSlots": ["weapon", "amulet", "ring"],
+      "minRarity": "magic",
+      "bonuses": {
+        "critChance": 0.04,
+        "attack": 2
+      },
+      "description": "+4% de Chance Crítica e +2 de Ataque."
+    },
+    {
+      "id": "of_slag_fortitude",
+      "name": "da Escória",
+      "force": "inferno",
+      "allowedSlots": ["armor"],
+      "minRarity": "magic",
+      "bonuses": {
+        "maxHp": 22,
+        "defense": 2
+      },
+      "description": "+22 de Vida Máxima e +2 de Defesa."
+    },
+    {
+      "id": "of_infernal_haste",
+      "name": "da Fúria Ígnea",
+      "force": "inferno",
+      "allowedSlots": ["amulet", "ring"],
+      "minRarity": "magic",
+      "bonuses": {
+        "cooldownReduction": 0.06,
+        "moveSpeed": 8
+      },
+      "description": "+6% de Redução de Recarga e +8 de Velocidade."
+    },
+    {
+      "id": "of_pyre_wrath",
+      "name": "da Ira da Pira",
+      "force": "inferno",
+      "allowedSlots": ["weapon", "amulet"],
+      "minRarity": "rare",
+      "bonuses": {
+        "attack": 5,
+        "critMultiplier": 0.18
+      },
+      "description": "+5 de Ataque e +18% de Dano Crítico."
+    },
+    {
+      "id": "of_hellfire_dominion",
+      "name": "do Fogo Abissal",
+      "force": "inferno",
+      "allowedSlots": ["weapon", "armor", "amulet", "ring"],
+      "minRarity": "rare",
+      "bonuses": {
+        "attack": 4,
+        "maxHp": 15,
+        "critChance": 0.04
+      },
+      "description": "+4 de Ataque, +15 de Vida Máxima e +4% de Chance Crítica."
+    },
+    {
+      "id": "of_leeches",
+      "name": "Sanguessuga",
+      "force": "submundo",
+      "allowedSlots": ["weapon", "ring"],
+      "minRarity": "magic",
+      "bonuses": {
+        "lifeSteal": 0.03
+      },
+      "description": "+3% de Roubo de Vida."
+    },
+    {
+      "id": "of_crimson_veins",
+      "name": "das Veias Carmesins",
+      "force": "submundo",
+      "allowedSlots": ["armor", "amulet"],
+      "minRarity": "magic",
+      "bonuses": {
+        "maxHp": 20,
+        "lifeSteal": 0.02
+      },
+      "description": "+20 de Vida Máxima e +2% de Roubo de Vida."
+    },
+    {
+      "id": "of_spectral_mist",
+      "name": "da Névoa Umbral",
+      "force": "submundo",
+      "allowedSlots": ["armor", "ring"],
+      "minRarity": "magic",
+      "bonuses": {
+        "moveSpeed": 10,
+        "defense": 2
+      },
+      "description": "+10 de Velocidade e +2 de Defesa."
+    },
+    {
+      "id": "of_soul_harvest",
+      "name": "da Colheita de Almas",
+      "force": "submundo",
+      "allowedSlots": ["amulet", "ring"],
+      "minRarity": "magic",
+      "bonuses": {
+        "cooldownReduction": 0.06,
+        "luck": 0.08
+      },
+      "description": "+6% de Redução de Recarga e +8% de Sorte."
+    },
+    {
+      "id": "of_blood_frenzy",
+      "name": "do Frenesi Sangrento",
+      "force": "submundo",
+      "allowedSlots": ["weapon", "ring"],
+      "minRarity": "rare",
+      "bonuses": {
+        "attack": 4,
+        "lifeSteal": 0.04
+      },
+      "description": "+4 de Ataque e +4% de Roubo de Vida."
+    },
+    {
+      "id": "of_grave_ward",
+      "name": "da Proteção Tumular",
+      "force": "submundo",
+      "allowedSlots": ["armor", "amulet"],
+      "minRarity": "rare",
+      "bonuses": {
+        "maxHp": 28,
+        "defense": 3
+      },
+      "description": "+28 de Vida Máxima e +3 de Defesa."
+    },
+    {
+      "id": "of_lightning",
+      "name": "do Relâmpago",
+      "force": "empireo",
+      "allowedSlots": ["weapon", "ring"],
+      "minRarity": "magic",
+      "bonuses": {
+        "critChance": 0.05
+      },
+      "description": "+5% de Chance Crítica."
+    },
+    {
+      "id": "of_zeal",
+      "name": "do Zelo Celestial",
+      "force": "empireo",
+      "allowedSlots": ["amulet", "ring"],
+      "minRarity": "magic",
+      "bonuses": {
+        "cooldownReduction": 0.08
+      },
+      "description": "+8% de Redução de Recarga."
+    },
+    {
+      "id": "of_judgment_blow",
+      "name": "do Golpe Severo",
+      "force": "empireo",
+      "allowedSlots": ["weapon", "ring"],
+      "minRarity": "magic",
+      "bonuses": {
+        "critMultiplier": 0.2
+      },
+      "description": "+20% de Dano Crítico."
+    },
+    {
+      "id": "of_seraph_ward",
+      "name": "da Guarda Seráfica",
+      "force": "empireo",
+      "allowedSlots": ["armor", "amulet"],
+      "minRarity": "magic",
+      "bonuses": {
+        "defense": 3,
+        "cooldownReduction": 0.04
+      },
+      "description": "+3 de Defesa e +4% de Redução de Recarga."
+    },
+    {
+      "id": "of_thunder_tempest",
+      "name": "da Tempestade Divina",
+      "force": "empireo",
+      "allowedSlots": ["weapon", "amulet"],
+      "minRarity": "rare",
+      "bonuses": {
+        "critChance": 0.06,
+        "critMultiplier": 0.22
+      },
+      "description": "+6% de Chance Crítica e +22% de Dano Crítico."
+    },
+    {
+      "id": "of_radiant_aegis",
+      "name": "do Esplendor Corrompido",
+      "force": "empireo",
+      "allowedSlots": ["armor", "ring"],
+      "minRarity": "rare",
+      "bonuses": {
+        "defense": 4,
+        "moveSpeed": 10,
+        "critChance": 0.03
+      },
+      "description": "+4 de Defesa, +10 de Velocidade e +3% de Chance Crítica."
+    }
+  ],
+  "legendaryPowers": [
+    {
+      "id": "inferno_dash_trail",
+      "name": "Rastro das Cinzas",
+      "force": "inferno",
+      "description": "Sua Esquiva Espectral deixa um rastro de fogo infernal que aplica Brasa nos inimigos."
+    },
+    {
+      "id": "submundo_bleed_minion",
+      "name": "Legião do Sangue",
+      "force": "submundo",
+      "description": "Inimigos que morrem sob Sangramento têm 25% de chance de erguer um servo espectral aliado."
+    },
+    {
+      "id": "empireo_crit_lightning",
+      "name": "Sentença Voltaica",
+      "force": "empireo",
+      "description": "Acertos críticos disparam um raio celestial nos 2 inimigos mais próximos, aplicando Julgamento."
+    },
+    {
+      "id": "inferno_ember_nova",
+      "name": "Supernova Abissal",
+      "force": "inferno",
+      "description": "Ao atingir 5 cargas de Brasa, a explosão causa dano ampliado em grande área e incendeia alvos vizinhos."
+    },
+    {
+      "id": "submundo_crimson_pact",
+      "name": "Pacto Carmesim",
+      "force": "submundo",
+      "description": "Skills do Submundo amplificam o Sangramento ativo e convertem parte do dano em cura espectral."
+    },
+    {
+      "id": "empireo_judgment_haste",
+      "name": "Fervor do Relâmpago",
+      "force": "empireo",
+      "description": "Aplicar Julgamento reduz a recarga das suas habilidades ativas e acelera seus golpes básicos."
+    }
+  ]
+}

@@ -36,11 +36,43 @@
       "title": "Forma Espectral Desfeita",
       "text": "Sua carcaça etérea se desfez nas sombras. O Selo puxa seu espírito de volta ao Refúgio do Submundo: os espólios ficaram para trás, mas suas Almas permanecem.",
       "shortText": "Você tombou. Retornando ao Refúgio do Submundo com suas Almas preservadas."
+    },
+    "loot_drop_legendary": {
+      "id": "loot_drop_legendary",
+      "speaker": "Sistema",
+      "title": "Relíquia Lendária Descoberta",
+      "text": "Um poder antigo pulsa nas cinzas: você obteve um equipamento Lendário. Vença o Boss para extraí-lo com segurança até o Refúgio do Submundo.",
+      "shortText": "Lendário encontrado! Extraia após o Boss para mantê-lo."
+    },
+    "inventory_hint": {
+      "id": "inventory_hint",
+      "speaker": "Ferreiro Espiritual",
+      "title": "Arsenal do Espectro",
+      "text": "Equipe Arma, Armadura Espectral, Amuleto e Anel de Alma na mochila. Combine afixos de Inferno, Submundo e Empíreo para despertar sua build.",
+      "shortText": "Abra o inventário para equipar os 4 slots e combinar as 3 Forças."
+    },
+    "extraction_loot_kept": {
+      "id": "extraction_loot_kept",
+      "speaker": "Emissário Celestial",
+      "title": "Espólios Extraídos",
+      "text": "A extração foi selada. Todas as Almas e equipamentos saqueados nesta incursão agora pertencem em definitivo ao seu arsenal no Refúgio do Submundo.",
+      "shortText": "Extração completa! Todos os equipamentos saqueados foram mantidos."
+    },
+    "death_loot_lost": {
+      "id": "death_loot_lost",
+      "speaker": "Emissário Celestial",
+      "title": "Espólios Perdidos na Escuridão",
+      "text": "O Selo resgatou seu espírito e suas Almas, mas os equipamentos coletados durante a incursão ficaram perdidos nos escombros da masmorra.",
+      "shortText": "Equipamentos não extraídos foram perdidos; suas Almas permanecem."
     }
   },
   "dungeon_enter": "As correntes do Submundo rangem, Guerreiro Espectral. Expurgue as quatro câmaras e reivindique a cabeça do Carcereiro Infernal.",
   "room_clear": "O último eco abissal se desfaz em cinzas. As Almas convergem para o seu Selo e o caminho adiante se abre.",
   "boss_intro": "Mais um cão acorrentado pelo Empíreo... Suas cinzas alimentarão minhas fornalhas, Guerreiro Espectral!",
   "run_victory": "O Carcereiro Infernal tombou. Retorne ao Refúgio do Submundo com suas Almas, seus espólios e a Essência tomada.",
-  "run_death": "Sua carcaça etérea se desfez nas sombras. O Selo puxa seu espírito de volta ao Refúgio do Submundo: os espólios ficaram para trás, mas suas Almas permanecem."
+  "run_death": "Sua carcaça etérea se desfez nas sombras. O Selo puxa seu espírito de volta ao Refúgio do Submundo: os espólios ficaram para trás, mas suas Almas permanecem.",
+  "loot_drop_legendary": "Lendário encontrado! Extraia após o Boss para mantê-lo.",
+  "inventory_hint": "Abra o inventário para equipar os 4 slots e combinar as 3 Forças.",
+  "extraction_loot_kept": "Extração completa! Todos os equipamentos saqueados foram mantidos.",
+  "death_loot_lost": "Equipamentos não extraídos foram perdidos; suas Almas permanecem."
 }
