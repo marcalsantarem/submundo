@@ -17,10 +17,30 @@ import { createHero, moveHero, type HeroState } from '../../core/entities/Hero';
 import { spawnMonster, type MonsterInstance } from '../../core/entities/Monster';
 import {
   resolveViewportConfig,
+  type EquipSlot,
+  type ItemInstance,
   type MonsterDef,
+  type Rarity,
   type SkillDef,
   type Vector2D,
 } from '../../core/index';
+import {
+  addItemToBag,
+  applyGearToHero,
+  computeGearBonuses,
+  createRunInventory,
+  equipItemFromBag,
+  getActiveForces,
+  getActiveLegendaryPowers,
+  resolveRunEndLoot,
+  unequipSlotToBag,
+  type RunInventoryState,
+} from '../../core/loot/Inventory';
+import {
+  generateItemDrop,
+  RARITY_COLORS,
+  shouldDropLoot,
+} from '../../core/loot/LootGenerator';
 import dialoguesData from '../../data/dialogues.json';
 import monstersJson from '../../data/monsters.json';
 import skillsJson from '../../data/skills.json';
@@ -29,10 +49,21 @@ import {
   registerGameAnimations,
 } from '../sprites/CombatVfx';
 import { DungeonHud, type HudSnapshot } from '../ui/DungeonHud';
+import {
+  InventoryModal,
+  type InventoryHudSnapshot,
+} from '../ui/InventoryModal';
 
 interface MonsterVisual {
   sprite: Phaser.GameObjects.Sprite;
   hpBar: Phaser.GameObjects.Graphics;
+}
+
+interface GroundDrop {
+  item: ItemInstance;
+  position: Vector2D;
+  sprite: Phaser.GameObjects.Sprite;
+  glow: Phaser.GameObjects.Graphics;
 }
 
 export interface SubmundoDebugApi {
@@ -40,6 +71,9 @@ export interface SubmundoDebugApi {
   getRunState: () => DungeonRunState;
   getHero: () => HeroState;
   getMonsters: () => MonsterInstance[];
+  getInventory: () => RunInventoryState;
+  spawnTestDrop: (rarity?: Rarity) => ItemInstance;
+  equipItem: (instanceId: string) => boolean;
   triggerSkill: (id: string) => CombatEvent[];
   forceClearRoom: () => void;
   advanceRoom: () => void;
@@ -55,6 +89,14 @@ declare global {
 const TILE_DISPLAY_SIZE = 32;
 const ARENA_PADDING = 36;
 const ROOM_CLEAR_AUTO_ADVANCE_MS = 1200;
+const DROP_PICKUP_RADIUS = 34;
+
+const RARITY_DROP_FRAME: Record<Rarity, number> = {
+  common: 0,
+  magic: 1,
+  rare: 2,
+  legendary: 3,
+};
 
 export class DungeonScene extends Phaser.Scene {
   private readonly monstersCatalog: MonsterDef[] =
@@ -66,15 +108,19 @@ export class DungeonScene extends Phaser.Scene {
   private runState!: DungeonRunState;
   private hero!: HeroState;
   private monsters: MonsterInstance[] = [];
+  private inventory!: RunInventoryState;
 
   private vfx!: CombatVfxManager;
   private hud!: DungeonHud;
+  private inventoryModal!: InventoryModal;
 
   private arenaLayer!: Phaser.GameObjects.Container;
   private lightingGraphics!: Phaser.GameObjects.Graphics;
   private heroAura!: Phaser.GameObjects.Graphics;
   private heroSprite!: Phaser.GameObjects.Sprite;
   private readonly monsterVisuals = new Map<string, MonsterVisual>();
+  private readonly minionVisuals = new Map<string, Phaser.GameObjects.Graphics>();
+  private groundDrops: GroundDrop[] = [];
 
   private portalContainer?: Phaser.GameObjects.Container;
   private portalPosition?: Vector2D;
@@ -84,6 +130,8 @@ export class DungeonScene extends Phaser.Scene {
   private bannerText?: string;
   private bannerExpiresAtMs = 0;
   private runSeedCounter = 1337;
+  private lootSummaryText?: string;
+  private runLootResolved = false;
 
   constructor() {
     super({ key: 'DungeonScene' });
@@ -108,6 +156,21 @@ export class DungeonScene extends Phaser.Scene {
       onRestartRun: () => {
         this.startNewRun();
       },
+      onToggleInventory: () => {
+        this.toggleInventoryModal();
+      },
+    });
+
+    this.inventoryModal = new InventoryModal(this, {
+      onEquipItem: (instanceId: string) => {
+        this.handleEquipItem(instanceId);
+      },
+      onUnequipSlot: (slot: EquipSlot) => {
+        this.handleUnequipSlot(slot);
+      },
+      onClose: () => {
+        this.updateHud(this.elapsedTimeMs);
+      },
     });
 
     this.startNewRun();
@@ -120,7 +183,10 @@ export class DungeonScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', onResize);
       this.clearMonsterVisuals();
+      this.clearGroundDrops();
+      this.clearMinionVisuals();
       this.destroyPortal();
+      this.inventoryModal?.destroy();
       this.hud?.destroy();
     });
 
@@ -130,6 +196,9 @@ export class DungeonScene extends Phaser.Scene {
         getRunState: () => this.runState,
         getHero: () => this.hero,
         getMonsters: () => this.monsters,
+        getInventory: () => this.inventory,
+        spawnTestDrop: (rarity?: Rarity) => this.spawnTestDrop(rarity),
+        equipItem: (instanceId: string) => this.handleEquipItem(instanceId),
         triggerSkill: (id: string) => this.handleUseSkill(id),
         forceClearRoom: () => this.forceClearRoom(),
         advanceRoom: () => this.advanceRoomNow(),
@@ -140,6 +209,12 @@ export class DungeonScene extends Phaser.Scene {
 
   public update(_time: number, delta: number): void {
     if (!this.runState || !this.hero || !this.hud) {
+      return;
+    }
+
+    if (this.inventoryModal?.isOpen()) {
+      this.syncVisuals(this.elapsedTimeMs);
+      this.updateHud(this.elapsedTimeMs);
       return;
     }
 
@@ -159,6 +234,7 @@ export class DungeonScene extends Phaser.Scene {
       this.runState.elapsedMs += clampedDelta;
 
       moveHero(this.hero, moveDir, clampedDelta, bounds);
+      this.collectNearbyDrops();
 
       const events = tickCombat(
         this.hero,
@@ -170,6 +246,7 @@ export class DungeonScene extends Phaser.Scene {
       this.checkAndUpdateRoomState(nowMs);
     } else if (this.runState.status === 'room_cleared' && this.hero.isAlive) {
       moveHero(this.hero, moveDir, clampedDelta, bounds);
+      this.collectNearbyDrops();
       this.roomClearTimerMs -= clampedDelta;
 
       const touchedPortal =
@@ -189,6 +266,7 @@ export class DungeonScene extends Phaser.Scene {
     if (
       !this.hero ||
       !this.hero.isAlive ||
+      this.inventoryModal?.isOpen() ||
       this.runState.status === 'victory' ||
       this.runState.status === 'defeat'
     ) {
@@ -280,10 +358,20 @@ export class DungeonScene extends Phaser.Scene {
 
     this.elapsedTimeMs = 0;
     this.roomClearTimerMs = 0;
+    this.lootSummaryText = undefined;
+    this.runLootResolved = false;
+    this.clearGroundDrops();
+    this.clearMinionVisuals();
+    if (this.inventoryModal?.isOpen()) {
+      this.inventoryModal.close();
+    }
+
     this.runState = createDungeonRun(width, height, this.runSeedCounter);
     this.runSeedCounter += 7;
 
     this.hero = createHero({ x: Math.round(width / 2), y: Math.round(height / 2) });
+    this.inventory = createRunInventory();
+    this.recalculateHeroGear();
 
     if (!this.heroSprite) {
       this.heroSprite = this.add
@@ -317,6 +405,7 @@ export class DungeonScene extends Phaser.Scene {
 
     this.destroyPortal();
     this.clearMonsterVisuals();
+    this.clearGroundDrops();
     this.buildArenaTilesAndLighting(width, height, currentRoom.roomNumber, currentRoom.isBossRoom);
 
     // Reposition hero at center of the new chamber
@@ -530,6 +619,84 @@ export class DungeonScene extends Phaser.Scene {
             event.position.y,
             reward
           );
+
+          const killedMonster = this.monsters.find(
+            (m) => m.instanceId === event.targetId
+          );
+          const isBoss = killedMonster?.type === 'boss';
+          if (shouldDropLoot(isBoss, Math.random, this.hero.luck)) {
+            const item = generateItemDrop({
+              luck: this.hero.luck,
+              isBoss,
+            });
+            this.spawnGroundDrop(item, event.position);
+          }
+          break;
+        }
+
+        case 'ember_explosion': {
+          const radius = this.hero.activeLegendaryPowers.includes(
+            'inferno_ember_nova'
+          )
+            ? 130
+            : 90;
+          this.vfx.showEmberExplosion(
+            event.position.x,
+            event.position.y,
+            radius
+          );
+          break;
+        }
+
+        case 'lightning_chain': {
+          const points = [event.position, ...(event.chainTargets ?? [])];
+          this.vfx.showLightningChain(points);
+          break;
+        }
+
+        case 'bleed_tick': {
+          this.vfx.showBleedEffect(event.position.x, event.position.y);
+          if ((event.value ?? 0) > 0) {
+            this.vfx.showDamageNumber(
+              event.position.x,
+              event.position.y,
+              event.value ?? 1,
+              false,
+              false
+            );
+          }
+          break;
+        }
+
+        case 'lifesteal_heal': {
+          this.vfx.showHealEffect(
+            event.position.x,
+            event.position.y,
+            event.value ?? 1
+          );
+          break;
+        }
+
+        case 'minion_spawned': {
+          this.vfx.showSkillAreaEffect(
+            event.position.x,
+            event.position.y,
+            26,
+            'submundo'
+          );
+          break;
+        }
+
+        case 'minion_attack': {
+          if ((event.value ?? 0) > 0) {
+            this.vfx.showDamageNumber(
+              event.position.x,
+              event.position.y,
+              event.value ?? 1,
+              false,
+              false
+            );
+          }
           break;
         }
 
@@ -570,14 +737,27 @@ export class DungeonScene extends Phaser.Scene {
           dialoguesData.entries.room_clear.shortText,
           ROOM_CLEAR_AUTO_ADVANCE_MS
         );
-      } else if (nextStatus === 'victory') {
+      } else if (nextStatus === 'victory' || nextStatus === 'defeat') {
+        const isVictory = nextStatus === 'victory';
+        if (isVictory) {
+          this.collectRemainingDropsOnVictory();
+        } else {
+          this.clearGroundDrops();
+        }
+        if (!this.runLootResolved) {
+          this.runLootResolved = true;
+          const { kept, lost } = resolveRunEndLoot(this.inventory, isVictory);
+          this.lootSummaryText = isVictory
+            ? `Itens extraídos: ${kept.length}`
+            : `Itens perdidos na incursão: ${lost.length}`;
+        }
+        if (this.inventoryModal?.isOpen()) {
+          this.inventoryModal.close();
+        }
         this.showTimedBanner(
-          dialoguesData.entries.run_victory.text,
-          60000
-        );
-      } else if (nextStatus === 'defeat') {
-        this.showTimedBanner(
-          dialoguesData.entries.run_death.text,
+          isVictory
+            ? dialoguesData.entries.run_victory.text
+            : dialoguesData.entries.run_death.text,
           60000
         );
       }
@@ -657,6 +837,30 @@ export class DungeonScene extends Phaser.Scene {
       );
     }
 
+    // Sync Spectral Minions
+    const activeMinionIds = new Set(this.hero.minions.map((m) => m.id));
+    for (const [minionId, gfx] of this.minionVisuals.entries()) {
+      if (!activeMinionIds.has(minionId)) {
+        gfx.destroy();
+        this.minionVisuals.delete(minionId);
+      }
+    }
+
+    for (const minion of this.hero.minions) {
+      let gfx = this.minionVisuals.get(minion.id);
+      if (!gfx) {
+        gfx = this.add.graphics().setDepth(19);
+        gfx.fillStyle(0xef4444, 0.28);
+        gfx.fillCircle(0, 0, 13);
+        gfx.fillStyle(0xff4d6d, 0.92);
+        gfx.fillTriangle(0, -8, 7, 5, -7, 5);
+        gfx.lineStyle(1.5, 0xfca5a5, 0.95);
+        gfx.strokeTriangle(0, -8, 7, 5, -7, 5);
+        this.minionVisuals.set(minion.id, gfx);
+      }
+      gfx.setPosition(minion.position.x, minion.position.y);
+    }
+
     // Sync Monster Sprites & Individual HP Bars
     for (const monster of this.monsters) {
       const visual = this.monsterVisuals.get(monster.instanceId);
@@ -722,6 +926,10 @@ export class DungeonScene extends Phaser.Scene {
         ? this.bannerText
         : undefined;
 
+    const equippedCount = (
+      ['weapon', 'armor', 'amulet', 'ring'] as const
+    ).filter((slot) => this.inventory.equipped[slot] !== null).length;
+
     const snapshot: HudSnapshot = {
       hp: this.hero.stats.hp,
       maxHp: this.hero.stats.maxHp,
@@ -738,6 +946,9 @@ export class DungeonScene extends Phaser.Scene {
       skillCooldownsMs,
       runStatus: this.runState.status,
       bannerText: activeBanner,
+      bagCount: this.inventory.bag.length,
+      equippedCount,
+      lootSummaryText: this.lootSummaryText,
     };
 
     this.hud.update(snapshot);
@@ -777,9 +988,230 @@ export class DungeonScene extends Phaser.Scene {
       );
     }
 
+    for (const drop of this.groundDrops) {
+      drop.position.x = Math.max(
+        ARENA_PADDING,
+        Math.min(width - ARENA_PADDING, drop.position.x)
+      );
+      drop.position.y = Math.max(
+        ARENA_PADDING + 24,
+        Math.min(height - ARENA_PADDING - 24, drop.position.y)
+      );
+      drop.sprite.setPosition(drop.position.x, drop.position.y);
+      drop.glow.setPosition(drop.position.x, drop.position.y);
+    }
+
     this.hud.resize(viewport);
+    this.inventoryModal?.resize(viewport);
     this.syncVisuals(this.elapsedTimeMs);
     this.updateHud(this.elapsedTimeMs);
+  }
+
+  private toggleInventoryModal(): void {
+    if (
+      !this.inventoryModal ||
+      !this.runState ||
+      this.runState.status === 'victory' ||
+      this.runState.status === 'defeat'
+    ) {
+      return;
+    }
+
+    if (this.inventoryModal.isOpen()) {
+      this.inventoryModal.close();
+    } else {
+      this.inventoryModal.open(this.buildInventorySnapshot());
+    }
+    this.updateHud(this.elapsedTimeMs);
+  }
+
+  private handleEquipItem(instanceId: string): boolean {
+    if (!this.inventory || !this.hero) {
+      return false;
+    }
+
+    const result = equipItemFromBag(this.inventory, instanceId);
+    if (!result) {
+      return false;
+    }
+
+    this.recalculateHeroGear();
+    if (this.inventoryModal?.isOpen()) {
+      this.inventoryModal.update(this.buildInventorySnapshot());
+    }
+    this.updateHud(this.elapsedTimeMs);
+    return true;
+  }
+
+  private handleUnequipSlot(slot: EquipSlot): boolean {
+    if (!this.inventory || !this.hero) {
+      return false;
+    }
+
+    const ok = unequipSlotToBag(this.inventory, slot);
+    if (!ok) {
+      return false;
+    }
+
+    this.recalculateHeroGear();
+    if (this.inventoryModal?.isOpen()) {
+      this.inventoryModal.update(this.buildInventorySnapshot());
+    }
+    this.updateHud(this.elapsedTimeMs);
+    return true;
+  }
+
+  private recalculateHeroGear(): void {
+    applyGearToHero(this.hero, this.hero.baseStats, this.inventory.equipped);
+    const bonuses = computeGearBonuses(this.inventory.equipped);
+    this.hero.lifeSteal = bonuses.lifeSteal;
+    this.hero.cooldownReduction = bonuses.cooldownReduction;
+    this.hero.luck = bonuses.luck;
+    this.hero.equippedForces = getActiveForces(this.inventory.equipped);
+    this.hero.activeLegendaryPowers = getActiveLegendaryPowers(
+      this.inventory.equipped
+    );
+  }
+
+  private buildInventorySnapshot(): InventoryHudSnapshot {
+    return {
+      equipped: { ...this.inventory.equipped },
+      bag: [...this.inventory.bag],
+      heroStats: { ...this.hero.stats },
+      lifeSteal: this.hero.lifeSteal,
+      cooldownReduction: this.hero.cooldownReduction,
+      luck: this.hero.luck,
+      activeForces: { ...this.hero.equippedForces },
+    };
+  }
+
+  private spawnGroundDrop(item: ItemInstance, rawPosition: Vector2D): void {
+    const width = this.scale.width || 800;
+    const height = this.scale.height || 600;
+    const x = Math.max(
+      ARENA_PADDING,
+      Math.min(width - ARENA_PADDING, rawPosition.x)
+    );
+    const y = Math.max(
+      ARENA_PADDING + 24,
+      Math.min(height - ARENA_PADDING - 24, rawPosition.y)
+    );
+
+    const rarityNum = Number.parseInt(
+      RARITY_COLORS[item.rarity].replace('#', ''),
+      16
+    );
+    const glow = this.add.graphics({ x, y }).setDepth(14);
+    glow.fillStyle(rarityNum, 0.24);
+    glow.fillCircle(0, 0, 15);
+    glow.lineStyle(1.5, rarityNum, 0.9);
+    glow.strokeCircle(0, 0, 13);
+
+    const hasDropFrames =
+      this.textures.exists('loot_drops') &&
+      this.textures.get('loot_drops').frameTotal > 4;
+    const frameIndex = hasDropFrames ? RARITY_DROP_FRAME[item.rarity] : 0;
+    const sprite = this.add
+      .sprite(x, y, 'loot_drops', frameIndex)
+      .setScale(1.5)
+      .setDepth(16);
+
+    this.vfx.showLootDropBeam(x, y, item.rarity);
+    this.groundDrops.push({
+      item,
+      position: { x, y },
+      sprite,
+      glow,
+    });
+  }
+
+  private spawnTestDrop(rarity?: Rarity): ItemInstance {
+    const item = generateItemDrop({
+      luck: this.hero.luck,
+      forcedRarity: rarity,
+    });
+    this.spawnGroundDrop(item, {
+      x: this.hero.position.x + 48,
+      y: this.hero.position.y,
+    });
+    return item;
+  }
+
+  private collectNearbyDrops(): void {
+    if (this.groundDrops.length === 0) {
+      return;
+    }
+
+    const remaining: GroundDrop[] = [];
+    for (const drop of this.groundDrops) {
+      if (
+        distanceBetween(this.hero.position, drop.position) <=
+        DROP_PICKUP_RADIUS
+      ) {
+        const added = addItemToBag(this.inventory, drop.item);
+        if (!added) {
+          remaining.push(drop);
+          continue;
+        }
+        drop.sprite.destroy();
+        drop.glow.destroy();
+        if (this.inventory.equipped[drop.item.slot] === null) {
+          equipItemFromBag(this.inventory, drop.item.instanceId);
+          this.recalculateHeroGear();
+        }
+        this.vfx.showItemPickupBanner(
+          drop.position.x,
+          drop.position.y,
+          drop.item.name,
+          RARITY_COLORS[drop.item.rarity]
+        );
+        if (this.inventoryModal?.isOpen()) {
+          this.inventoryModal.update(this.buildInventorySnapshot());
+        }
+      } else {
+        remaining.push(drop);
+      }
+    }
+    this.groundDrops = remaining;
+  }
+
+  private collectRemainingDropsOnVictory(): void {
+    if (this.groundDrops.length === 0) {
+      return;
+    }
+    for (const drop of this.groundDrops) {
+      const added = addItemToBag(this.inventory, drop.item);
+      if (added) {
+        if (this.inventory.equipped[drop.item.slot] === null) {
+          equipItemFromBag(this.inventory, drop.item.instanceId);
+          this.recalculateHeroGear();
+        }
+        this.vfx.showItemPickupBanner(
+          drop.position.x,
+          drop.position.y,
+          drop.item.name,
+          RARITY_COLORS[drop.item.rarity]
+        );
+      }
+      drop.sprite.destroy();
+      drop.glow.destroy();
+    }
+    this.groundDrops = [];
+  }
+
+  private clearGroundDrops(): void {
+    for (const drop of this.groundDrops) {
+      drop.sprite.destroy();
+      drop.glow.destroy();
+    }
+    this.groundDrops = [];
+  }
+
+  private clearMinionVisuals(): void {
+    for (const gfx of this.minionVisuals.values()) {
+      gfx.destroy();
+    }
+    this.minionVisuals.clear();
   }
 
   private showTimedBanner(text: string, durationMs: number): void {
