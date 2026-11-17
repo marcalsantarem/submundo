@@ -127,3 +127,33 @@
 - Chave `blacksmith_intro`: Apresentação do **Ferreiro Espiritual** detalhando o aprimoramento `+1/+2/+3` com **Almas** e a forja Lendária via **Essência de General**.
 - Chave `portal_enter`: Chamado do **Portal da Fenda** convidando o Espectro para iniciar uma nova incursão.
 - Chave `boss_essence_drop`: Alerta de conquista ao obter **Essência de General** do **Carcereiro Infernal**, conectando a vitória à forja do Refúgio.
+
+---
+
+## 8. Ato 0 — Prólogo: Vila Natal, Queda e Pacto Celestial (M4)
+
+### 8.1. Arco do Prólogo (Mundo dos Vivos)
+1. **A Vila Natal Viva:** O herói inicia como um **Jovem Guerreiro** mortal (`hero_living`) sob tutela do **Mestre de Armas** e com apoio do **Ferreiro da Vila** (forja comum de ferro).
+2. **As 3 Masmorras Iniciais:**
+   - **1. A Gruta da Cachoeira (`stage_grotto`):** Primeiro teste em combate real contra limos e **Morcegos da Gruta**; o enxofre na água anuncia algo errado.
+   - **2. A Mina Abandonada (`stage_mine`):** Expurgo noturno de esqueletos reanimados e descoberta de runas profanas nas galerias inferiores.
+   - **3. O Selo Antigo (`stage_seal`):** A porta ancestral no fundo da mina é rompida, liberando a vanguarda demoníaca.
+3. **A Queda e o Pacto Celestial:** A horda comandada pelo **Arauto do Abismo** incendeia a **Vila Natal**. Ao tombar defendendo o vilarejo, o guerreiro tem a alma marcada pelo **Emissário Celestial** com o **Selo Celestial**, despertando como **Guerreiro Espectral** (`hero_wraith`) no **Refúgio no Submundo** para iniciar o **Ato 1** (`act1_briefing`).
+
+### 8.2. Glossário do Prólogo e Novos Termos
+| ID / Chave | Nome Oficial (pt-BR) | Categoria / Papel |
+| :--- | :--- | :--- |
+| `hero_living` | **Jovem Guerreiro** | Forma mortal do protagonista durante o treinamento e as incursões na Vila Natal. |
+| `weapon_master` | **Mestre de Armas** | Mentor marcial da Vila Natal que guia o guerreiro pela Gruta, Mina e ruptura do Selo. |
+| `village_blacksmith` | **Ferreiro da Vila** | Artesão mortal da Vila Natal que tempera aço comum antes de sua alma ser arrastada ao Refúgio. |
+| `cave_bat` | **Morcego da Gruta** | Criatura veloz das cavernas que infesta *A Gruta da Cachoeira* ao lado dos limos. |
+| `ancient_seal` | **Selo Antigo** | Porta ancestral sob a Mina Abandonada cuja ruptura desencadeia a invasão demoníaca. |
+| `abyss_herald` | **Arauto do Abismo** | Comandante infernal que emerge do Selo Antigo, incendeia a Vila Natal e abate o guerreiro vivo. |
+
+### 8.3. Diretrizes de Diálogos do Prólogo e Abertura do Ato 1 (M4)
+- `prologue_welcome` / `prologue_blacksmith`: Clima de vila viva e preparação simples antes da tragédia.
+- `stage_grotto_intro` / `stage_grotto_victory`: Batismo de fogo na Cachoeira e primeiro indício de enxofre.
+- `stage_mine_intro` / `stage_mine_victory`: Escalada de tensão com mortos-vivos e runas sob a terra.
+- `stage_seal_intro` / `village_fall_boss`: Rompimento do **Selo Antigo** e ataque implacável do **Arauto do Abismo**.
+- `village_fall_pact` / `act1_briefing`: Morte heroica, imposição do **Selo Celestial** e transição direta ao **Refúgio no Submundo** para caçar os Generais do Inferno.
+

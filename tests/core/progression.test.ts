@@ -371,4 +371,45 @@ describe('ProfileManager & Permanent Progression (T-033)', () => {
       extractedDrop.instanceId,
     ]);
   });
+
+  it('preserves campaign progress across persistProfile() and loadOrCreateProfile()', () => {
+    const storage = createMemoryStorageMock();
+    const profile = createDefaultProfile();
+    profile.campaign = {
+      phase: 'act1',
+      currentStageId: 'act1_submundo',
+      completedStages: ['prologue_grotto', 'prologue_mine', 'prologue_seal'],
+      seenDialogues: ['intro_training', 'village_fall_pact'],
+      villageFallTriggered: true,
+    };
+
+    expect(persistProfile(profile, storage)).toBe(true);
+
+    const reloaded = loadOrCreateProfile(storage);
+    expect(reloaded.campaign).toEqual({
+      phase: 'act1',
+      currentStageId: 'act1_submundo',
+      completedStages: ['prologue_grotto', 'prologue_mine', 'prologue_seal'],
+      seenDialogues: ['intro_training', 'village_fall_pact'],
+      villageFallTriggered: true,
+    });
+
+    const partialProfile = {
+      ...createDefaultProfile(),
+      campaign: {
+        phase: 'prologue',
+        completedStages: ['prologue_grotto', 'invalid_stage'],
+      },
+    };
+    storage.setItem(SAVE_STORAGE_KEY, JSON.stringify(partialProfile));
+
+    const normalized = loadOrCreateProfile(storage);
+    expect(normalized.campaign).toEqual({
+      phase: 'prologue',
+      currentStageId: 'prologue_grotto',
+      completedStages: ['prologue_grotto'],
+      seenDialogues: [],
+      villageFallTriggered: false,
+    });
+  });
 });

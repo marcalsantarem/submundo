@@ -1,3 +1,4 @@
+import type { BiomeId, CampaignStageDef, CampaignStageId } from '../index';
 import { generateDungeonRooms, type RoomSpec } from './DungeonGenerator';
 
 export type RunStatus = 'in_progress' | 'room_cleared' | 'victory' | 'defeat';
@@ -11,14 +12,17 @@ export interface DungeonRunState {
   soulsCollected: number;
   monstersKilled: number;
   elapsedMs: number;
+  stageId?: CampaignStageId;
+  biome?: BiomeId;
 }
 
 export function createDungeonRun(
   arenaWidth: number = 800,
   arenaHeight: number = 600,
-  seed: number = 1337
+  seed: number = 1337,
+  stage?: CampaignStageDef
 ): DungeonRunState {
-  const rooms = generateDungeonRooms(arenaWidth, arenaHeight, seed);
+  const rooms = generateDungeonRooms(arenaWidth, arenaHeight, seed, stage);
   return {
     seed,
     currentRoomIndex: 0,
@@ -28,6 +32,7 @@ export function createDungeonRun(
     soulsCollected: 0,
     monstersKilled: 0,
     elapsedMs: 0,
+    ...(stage ? { stageId: stage.id, biome: stage.biome } : {}),
   };
 }
 

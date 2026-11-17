@@ -201,6 +201,7 @@ export interface SaveProfile {
     bossesDefeated: number;
     totalSoulsEarned: number;
   };
+  campaign?: CampaignProgress;
 }
 
 export interface RunEndReport {
@@ -211,9 +212,77 @@ export interface RunEndReport {
   bossDefeated: boolean;
   keptItems: ItemInstance[];
   lostItems: ItemInstance[];
+  stageId?: CampaignStageId;
+  triggeredVillageFall?: boolean;
 }
 
 export interface HubTransitionData {
   fromRun?: RunEndReport;
+  stageId?: CampaignStageId;
 }
+
+export type CampaignPhase = 'prologue' | 'act1';
+
+export type CampaignStageId =
+  | 'prologue_grotto'
+  | 'prologue_mine'
+  | 'prologue_seal'
+  | 'act1_submundo';
+
+export type PortraitId =
+  | 'hero_living'
+  | 'hero_wraith'
+  | 'weapon_master'
+  | 'village_blacksmith'
+  | 'emissary'
+  | 'spectral_blacksmith'
+  | 'infernal_warden'
+  | 'system';
+
+export type BiomeId =
+  | 'village_grotto'
+  | 'village_mine'
+  | 'ancient_seal'
+  | 'submundo_abyss';
+
+export interface DialogueLine {
+  id: string;
+  speaker: string;
+  portraitId: PortraitId;
+  title: string;
+  text: string;
+  shortText?: string;
+}
+
+export interface CampaignStageDef {
+  id: CampaignStageId;
+  phase: CampaignPhase;
+  order: number;
+  name: string;
+  subtitle: string;
+  description: string;
+  biome: BiomeId;
+  totalRooms: number;
+  difficultyScale: number;
+  monsterPool: string[];
+  bossId: string;
+  introDialogueIds: string[];
+  victoryDialogueIds: string[];
+  defeatDialogueIds?: string[];
+  unlocksStageId?: CampaignStageId;
+  triggersFallOfVillage?: boolean;
+}
+
+export interface CampaignCatalog {
+  stages: CampaignStageDef[];
+}
+
+export interface CampaignProgress {
+  phase: CampaignPhase;
+  currentStageId: CampaignStageId;
+  completedStages: CampaignStageId[];
+  seenDialogues: string[];
+  villageFallTriggered: boolean;
+}
+
 

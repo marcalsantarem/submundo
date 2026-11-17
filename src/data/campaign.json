@@ -1,0 +1,68 @@
+{
+  "stages": [
+    {
+      "id": "prologue_grotto",
+      "phase": "prologue",
+      "order": 1,
+      "name": "A Gruta da Cachoeira",
+      "subtitle": "Prólogo — Teste do Mestre",
+      "description": "Enfrente limos e morcegos nas grutas próximas à vila sob a tutela do Mestre de Armas.",
+      "biome": "village_grotto",
+      "totalRooms": 3,
+      "difficultyScale": 0.7,
+      "monsterPool": ["abyssal_slime", "cave_bat"],
+      "bossId": "bone_sentinel",
+      "introDialogueIds": ["prologue_welcome", "stage_grotto_intro"],
+      "victoryDialogueIds": ["stage_grotto_victory"],
+      "unlocksStageId": "prologue_mine"
+    },
+    {
+      "id": "prologue_mine",
+      "phase": "prologue",
+      "order": 2,
+      "name": "A Mina Abandonada",
+      "subtitle": "Prólogo — Sombras na Escavação",
+      "description": "Expurgue os morcegos e sentinelas ósseos que emergiram dos túneis antigos durante a noite.",
+      "biome": "village_mine",
+      "totalRooms": 3,
+      "difficultyScale": 0.85,
+      "monsterPool": ["cave_bat", "bone_sentinel"],
+      "bossId": "bone_sentinel",
+      "introDialogueIds": ["stage_mine_intro"],
+      "victoryDialogueIds": ["stage_mine_victory"],
+      "unlocksStageId": "prologue_seal"
+    },
+    {
+      "id": "prologue_seal",
+      "phase": "prologue",
+      "order": 3,
+      "name": "O Selo Antigo",
+      "subtitle": "Prólogo — A Ruptura",
+      "description": "Desça até a câmara selada no fundo da mina antes que o Arauto do Abismo rompa a barreira.",
+      "biome": "ancient_seal",
+      "totalRooms": 4,
+      "difficultyScale": 1.0,
+      "monsterPool": ["abyssal_slime", "cave_bat", "bone_sentinel"],
+      "bossId": "abyss_herald",
+      "introDialogueIds": ["stage_seal_intro"],
+      "victoryDialogueIds": ["village_fall_pact", "act1_briefing"],
+      "unlocksStageId": "act1_submundo",
+      "triggersFallOfVillage": true
+    },
+    {
+      "id": "act1_submundo",
+      "phase": "act1",
+      "order": 4,
+      "name": "Fenda do Submundo — Ato 1",
+      "subtitle": "Ato 1 — Caçada aos Generais",
+      "description": "Atravesse as profundezas do Submundo como Espectro e enfrente o Carcereiro Infernal.",
+      "biome": "submundo_abyss",
+      "totalRooms": 5,
+      "difficultyScale": 1.0,
+      "monsterPool": ["abyssal_slime", "bone_sentinel"],
+      "bossId": "infernal_warden",
+      "introDialogueIds": ["hub_welcome", "dungeon_enter"],
+      "victoryDialogueIds": ["run_victory"]
+    }
+  ]
+}

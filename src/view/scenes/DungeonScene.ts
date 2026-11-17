@@ -17,6 +17,9 @@ import { moveHero, type HeroState } from '../../core/entities/Hero';
 import { spawnMonster, type MonsterInstance } from '../../core/entities/Monster';
 import {
   resolveViewportConfig,
+  type BiomeId,
+  type CampaignStageDef,
+  type CampaignStageId,
   type EquipSlot,
   type ItemInstance,
   type MonsterDef,
@@ -44,6 +47,12 @@ import {
   shouldDropLoot,
 } from '../../core/loot/LootGenerator';
 import {
+  applyStageOutcomeToCampaign,
+  ensureCampaignProgress,
+  getCampaignStage,
+  getDialogueLine,
+} from '../../core/progression/CampaignManager';
+import {
   applyRunOutcomeToProfile,
   buildHeroFromProfile,
   computeAltarBonuses,
@@ -53,6 +62,7 @@ import {
 import dialoguesData from '../../data/dialogues.json';
 import monstersJson from '../../data/monsters.json';
 import skillsJson from '../../data/skills.json';
+import { soundManager } from '../audio/SoundManager';
 import {
   CombatVfxManager,
   registerGameAnimations,
@@ -86,7 +96,7 @@ export interface SubmundoDebugApi {
   triggerSkill: (id: string) => CombatEvent[];
   forceClearRoom: () => void;
   advanceRoom: () => void;
-  restartRun: () => void;
+  restartRun: (stageId?: CampaignStageId) => void;
   returnToHub?: () => void;
 }
 
@@ -117,6 +127,7 @@ export class DungeonScene extends Phaser.Scene {
   private readonly monsterDefMap = new Map<string, MonsterDef>();
 
   private activeProfile!: SaveProfile;
+  private activeStage!: CampaignStageDef;
   private startingHubItemIds = new Set<string>();
   private runState!: DungeonRunState;
   private hero!: HeroState;
@@ -156,9 +167,19 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
-  public create(data?: { profileSnapshot?: SaveProfile }): void {
+  public create(data?: {
+    profileSnapshot?: SaveProfile;
+    stageId?: CampaignStageId;
+  }): void {
     this.cameras.main.setBackgroundColor('#09090b');
+    this.ensureCampaignFallbackTextures();
     registerGameAnimations(this);
+
+    const unlockAudio = () => {
+      soundManager.unlock();
+    };
+    this.input.once('pointerdown', unlockAudio);
+    this.input.keyboard?.once('keydown', unlockAudio);
 
     this.arenaLayer = this.add.container(0, 0).setDepth(1);
     this.lightingGraphics = this.add.graphics().setDepth(5);
@@ -189,7 +210,7 @@ export class DungeonScene extends Phaser.Scene {
       },
     });
 
-    this.startNewRun(data?.profileSnapshot);
+    this.startNewRun(data);
 
     const onResize = (gameSize: Phaser.Structs.Size) => {
       this.handleViewportResize(gameSize.width, gameSize.height);
@@ -198,6 +219,8 @@ export class DungeonScene extends Phaser.Scene {
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', onResize);
+      this.input.off('pointerdown', unlockAudio);
+      this.input.keyboard?.off('keydown', unlockAudio);
       this.clearMonsterVisuals();
       this.clearGroundDrops();
       this.clearMinionVisuals();
@@ -221,7 +244,8 @@ export class DungeonScene extends Phaser.Scene {
         triggerSkill: (id: string) => this.handleUseSkill(id),
         forceClearRoom: () => this.forceClearRoom(),
         advanceRoom: () => this.advanceRoomNow(),
-        restartRun: () => this.startNewRun(),
+        restartRun: (stageId?: CampaignStageId) =>
+          this.startNewRun(stageId ? { stageId } : undefined),
         returnToHub: () => this.returnToHub(),
       };
     }
@@ -351,8 +375,9 @@ export class DungeonScene extends Phaser.Scene {
           monster.position.y,
           monster.soulReward
         );
+        soundManager.play('soul_pickup');
         if (monster.defId === 'infernal_warden' || monster.type === 'boss') {
-          this.handleBossDefeated(monster.position);
+          this.handleBossDefeated(monster.position, monster);
         }
       }
     }
@@ -383,7 +408,10 @@ export class DungeonScene extends Phaser.Scene {
     this.startNewRun();
   }
 
-  private startNewRun(profileSnapshot?: SaveProfile): void {
+  private startNewRun(data?: {
+    profileSnapshot?: SaveProfile;
+    stageId?: CampaignStageId;
+  }): void {
     const width = this.scale.width || 800;
     const height = this.scale.height || 600;
 
@@ -400,8 +428,15 @@ export class DungeonScene extends Phaser.Scene {
       this.inventoryModal.close();
     }
 
-    this.activeProfile = profileSnapshot ?? loadOrCreateProfile();
-    this.runState = createDungeonRun(width, height, this.runSeedCounter);
+    this.activeProfile = data?.profileSnapshot ?? loadOrCreateProfile();
+    const campaign = ensureCampaignProgress(this.activeProfile);
+    this.activeStage = getCampaignStage(data?.stageId ?? campaign.currentStageId);
+    this.runState = createDungeonRun(
+      width,
+      height,
+      this.runSeedCounter,
+      this.activeStage
+    );
     this.runSeedCounter += 7;
 
     const centerPos: Vector2D = {
@@ -438,8 +473,18 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     this.loadCurrentRoom();
+
+    const introDialogueId =
+      this.activeStage.introDialogueIds[
+        this.activeStage.introDialogueIds.length - 1
+      ];
+    const introDialogue = introDialogueId
+      ? getDialogueLine(introDialogueId)
+      : null;
     this.showTimedBanner(
-      dialoguesData.entries.dungeon_enter.shortText,
+      introDialogue?.shortText ??
+        introDialogue?.text ??
+        dialoguesData.entries.dungeon_enter.shortText,
       3200
     );
     this.syncVisuals(this.elapsedTimeMs);
@@ -454,7 +499,13 @@ export class DungeonScene extends Phaser.Scene {
     this.destroyPortal();
     this.clearMonsterVisuals();
     this.clearGroundDrops();
-    this.buildArenaTilesAndLighting(width, height, currentRoom.roomNumber, currentRoom.isBossRoom);
+    this.buildArenaTilesAndLighting(
+      width,
+      height,
+      currentRoom.roomNumber,
+      currentRoom.isBossRoom,
+      currentRoom.biome
+    );
 
     // Reposition hero at center of the new chamber
     this.hero.position = {
@@ -462,10 +513,21 @@ export class DungeonScene extends Phaser.Scene {
       y: Math.round(height / 2),
     };
 
+    const difficultyScale =
+      currentRoom.difficultyScale ?? this.activeStage?.difficultyScale ?? 1;
+
     // Spawn room monsters from core RoomSpec + monsters.json catalog
     this.monsters = currentRoom.spawns.map((spawn, idx) => {
-      const def =
+      const baseDef =
         this.monsterDefMap.get(spawn.defId) ?? this.monstersCatalog[0];
+      const scaledDef: MonsterDef =
+        difficultyScale === 1
+          ? baseDef
+          : {
+              ...baseDef,
+              maxHp: Math.max(1, Math.round(baseDef.maxHp * difficultyScale)),
+              attack: Math.max(1, Math.round(baseDef.attack * difficultyScale)),
+            };
       const clampedX = Math.max(
         ARENA_PADDING,
         Math.min(width - ARENA_PADDING, spawn.x)
@@ -475,17 +537,22 @@ export class DungeonScene extends Phaser.Scene {
         Math.min(height - ARENA_PADDING - 24, spawn.y)
       );
       return spawnMonster(
-        def,
-        `r${currentRoom.roomNumber}_m${idx}_${def.id}`,
+        scaledDef,
+        `r${currentRoom.roomNumber}_m${idx}_${scaledDef.id}`,
         { x: clampedX, y: clampedY }
       );
     });
 
     for (const monster of this.monsters) {
+      const isAbyssHerald = monster.defId === 'abyss_herald';
       const sprite = this.add
         .sprite(monster.position.x, monster.position.y, monster.spriteKey, 0)
-        .setScale(1.5)
+        .setScale(isAbyssHerald ? 1.75 : 1.5)
         .setDepth(monster.type === 'boss' ? 19 : 18);
+
+      if (isAbyssHerald) {
+        sprite.setTint(0xdc2626);
+      }
 
       const animKey = this.resolveMonsterIdleAnim(monster.spriteKey);
       if (animKey && this.anims.exists(animKey)) {
@@ -497,10 +564,20 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     if (currentRoom.isBossRoom) {
-      this.showTimedBanner(
-        dialoguesData.entries.boss_intro.shortText,
-        4000
-      );
+      if (this.activeStage?.id === 'prologue_seal') {
+        const fallBossLine = getDialogueLine('village_fall_boss');
+        this.showTimedBanner(
+          fallBossLine?.shortText ?? currentRoom.title,
+          4200
+        );
+      } else if (this.activeStage?.id === 'act1_submundo') {
+        this.showTimedBanner(
+          dialoguesData.entries.boss_intro.shortText,
+          4000
+        );
+      } else {
+        this.showTimedBanner(currentRoom.title, 3200);
+      }
     } else if (currentRoom.roomNumber > 1) {
       this.showTimedBanner(currentRoom.title, 2000);
     }
@@ -510,15 +587,26 @@ export class DungeonScene extends Phaser.Scene {
     width: number,
     height: number,
     roomNumber: number,
-    isBossRoom: boolean
+    isBossRoom: boolean,
+    biome?: BiomeId
   ): void {
     this.arenaLayer.removeAll(true);
+
+    const activeBiome: BiomeId =
+      biome ?? this.activeStage?.biome ?? 'submundo_abyss';
+    const isVillageBiome =
+      activeBiome === 'village_grotto' ||
+      activeBiome === 'village_mine' ||
+      activeBiome === 'ancient_seal';
+    const hasVillageTiles = this.textures.exists('village_tiles');
+    const tileTextureKey =
+      isVillageBiome && hasVillageTiles ? 'village_tiles' : 'dungeon_tiles';
 
     const cols = Math.ceil(width / TILE_DISPLAY_SIZE);
     const rows = Math.ceil(height / TILE_DISPLAY_SIZE);
     const hasTileFrames =
-      this.textures.exists('dungeon_tiles') &&
-      this.textures.get('dungeon_tiles').frameTotal > 4;
+      this.textures.exists(tileTextureKey) &&
+      this.textures.get(tileTextureKey).frameTotal > 4;
 
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
@@ -533,30 +621,26 @@ export class DungeonScene extends Phaser.Scene {
         const tile = this.add.image(
           tileX,
           tileY,
-          'dungeon_tiles',
+          tileTextureKey,
           hasTileFrames ? frameIndex : undefined
         );
         tile.setDisplaySize(TILE_DISPLAY_SIZE, TILE_DISPLAY_SIZE);
 
-        if (isBossRoom && !isWall && hash === 2) {
-          tile.setTint(0x991b1b);
-        }
-
+        this.applyBiomeTileTint(tile, activeBiome, isWall, isBossRoom, hash);
         this.arenaLayer.add(tile);
       }
     }
 
-    // Spiritual / Infernal border lighting and corner braziers
+    // Biome lighting and corner braziers / lanterns
     this.lightingGraphics.clear();
-    const borderGlowColor = isBossRoom ? 0xf97316 : 0x38bdf8;
-    const secondaryGlowColor = isBossRoom ? 0xdc2626 : 0x0284c7;
+    const palette = this.resolveBiomeLighting(activeBiome, isBossRoom);
 
     // Outer dark vignette frame
     this.lightingGraphics.lineStyle(18, 0x09090b, 0.55);
     this.lightingGraphics.strokeRect(9, 9, width - 18, height - 18);
 
-    // Inner spiritual barrier line
-    this.lightingGraphics.lineStyle(2, borderGlowColor, 0.35);
+    // Inner barrier / ambient rim
+    this.lightingGraphics.lineStyle(2, palette.borderGlow, 0.35);
     this.lightingGraphics.strokeRect(
       TILE_DISPLAY_SIZE,
       TILE_DISPLAY_SIZE,
@@ -564,7 +648,16 @@ export class DungeonScene extends Phaser.Scene {
       height - TILE_DISPLAY_SIZE * 2
     );
 
-    // 4 Corner spiritual braziers
+    if (activeBiome === 'ancient_seal') {
+      const cx = Math.round(width / 2);
+      const cy = Math.round(height / 2);
+      this.lightingGraphics.lineStyle(2, 0xdc2626, 0.25);
+      this.lightingGraphics.strokeCircle(cx, cy, 86);
+      this.lightingGraphics.lineStyle(1.5, 0xf87171, 0.22);
+      this.lightingGraphics.strokeCircle(cx, cy, 56);
+    }
+
+    // 4 Corner braziers / lanterns
     const corners: Vector2D[] = [
       { x: TILE_DISPLAY_SIZE + 12, y: TILE_DISPLAY_SIZE + 28 },
       { x: width - TILE_DISPLAY_SIZE - 12, y: TILE_DISPLAY_SIZE + 28 },
@@ -573,11 +666,11 @@ export class DungeonScene extends Phaser.Scene {
     ];
 
     for (const corner of corners) {
-      this.lightingGraphics.fillStyle(secondaryGlowColor, 0.14);
+      this.lightingGraphics.fillStyle(palette.secondaryGlow, 0.16);
       this.lightingGraphics.fillCircle(corner.x, corner.y, 44);
-      this.lightingGraphics.fillStyle(borderGlowColor, 0.25);
+      this.lightingGraphics.fillStyle(palette.borderGlow, 0.26);
       this.lightingGraphics.fillCircle(corner.x, corner.y, 20);
-      this.lightingGraphics.fillStyle(0xe0f2fe, 0.65);
+      this.lightingGraphics.fillStyle(palette.coreGlow, 0.7);
       this.lightingGraphics.fillCircle(corner.x, corner.y, 4);
     }
   }
@@ -586,6 +679,7 @@ export class DungeonScene extends Phaser.Scene {
     for (const event of events) {
       switch (event.type) {
         case 'hero_basic_attack': {
+          soundManager.play(event.isCrit ? 'crit' : 'attack');
           this.vfx.showSlashEffect(
             this.hero.position.x,
             this.hero.position.y,
@@ -607,6 +701,7 @@ export class DungeonScene extends Phaser.Scene {
         }
 
         case 'hero_dash': {
+          soundManager.play('dash');
           this.vfx.showDashTrail(event.position.x, event.position.y);
           if (this.anims.exists('wraith_dash') && this.heroSprite) {
             this.heroSprite.play('wraith_dash');
@@ -624,6 +719,17 @@ export class DungeonScene extends Phaser.Scene {
 
         case 'hero_skill_used': {
           const skill = this.skillsCatalog.find((s) => s.id === event.skillId);
+          if (skill) {
+            if (skill.slot === 'potion') {
+              soundManager.play('potion');
+            } else if (skill.force === 'inferno') {
+              soundManager.play('skill_inferno');
+            } else if (skill.force === 'submundo') {
+              soundManager.play('skill_submundo');
+            } else if (skill.force === 'empireo') {
+              soundManager.play('skill_empireo');
+            }
+          }
           if (
             skill &&
             (skill.slot === 'active_1' || skill.slot === 'active_2')
@@ -648,6 +754,9 @@ export class DungeonScene extends Phaser.Scene {
         }
 
         case 'monster_damaged': {
+          if (event.isCrit && event.skillId) {
+            soundManager.play('crit');
+          }
           this.vfx.showDamageNumber(
             event.position.x,
             event.position.y,
@@ -667,6 +776,9 @@ export class DungeonScene extends Phaser.Scene {
             event.position.y,
             reward
           );
+          if (reward > 0) {
+            soundManager.play('soul_pickup');
+          }
 
           const killedMonster = this.monsters.find(
             (m) => m.instanceId === event.targetId
@@ -675,7 +787,7 @@ export class DungeonScene extends Phaser.Scene {
             killedMonster?.type === 'boss' ||
             killedMonster?.defId === 'infernal_warden';
           if (isBoss) {
-            this.handleBossDefeated(event.position);
+            this.handleBossDefeated(event.position, killedMonster);
           }
           if (shouldDropLoot(isBoss, Math.random, this.hero.luck)) {
             const item = generateItemDrop({
@@ -754,6 +866,7 @@ export class DungeonScene extends Phaser.Scene {
         }
 
         case 'hero_damaged': {
+          soundManager.play('hit_player');
           this.vfx.showDamageNumber(
             event.position.x,
             event.position.y,
@@ -773,11 +886,23 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
-  private handleBossDefeated(position: Vector2D): void {
+  private handleBossDefeated(
+    position: Vector2D,
+    monster?: MonsterInstance
+  ): void {
     if (this.bossDefeated) {
       return;
     }
     this.bossDefeated = true;
+
+    const isAct1Warden =
+      this.activeStage?.id === 'act1_submundo' &&
+      (monster ? monster.defId === 'infernal_warden' : true);
+
+    if (!isAct1Warden) {
+      return;
+    }
+
     this.essencesCollected += 1;
     this.vfx.showItemPickupBanner(
       position.x,
@@ -809,69 +934,99 @@ export class DungeonScene extends Phaser.Scene {
           ROOM_CLEAR_AUTO_ADVANCE_MS
         );
       } else if (nextStatus === 'victory' || nextStatus === 'defeat') {
-        const isVictory = nextStatus === 'victory';
-        if (isVictory) {
-          this.collectRemainingDropsOnVictory();
-        } else {
-          this.clearGroundDrops();
-        }
-        if (!this.runLootResolved) {
-          this.runLootResolved = true;
-          const { kept, lost } = resolveRunEndLoot(this.inventory, isVictory);
-          const runKeptDrops = kept.filter(
-            (item) => !this.startingHubItemIds.has(item.instanceId)
-          );
-          const runLostDrops = lost.filter(
-            (item) => !this.startingHubItemIds.has(item.instanceId)
-          );
-          const preservedHubCount = isVictory
-            ? kept.length - runKeptDrops.length
-            : lost.length - runLostDrops.length;
-
-          if (isVictory) {
-            const parts = [`Novos itens extraídos: ${runKeptDrops.length}`];
-            if (preservedHubCount > 0) {
-              parts.push(`Gear do Refúgio mantido: ${preservedHubCount}`);
-            }
-            if (this.essencesCollected > 0) {
-              parts.push(`+${this.essencesCollected} Essência de General`);
-            }
-            this.lootSummaryText = parts.join(' | ');
-          } else {
-            const parts = [`Itens perdidos na incursão: ${runLostDrops.length}`];
-            if (preservedHubCount > 0) {
-              parts.push(`Gear do Refúgio preservado: ${preservedHubCount}`);
-            }
-            this.lootSummaryText = parts.join(' | ');
-          }
-
-          const report: RunEndReport = {
-            victory: isVictory,
-            soulsGained: this.runState.soulsCollected,
-            essencesGained: this.essencesCollected,
-            monstersKilled: this.runState.monstersKilled,
-            bossDefeated: this.bossDefeated,
-            keptItems: runKeptDrops,
-            lostItems: runLostDrops,
-          };
-          this.lastRunReport = report;
-          applyRunOutcomeToProfile(this.activeProfile, report);
-          persistProfile(this.activeProfile);
-        }
-        if (this.inventoryModal?.isOpen()) {
-          this.inventoryModal.close();
-        }
-        this.showTimedBanner(
-          isVictory
-            ? dialoguesData.entries.run_victory.text
-            : dialoguesData.entries.run_death.text,
-          60000
-        );
+        this.finalizeRunOutcome(nextStatus === 'victory');
       }
     }
 
     if (this.bannerText && nowMs >= this.bannerExpiresAtMs) {
       this.bannerText = undefined;
+    }
+  }
+
+  private finalizeRunOutcome(isVictory: boolean): void {
+    if (isVictory) {
+      this.collectRemainingDropsOnVictory();
+    } else {
+      this.clearGroundDrops();
+    }
+
+    soundManager.play(isVictory ? 'victory' : 'defeat');
+
+    if (!this.runLootResolved) {
+      this.runLootResolved = true;
+      const { kept, lost } = resolveRunEndLoot(this.inventory, isVictory);
+      const runKeptDrops = kept.filter(
+        (item) => !this.startingHubItemIds.has(item.instanceId)
+      );
+      const runLostDrops = lost.filter(
+        (item) => !this.startingHubItemIds.has(item.instanceId)
+      );
+      const preservedHubCount = isVictory
+        ? kept.length - runKeptDrops.length
+        : lost.length - runLostDrops.length;
+
+      if (isVictory) {
+        const parts = [`Novos itens extraídos: ${runKeptDrops.length}`];
+        if (preservedHubCount > 0) {
+          parts.push(`Gear do Refúgio mantido: ${preservedHubCount}`);
+        }
+        if (this.essencesCollected > 0) {
+          parts.push(`+${this.essencesCollected} Essência de General`);
+        }
+        this.lootSummaryText = parts.join(' | ');
+      } else {
+        const parts = [`Itens perdidos na incursão: ${runLostDrops.length}`];
+        if (preservedHubCount > 0) {
+          parts.push(`Gear do Refúgio preservado: ${preservedHubCount}`);
+        }
+        this.lootSummaryText = parts.join(' | ');
+      }
+
+      const stageOutcome = applyStageOutcomeToCampaign(
+        this.activeProfile,
+        this.activeStage.id,
+        isVictory
+      );
+
+      const report: RunEndReport = {
+        victory: isVictory,
+        soulsGained: this.runState.soulsCollected,
+        essencesGained: this.essencesCollected,
+        monstersKilled: this.runState.monstersKilled,
+        bossDefeated: this.bossDefeated,
+        keptItems: runKeptDrops,
+        lostItems: runLostDrops,
+        stageId: this.activeStage.id,
+        triggeredVillageFall: stageOutcome.triggeredVillageFall,
+      };
+      this.lastRunReport = report;
+      applyRunOutcomeToProfile(this.activeProfile, report);
+      persistProfile(this.activeProfile);
+    }
+
+    if (this.inventoryModal?.isOpen()) {
+      this.inventoryModal.close();
+    }
+
+    if (isVictory) {
+      if (this.lastRunReport?.triggeredVillageFall) {
+        const pactLine = getDialogueLine('village_fall_pact');
+        const fallBanner = pactLine?.shortText
+          ? `QUEDA DA VILA NATAL! ${pactLine.shortText} O Refúgio no Submundo (Ato 1) foi aberto.`
+          : 'QUEDA DA VILA NATAL! O Emissário Celestial selou sua alma no Refúgio do Submundo (Ato 1).';
+        this.showTimedBanner(fallBanner, 60000);
+      } else {
+        const firstVictoryId = this.activeStage.victoryDialogueIds[0];
+        const victoryLine = firstVictoryId
+          ? getDialogueLine(firstVictoryId)
+          : null;
+        this.showTimedBanner(
+          victoryLine?.text ?? dialoguesData.entries.run_victory.text,
+          60000
+        );
+      }
+    } else {
+      this.showTimedBanner(dialoguesData.entries.run_death.text, 60000);
     }
   }
 
@@ -1016,7 +1171,8 @@ export class DungeonScene extends Phaser.Scene {
   private updateHud(nowMs: number): void {
     const currentRoom = getCurrentRoom(this.runState);
     const bossMonster = currentRoom.isBossRoom
-      ? this.monsters.find((m) => m.type === 'boss')
+      ? (this.monsters.find((m) => m.type === 'boss') ??
+        this.monsters.find((m) => m.defId === this.activeStage?.bossId))
       : undefined;
 
     const skillCooldownsMs: Record<string, number> = {};
@@ -1045,6 +1201,7 @@ export class DungeonScene extends Phaser.Scene {
       totalRooms: this.runState.totalRooms,
       isBossRoom: currentRoom.isBossRoom,
       roomTitle: currentRoom.title,
+      stageName: this.activeStage?.name,
       bossHp: bossMonster?.hp,
       bossMaxHp: bossMonster?.maxHp,
       bossName: bossMonster?.name,
@@ -1072,7 +1229,8 @@ export class DungeonScene extends Phaser.Scene {
       width,
       height,
       currentRoom.roomNumber,
-      currentRoom.isBossRoom
+      currentRoom.isBossRoom,
+      currentRoom.biome
     );
 
     this.hero.position.x = Math.max(
@@ -1142,6 +1300,7 @@ export class DungeonScene extends Phaser.Scene {
       return false;
     }
 
+    soundManager.play('ui_click');
     this.recalculateHeroGear();
     if (this.inventoryModal?.isOpen()) {
       this.inventoryModal.update(this.buildInventorySnapshot());
@@ -1160,6 +1319,7 @@ export class DungeonScene extends Phaser.Scene {
       return false;
     }
 
+    soundManager.play('ui_click');
     this.recalculateHeroGear();
     if (this.inventoryModal?.isOpen()) {
       this.inventoryModal.update(this.buildInventorySnapshot());
@@ -1232,6 +1392,9 @@ export class DungeonScene extends Phaser.Scene {
       .setScale(1.5)
       .setDepth(16);
 
+    soundManager.play(
+      item.rarity === 'legendary' ? 'loot_legendary' : 'loot_drop'
+    );
     this.vfx.showLootDropBeam(x, y, item.rarity);
     this.groundDrops.push({
       item,
@@ -1351,8 +1514,106 @@ export class DungeonScene extends Phaser.Scene {
         return 'sentinel_idle';
       case 'infernal_warden':
         return 'warden_idle';
+      case 'cave_bat':
+        return 'bat_idle';
       default:
         return null;
+    }
+  }
+
+  private ensureCampaignFallbackTextures(): void {
+    if (!this.textures.exists('cave_bat')) {
+      const gfx = this.make.graphics({ x: 0, y: 0 });
+      gfx.fillStyle(0x7c3aed, 1);
+      gfx.fillTriangle(16, 8, 4, 22, 28, 22);
+      gfx.fillStyle(0xfef08a, 1);
+      gfx.fillRect(12, 14, 2, 2);
+      gfx.fillRect(18, 14, 2, 2);
+      gfx.generateTexture('cave_bat', 32, 32);
+      gfx.destroy();
+    }
+  }
+
+  private applyBiomeTileTint(
+    tile: Phaser.GameObjects.Image,
+    biome: BiomeId,
+    isWall: boolean,
+    isBossRoom: boolean,
+    hash: number
+  ): void {
+    switch (biome) {
+      case 'village_grotto': {
+        if (isWall) {
+          tile.setTint(0x2f5e4e);
+        } else if (hash === 3) {
+          tile.setTint(0x38bdf8);
+        } else if (hash === 1) {
+          tile.setTint(0x86efac);
+        } else {
+          tile.setTint(0xa7f3d0);
+        }
+        break;
+      }
+      case 'village_mine': {
+        if (isWall) {
+          tile.setTint(0x44403c);
+        } else if (hash === 2) {
+          tile.setTint(0x78716c);
+        } else {
+          tile.setTint(0xa8a29e);
+        }
+        break;
+      }
+      case 'ancient_seal': {
+        if (isWall) {
+          tile.setTint(0x450a0a);
+        } else if (hash === 2) {
+          tile.setTint(0xdc2626);
+        } else {
+          tile.setTint(0x7f1d1d);
+        }
+        break;
+      }
+      case 'submundo_abyss':
+      default: {
+        if (isBossRoom && !isWall && hash === 2) {
+          tile.setTint(0x991b1b);
+        }
+        break;
+      }
+    }
+  }
+
+  private resolveBiomeLighting(
+    biome: BiomeId,
+    isBossRoom: boolean
+  ): { borderGlow: number; secondaryGlow: number; coreGlow: number } {
+    switch (biome) {
+      case 'village_grotto':
+        return {
+          borderGlow: isBossRoom ? 0x2dd4bf : 0x34d399,
+          secondaryGlow: 0x0284c7,
+          coreGlow: 0xccfbf1,
+        };
+      case 'village_mine':
+        return {
+          borderGlow: isBossRoom ? 0xf59e0b : 0xfbbf24,
+          secondaryGlow: 0x92400e,
+          coreGlow: 0xfef3c7,
+        };
+      case 'ancient_seal':
+        return {
+          borderGlow: 0xef4444,
+          secondaryGlow: 0x991b1b,
+          coreGlow: 0xfecaca,
+        };
+      case 'submundo_abyss':
+      default:
+        return {
+          borderGlow: isBossRoom ? 0xf97316 : 0x38bdf8,
+          secondaryGlow: isBossRoom ? 0xdc2626 : 0x0284c7,
+          coreGlow: 0xe0f2fe,
+        };
     }
   }
 }

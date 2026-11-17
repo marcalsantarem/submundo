@@ -8,6 +8,7 @@ import {
   resolveViewportConfig,
 } from '../../core/index';
 import dialoguesData from '../../data/dialogues.json';
+import { soundManager } from '../audio/SoundManager';
 import { VirtualJoystick } from './VirtualJoystick';
 
 export interface HudSnapshot {
@@ -18,6 +19,7 @@ export interface HudSnapshot {
   totalRooms: number;
   isBossRoom: boolean;
   roomTitle: string;
+  stageName?: string;
   bossHp?: number;
   bossMaxHp?: number;
   bossName?: string;
@@ -76,12 +78,19 @@ export class DungeonHud {
   private soulsText: Phaser.GameObjects.Text;
   private roomText: Phaser.GameObjects.Text;
   private roomTitleText: Phaser.GameObjects.Text;
+  private stageNameText: Phaser.GameObjects.Text;
 
   // Compact Bag Button
   private bagBtnContainer: Phaser.GameObjects.Container;
   private bagBtnBg: Phaser.GameObjects.Graphics;
   private bagBtnText: Phaser.GameObjects.Text;
   private bagBtnZone: Phaser.GameObjects.Zone;
+
+  // Discrete Mute Button
+  private muteBtnContainer: Phaser.GameObjects.Container;
+  private muteBtnBg: Phaser.GameObjects.Graphics;
+  private muteBtnText: Phaser.GameObjects.Text;
+  private muteBtnZone: Phaser.GameObjects.Zone;
 
   // Boss HP Bar
   private bossContainer: Phaser.GameObjects.Container;
@@ -193,6 +202,16 @@ export class DungeonHud {
       .setScrollFactor(0)
       .setDepth(1012);
 
+    this.stageNameText = scene.add
+      .text(0, 0, '', {
+        fontFamily: 'monospace',
+        fontSize: '10px',
+        color: '#90e0ef',
+      })
+      .setScrollFactor(0)
+      .setDepth(1012)
+      .setVisible(false);
+
     // Compact Bag Button ("Bolsa (N)")
     this.bagBtnBg = scene.add.graphics();
     this.bagBtnBg.fillStyle(0x162033, 0.94);
@@ -223,12 +242,14 @@ export class DungeonHud {
         event?: Phaser.Types.Input.EventData
       ) => {
         event?.stopPropagation?.();
+        soundManager.unlock();
         if (
           this.lastSnapshot.runStatus === 'victory' ||
           this.lastSnapshot.runStatus === 'defeat'
         ) {
           return;
         }
+        soundManager.play('ui_click');
         this.callbacks.onToggleInventory?.();
       }
     );
@@ -237,6 +258,46 @@ export class DungeonHud {
       .container(0, 0, [this.bagBtnBg, this.bagBtnText, this.bagBtnZone])
       .setScrollFactor(0)
       .setDepth(1020);
+
+    // Discrete Mute Button ("Som: ON/OFF")
+    this.muteBtnBg = scene.add.graphics();
+    this.muteBtnText = scene.add
+      .text(0, 0, 'Som: ON', {
+        fontFamily: 'monospace',
+        fontSize: '10px',
+        color: '#cbd5e1',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5, 0.5);
+
+    this.muteBtnZone = scene.add
+      .zone(0, 0, 66, 24)
+      .setOrigin(0.5, 0.5)
+      .setInteractive({ useHandCursor: true });
+
+    this.muteBtnZone.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _lx: number,
+        _ly: number,
+        event?: Phaser.Types.Input.EventData
+      ) => {
+        event?.stopPropagation?.();
+        soundManager.unlock();
+        const muted = soundManager.toggleMute();
+        this.refreshMuteButtonState();
+        if (!muted) {
+          soundManager.play('ui_click');
+        }
+      }
+    );
+
+    this.muteBtnContainer = scene.add
+      .container(0, 0, [this.muteBtnBg, this.muteBtnText, this.muteBtnZone])
+      .setScrollFactor(0)
+      .setDepth(1020);
+    this.refreshMuteButtonState();
 
     // Boss HP Container
     this.bossBarGraphic = scene.add.graphics();
@@ -357,6 +418,8 @@ export class DungeonHud {
         event?: Phaser.Types.Input.EventData
       ) => {
         event?.stopPropagation?.();
+        soundManager.unlock();
+        soundManager.play('ui_click');
         this.callbacks.onRestartRun();
       }
     );
@@ -448,13 +511,16 @@ export class DungeonHud {
   public update(snapshot: HudSnapshot): void {
     this.lastSnapshot = snapshot;
 
-    // 1. Hero HP + Souls + Room Indicator + Bag Count
+    // 1. Hero HP + Souls + Room Indicator + Stage Name + Bag Count
     const clampedHp = Math.max(0, Math.min(snapshot.hp, snapshot.maxHp));
     this.hpText.setText(`HP ${Math.ceil(clampedHp)}/${snapshot.maxHp}`);
     this.soulsText.setText(`Almas: ${snapshot.souls}`);
     this.roomText.setText(`Sala ${snapshot.roomNumber}/${snapshot.totalRooms}`);
     this.roomTitleText.setText(snapshot.roomTitle || '');
+    const stageName = snapshot.stageName?.trim() ?? '';
+    this.stageNameText.setText(stageName).setVisible(stageName.length > 0);
     this.bagBtnText.setText(`Bolsa (${snapshot.bagCount ?? 0})`);
+    this.refreshMuteButtonState();
 
     this.drawHeroHpBar(clampedHp, snapshot.maxHp);
 
@@ -566,35 +632,39 @@ export class DungeonHud {
     // Top Panel Layout
     this.topPanelBg.clear();
     this.topPanelBg.fillStyle(0x090c14, 0.82);
-    const topBarHeight = isMobile ? 58 : 52;
+    const topBarHeight = isMobile ? 64 : 52;
     this.topPanelBg.fillRect(0, 0, w, topBarHeight);
     this.topPanelBg.lineStyle(1, 0x2b3448, 0.9);
     this.topPanelBg.lineBetween(0, topBarHeight, w, topBarHeight);
 
     if (isMobile) {
       this.hpText.setPosition(12, 8);
-      this.soulsText.setPosition(12, 34);
+      this.soulsText.setPosition(12, 28);
+      this.stageNameText.setPosition(12, 46);
       this.roomText.setOrigin(1, 0).setPosition(w - 12, 8);
-      this.roomTitleText.setOrigin(1, 0).setPosition(w - 12, 30);
+      this.roomTitleText.setOrigin(1, 0).setPosition(w - 12, 28);
       this.bagBtnContainer.setPosition(w - 58, h - 222);
+      this.muteBtnContainer.setPosition(w - 41, h - 254);
     } else {
       this.hpText.setPosition(16, 8);
+      this.stageNameText.setPosition(16, 32);
       this.soulsText.setPosition(230, 16);
+      this.muteBtnContainer.setPosition(368, 26);
+      this.bagBtnContainer.setPosition(462, 26);
       this.roomText.setOrigin(1, 0).setPosition(w - 16, 8);
       this.roomTitleText.setOrigin(1, 0).setPosition(w - 16, 28);
-      this.bagBtnContainer.setPosition(462, 26);
     }
 
     // Boss Container Layout
-    this.bossContainer.setPosition(w / 2, isMobile ? 84 : 78);
+    this.bossContainer.setPosition(w / 2, isMobile ? 92 : 78);
 
     // Banner Container Layout
     const bannerY = this.lastSnapshot.isBossRoom
       ? isMobile
-        ? 126
+        ? 134
         : 120
       : isMobile
-        ? 82
+        ? 88
         : 76;
     this.bannerContainer.setPosition(w / 2, bannerY);
     this.bannerLabel.setWordWrapWidth(isMobile ? w - 40 : 460);
@@ -622,7 +692,9 @@ export class DungeonHud {
     this.soulsText.destroy();
     this.roomText.destroy();
     this.roomTitleText.destroy();
+    this.stageNameText.destroy();
     this.bagBtnContainer.destroy();
+    this.muteBtnContainer.destroy();
     this.bossContainer.destroy();
     this.bannerContainer.destroy();
     this.modalContainer.destroy();
@@ -720,6 +792,7 @@ export class DungeonHud {
           event?: Phaser.Types.Input.EventData
         ) => {
           event?.stopPropagation?.();
+          soundManager.unlock();
           if (
             this.lastSnapshot.runStatus === 'victory' ||
             this.lastSnapshot.runStatus === 'defeat'
@@ -777,6 +850,7 @@ export class DungeonHud {
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
+    soundManager.unlock();
     const code = event.code;
     const key = event.key.toLowerCase();
 
@@ -785,6 +859,7 @@ export class DungeonHud {
       this.lastSnapshot.runStatus === 'defeat'
     ) {
       if (code === 'Enter' || key === 'r') {
+        soundManager.play('ui_click');
         this.callbacks.onRestartRun();
       }
       return;
@@ -823,7 +898,17 @@ export class DungeonHud {
     }
 
     if (key === 'i' || key === 'b') {
+      soundManager.play('ui_click');
       this.callbacks.onToggleInventory?.();
+      return;
+    }
+
+    if (key === 'm') {
+      const muted = soundManager.toggleMute();
+      this.refreshMuteButtonState();
+      if (!muted) {
+        soundManager.play('ui_click');
+      }
     }
   }
 
@@ -952,5 +1037,16 @@ export class DungeonHud {
     this.modalBox.fillRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 8);
     this.modalBox.lineStyle(2, isVictory ? 0xffd166 : 0xd90429, 1);
     this.modalBox.strokeRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 8);
+  }
+
+  private refreshMuteButtonState(): void {
+    const muted = soundManager.isMuted();
+    this.muteBtnText.setText(muted ? 'Som: OFF' : 'Som: ON');
+    this.muteBtnText.setColor(muted ? '#94a3b8' : '#e0f2fe');
+    this.muteBtnBg.clear();
+    this.muteBtnBg.fillStyle(muted ? 0x111827 : 0x162033, 0.9);
+    this.muteBtnBg.fillRoundedRect(-33, -12, 66, 24, 5);
+    this.muteBtnBg.lineStyle(1, muted ? 0x475569 : 0x38bdf8, 0.85);
+    this.muteBtnBg.strokeRoundedRect(-33, -12, 66, 24, 5);
   }
 }

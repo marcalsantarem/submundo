@@ -6,7 +6,7 @@ import { SAVE_STORAGE_KEY } from '../../src/core/progression/StorageAdapter';
 import { GAME_VERSION } from '../../src/version';
 
 test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Progression E2E (PC 800x600 & Mobile 360x640)', () => {
-  test('validates HubScene v0.3.0 boot, LocalStorage persistence, Altar/Blacksmith/Stash modals, T-039 layout fix, Dungeon victory extraction vs punitive death, and PC/Mobile screenshots', async ({
+  test('validates HubScene v0.4.0 boot, LocalStorage persistence, Altar/Blacksmith/Stash modals, T-039 layout fix, Dungeon victory extraction vs punitive death, and PC/Mobile screenshots', async ({
     page,
   }) => {
     const consoleErrors: string[] = [];
@@ -54,8 +54,8 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
       };
     }, SAVE_STORAGE_KEY);
 
-    expect(GAME_VERSION).toBe('0.3.0');
-    expect(bootCheck.title).toBe('SUBMUNDO v0.3.0');
+    expect(GAME_VERSION).toBe('0.4.0');
+    expect(bootCheck.title).toBe('SUBMUNDO v0.4.0');
     expect(bootCheck.hasCanvas).toBe(true);
     expect(bootCheck.canvasWidth).toBe(800);
     expect(bootCheck.canvasHeight).toBe(600);
@@ -65,6 +65,12 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
     expect(bootCheck.essences).toBe(0);
     expect(bootCheck.hasSavedInStorage).toBe(true);
     expect(bootCheck.savedVersion).toBe(1);
+
+    await page.evaluate(() => {
+      const hub = window.__SUBMUNDO_HUB_DEBUG__!;
+      hub.getDialogueBox().close();
+      hub.setCampaignPhase('act1', 'act1_submundo');
+    });
 
     const getCanvasOffset = async () => {
       const rect = await page.evaluate(() => {
@@ -521,6 +527,7 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
       dbg.advanceRoom();
       const hero = dbg.getHero();
       hero.invulnerableUntilMs = 999999;
+      hero.basicAttackReadyAtMs = 999999;
       const drop = dbg.spawnTestDrop('magic');
       return {
         dropId: drop.instanceId,
@@ -554,7 +561,12 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
       hero.baseStats.defense = 0;
       hero.stats.defense = 0;
       hero.stats.hp = 1;
+      hero.basicAttackReadyAtMs = 999999;
+      hero.minions = [];
       const attacker = monsters.find((m) => m.isAlive)!;
+      attacker.hp = Math.max(attacker.hp, 500);
+      attacker.stunnedUntilMs = 0;
+      attacker.bleedDps = 0;
       attacker.position = { x: hero.position.x, y: hero.position.y };
       attacker.nextAttackAtMs = 0;
     });

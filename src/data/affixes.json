@@ -280,6 +280,152 @@
         "critChance": 0.03
       },
       "description": "+4 de Defesa, +10 de Velocidade e +3% de Chance Crítica."
+    },
+    {
+      "id": "of_tempered_steel",
+      "name": "do Aço Temperado",
+      "force": "none",
+      "allowedSlots": ["weapon", "armor"],
+      "minRarity": "magic",
+      "bonuses": {
+        "attack": 2,
+        "defense": 2
+      },
+      "description": "+2 de Ataque e +2 de Defesa."
+    },
+    {
+      "id": "of_watchful_eye",
+      "name": "do Olhar Vigilante",
+      "force": "none",
+      "allowedSlots": ["amulet", "ring"],
+      "minRarity": "rare",
+      "bonuses": {
+        "critChance": 0.04,
+        "luck": 0.12
+      },
+      "description": "+4% de Chance Crítica e +12% de Sorte."
+    },
+    {
+      "id": "of_relentless_stride",
+      "name": "do Passo Incansável",
+      "force": "none",
+      "allowedSlots": ["armor", "amulet", "ring"],
+      "minRarity": "rare",
+      "bonuses": {
+        "moveSpeed": 14,
+        "cooldownReduction": 0.05
+      },
+      "description": "+14 de Velocidade e +5% de Redução de Recarga."
+    },
+    {
+      "id": "of_blazing_edge",
+      "name": "do Gume Ardente",
+      "force": "inferno",
+      "allowedSlots": ["weapon"],
+      "minRarity": "magic",
+      "bonuses": {
+        "attack": 3,
+        "attackRange": 8
+      },
+      "description": "+3 de Ataque e +8 de Alcance de Ataque."
+    },
+    {
+      "id": "of_charred_plate",
+      "name": "da Placa Carbonizada",
+      "force": "inferno",
+      "allowedSlots": ["armor", "amulet"],
+      "minRarity": "magic",
+      "bonuses": {
+        "defense": 3,
+        "maxHp": 14
+      },
+      "description": "+3 de Defesa e +14 de Vida Máxima."
+    },
+    {
+      "id": "of_volcanic_surge",
+      "name": "do Surto Vulcânico",
+      "force": "inferno",
+      "allowedSlots": ["amulet", "ring"],
+      "minRarity": "rare",
+      "bonuses": {
+        "cooldownReduction": 0.08,
+        "critMultiplier": 0.2
+      },
+      "description": "+8% de Redução de Recarga e +20% de Dano Crítico."
+    },
+    {
+      "id": "of_reaping_arc",
+      "name": "do Arco Ceifador",
+      "force": "submundo",
+      "allowedSlots": ["weapon"],
+      "minRarity": "magic",
+      "bonuses": {
+        "attack": 2,
+        "attackRange": 10
+      },
+      "description": "+2 de Ataque e +10 de Alcance de Ataque."
+    },
+    {
+      "id": "of_hollow_hunger",
+      "name": "da Fome Espectral",
+      "force": "submundo",
+      "allowedSlots": ["amulet", "ring"],
+      "minRarity": "magic",
+      "bonuses": {
+        "lifeSteal": 0.03,
+        "luck": 0.08
+      },
+      "description": "+3% de Roubo de Vida e +8% de Sorte."
+    },
+    {
+      "id": "of_abyssal_vigil",
+      "name": "da Vigília Abissal",
+      "force": "submundo",
+      "allowedSlots": ["armor", "amulet", "ring"],
+      "minRarity": "rare",
+      "bonuses": {
+        "maxHp": 24,
+        "cooldownReduction": 0.07,
+        "lifeSteal": 0.02
+      },
+      "description": "+24 de Vida Máxima, +7% de Redução de Recarga e +2% de Roubo de Vida."
+    },
+    {
+      "id": "of_sky_lance",
+      "name": "da Lança Celeste",
+      "force": "empireo",
+      "allowedSlots": ["weapon"],
+      "minRarity": "magic",
+      "bonuses": {
+        "critChance": 0.04,
+        "attackRange": 8
+      },
+      "description": "+4% de Chance Crítica e +8 de Alcance de Ataque."
+    },
+    {
+      "id": "of_halo_grace",
+      "name": "da Graça do Halo",
+      "force": "empireo",
+      "allowedSlots": ["armor", "ring"],
+      "minRarity": "magic",
+      "bonuses": {
+        "moveSpeed": 10,
+        "cooldownReduction": 0.05
+      },
+      "description": "+10 de Velocidade e +5% de Redução de Recarga."
+    },
+    {
+      "id": "of_sovereign_verdict",
+      "name": "do Veredito Soberano",
+      "force": "empireo",
+      "allowedSlots": ["weapon", "amulet", "ring"],
+      "minRarity": "rare",
+      "bonuses": {
+        "attack": 4,
+        "critChance": 0.05,
+        "critMultiplier": 0.16
+      },
+      "description": "+4 de Ataque, +5% de Chance Crítica e +16% de Dano Crítico."
     }
   ],
   "legendaryPowers": [

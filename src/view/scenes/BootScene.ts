@@ -80,6 +80,34 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
     frameHeight: 32,
     fallbackColor: 0x48cae4,
   },
+  {
+    key: 'portraits',
+    file: 'assets/sprites/portraits.png',
+    frameWidth: 64,
+    frameHeight: 64,
+    fallbackColor: 0x64748b,
+  },
+  {
+    key: 'village_tiles',
+    file: 'assets/sprites/village_tiles.png',
+    frameWidth: 16,
+    frameHeight: 16,
+    fallbackColor: 0x2f4f2f,
+  },
+  {
+    key: 'village_npcs',
+    file: 'assets/sprites/village_npcs.png',
+    frameWidth: 32,
+    frameHeight: 32,
+    fallbackColor: 0xd97706,
+  },
+  {
+    key: 'cave_bat',
+    file: 'assets/sprites/cave_bat.png',
+    frameWidth: 32,
+    frameHeight: 32,
+    fallbackColor: 0x7c3aed,
+  },
 ];
 
 export class BootScene extends Phaser.Scene {

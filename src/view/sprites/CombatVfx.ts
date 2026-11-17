@@ -53,6 +53,13 @@ const ANIMATION_SPECS: readonly AnimationSpec[] = [
     frameRate: 3,
     repeat: -1,
   },
+  {
+    key: 'bat_idle',
+    texture: 'cave_bat',
+    frames: [0, 1],
+    frameRate: 6,
+    repeat: -1,
+  },
 ];
 
 const FORCE_PALETTE: Record<

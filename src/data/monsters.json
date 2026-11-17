@@ -37,5 +37,31 @@
     "attackCooldownMs": 1400,
     "soulReward": 100,
     "spriteKey": "infernal_warden"
+  },
+  {
+    "id": "cave_bat",
+    "name": "Morcego da Gruta",
+    "type": "normal",
+    "maxHp": 28,
+    "attack": 7,
+    "defense": 1,
+    "moveSpeed": 135,
+    "attackRange": 30,
+    "attackCooldownMs": 900,
+    "soulReward": 6,
+    "spriteKey": "cave_bat"
+  },
+  {
+    "id": "abyss_herald",
+    "name": "Arauto do Abismo",
+    "type": "boss",
+    "maxHp": 210,
+    "attack": 15,
+    "defense": 3,
+    "moveSpeed": 105,
+    "attackRange": 54,
+    "attackCooldownMs": 1350,
+    "soulReward": 70,
+    "spriteKey": "infernal_warden"
   }
 ]

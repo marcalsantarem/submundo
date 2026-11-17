@@ -1,5 +1,5 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "sprites": {
     "wraith_warrior": {
       "key": "wraith_warrior",
@@ -130,6 +130,64 @@
         "blacksmith",
         "soul_altar",
         "rift_portal"
+      ]
+    },
+    "portraits": {
+      "key": "portraits",
+      "file": "portraits.png",
+      "width": 512,
+      "height": 64,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "frames": [
+        "hero_living",
+        "hero_wraith",
+        "weapon_master",
+        "village_blacksmith",
+        "emissary",
+        "spectral_blacksmith",
+        "infernal_warden",
+        "system"
+      ]
+    },
+    "village_tiles": {
+      "key": "village_tiles",
+      "file": "village_tiles.png",
+      "width": 64,
+      "height": 16,
+      "frameWidth": 16,
+      "frameHeight": 16,
+      "frames": [
+        "grass_path",
+        "cobble_square",
+        "wood_wall",
+        "village_lantern"
+      ]
+    },
+    "village_npcs": {
+      "key": "village_npcs",
+      "file": "village_npcs.png",
+      "width": 128,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "weapon_master",
+        "village_blacksmith",
+        "potion_stall",
+        "village_gate"
+      ]
+    },
+    "cave_bat": {
+      "key": "cave_bat",
+      "file": "cave_bat.png",
+      "width": 64,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "flap0",
+        "flap1"
       ]
     }
   }

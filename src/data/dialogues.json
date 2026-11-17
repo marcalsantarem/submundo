@@ -1,10 +1,11 @@
 {
-  "version": "0.1.0",
+  "version": "0.4.0",
   "locale": "pt-BR",
   "entries": {
     "dungeon_enter": {
       "id": "dungeon_enter",
       "speaker": "Emissário Celestial",
+      "portraitId": "emissary",
       "title": "Fenda do Submundo",
       "text": "As correntes do Submundo rangem, Guerreiro Espectral. Expurgue as quatro câmaras e reivindique a cabeça do Carcereiro Infernal.",
       "shortText": "Adentrando a masmorra. Expurgue as câmaras até o Carcereiro Infernal."
@@ -12,6 +13,7 @@
     "room_clear": {
       "id": "room_clear",
       "speaker": "Sistema",
+      "portraitId": "system",
       "title": "Câmara Expurgada",
       "text": "O último eco abissal se desfaz em cinzas. As Almas convergem para o seu Selo e o caminho adiante se abre.",
       "shortText": "Câmara expurgada! O caminho adiante foi liberado."
@@ -19,6 +21,7 @@
     "boss_intro": {
       "id": "boss_intro",
       "speaker": "Carcereiro Infernal",
+      "portraitId": "infernal_warden",
       "title": "Sala 5 — O Carcereiro Infernal",
       "text": "Mais um cão acorrentado pelo Empíreo... Suas cinzas alimentarão minhas fornalhas, Guerreiro Espectral!",
       "shortText": "Carcereiro Infernal: 'Suas cinzas alimentarão minhas fornalhas, Espectro!'"
@@ -26,6 +29,7 @@
     "run_victory": {
       "id": "run_victory",
       "speaker": "Emissário Celestial",
+      "portraitId": "emissary",
       "title": "Carcereiro Abatido — Extração Completa",
       "text": "O Carcereiro Infernal tombou. Retorne ao Refúgio do Submundo com suas Almas, seus espólios e a Essência tomada.",
       "shortText": "Vitória! Retornando ao Refúgio do Submundo com Almas e todos os espólios."
@@ -33,6 +37,7 @@
     "run_death": {
       "id": "run_death",
       "speaker": "Emissário Celestial",
+      "portraitId": "emissary",
       "title": "Forma Espectral Desfeita",
       "text": "Sua carcaça etérea se desfez nas sombras. O Selo puxa seu espírito de volta ao Refúgio do Submundo: os espólios ficaram para trás, mas suas Almas permanecem.",
       "shortText": "Você tombou. Retornando ao Refúgio do Submundo com suas Almas preservadas."
@@ -40,6 +45,7 @@
     "loot_drop_legendary": {
       "id": "loot_drop_legendary",
       "speaker": "Sistema",
+      "portraitId": "system",
       "title": "Relíquia Lendária Descoberta",
       "text": "Um poder antigo pulsa nas cinzas: você obteve um equipamento Lendário. Vença o Boss para extraí-lo com segurança até o Refúgio do Submundo.",
       "shortText": "Lendário encontrado! Extraia após o Boss para mantê-lo."
@@ -47,6 +53,7 @@
     "inventory_hint": {
       "id": "inventory_hint",
       "speaker": "Ferreiro Espiritual",
+      "portraitId": "spectral_blacksmith",
       "title": "Arsenal do Espectro",
       "text": "Equipe Arma, Armadura Espectral, Amuleto e Anel de Alma na mochila. Combine afixos de Inferno, Submundo e Empíreo para despertar sua build.",
       "shortText": "Abra o inventário para equipar os 4 slots e combinar as 3 Forças."
@@ -54,6 +61,7 @@
     "extraction_loot_kept": {
       "id": "extraction_loot_kept",
       "speaker": "Emissário Celestial",
+      "portraitId": "emissary",
       "title": "Espólios Extraídos",
       "text": "A extração foi selada. Todas as Almas e equipamentos saqueados nesta incursão agora pertencem em definitivo ao seu arsenal no Refúgio do Submundo.",
       "shortText": "Extração completa! Todos os equipamentos saqueados foram mantidos."
@@ -61,6 +69,7 @@
     "death_loot_lost": {
       "id": "death_loot_lost",
       "speaker": "Emissário Celestial",
+      "portraitId": "emissary",
       "title": "Espólios Perdidos na Escuridão",
       "text": "O Selo resgatou seu espírito e suas Almas, mas os equipamentos coletados durante a incursão ficaram perdidos nos escombros da masmorra.",
       "shortText": "Equipamentos não extraídos foram perdidos; suas Almas permanecem."
@@ -68,6 +77,7 @@
     "hub_welcome": {
       "id": "hub_welcome",
       "speaker": "Emissário Celestial",
+      "portraitId": "emissary",
       "title": "O Refúgio do Submundo",
       "text": "Ergue-te entre as cinzas da tua Vila Natal, Guerreiro Espectral. Neste Refúgio do Submundo, o Altar de Almas e o Ferreiro Espiritual forjam tua lâmina para a próxima caçada.",
       "shortText": "Bem-vindo ao Refúgio do Submundo. Prepare-se no Altar e no Ferreiro antes da Fenda."
@@ -75,6 +85,7 @@
     "altar_intro": {
       "id": "altar_intro",
       "speaker": "Altar de Almas",
+      "portraitId": "system",
       "title": "Altar de Almas",
       "text": "As Almas arrancadas da escuridão nunca se perdem com a queda. Ofereça-as aqui para gravar força, vigor e velocidade permanentes no seu Selo Espectral.",
       "shortText": "Canalize suas Almas no Altar para elevar atributos permanentes do Espectro."
@@ -82,6 +93,7 @@
     "blacksmith_intro": {
       "id": "blacksmith_intro",
       "speaker": "Ferreiro Espiritual",
+      "portraitId": "spectral_blacksmith",
       "title": "Forja do Ferreiro Espiritual",
       "text": "Minhas brasas azuis temperam o aço que trouxeste das trevas: gaste Almas para aprimorar teus itens em +1, +2 e +3, ou entregue uma Essência de General para forjar relíquias Lendárias.",
       "shortText": "Aprimore itens (+1/+2/+3) com Almas ou forje relíquias Lendárias com Essência de General."
@@ -89,6 +101,7 @@
     "portal_enter": {
       "id": "portal_enter",
       "speaker": "Portal da Fenda",
+      "portraitId": "system",
       "title": "Portal da Fenda",
       "text": "As correntes abissais vibram além do limiar. Atravesse o Portal da Fenda para uma nova incursão — vença o Carcereiro Infernal se quiser extrair seus espólios.",
       "shortText": "Atravesse o Portal da Fenda para iniciar uma nova incursão na masmorra."
@@ -96,9 +109,90 @@
     "boss_essence_drop": {
       "id": "boss_essence_drop",
       "speaker": "Sistema",
+      "portraitId": "system",
       "title": "Essência de General Obtida",
       "text": "O coração abissal do Carcereiro Infernal condensou-se em Essência de General! Leve-a ao Refúgio do Submundo para desbloquear forjas Lendárias com o Ferreiro Espiritual.",
       "shortText": "Essência de General obtida do Carcereiro Infernal! Use-a na forja do Refúgio."
+    },
+    "prologue_welcome": {
+      "id": "prologue_welcome",
+      "speaker": "Mestre de Armas",
+      "portraitId": "weapon_master",
+      "title": "Vila Natal — Campo de Treino",
+      "text": "Empunhe sua lâmina com firmeza, jovem guerreiro. Nossa Vila Natal ainda respira em paz, mas os tremores vindos das montanhas exigem aço pronto e reflexos afiados.",
+      "shortText": "Treine com o Mestre de Armas antes que a sombra alcance a Vila Natal."
+    },
+    "prologue_blacksmith": {
+      "id": "prologue_blacksmith",
+      "speaker": "Ferreiro da Vila",
+      "portraitId": "village_blacksmith",
+      "title": "Forja da Vila Natal",
+      "text": "Ferro comum e boa têmpera salvam mais vidas do que lendas. Passe pela minha bigorna sempre que precisar reforçar o gume antes de descer às grutas.",
+      "shortText": "Ferreiro da Vila: aço bem temperado mantém você vivo nas incursões."
+    },
+    "stage_grotto_intro": {
+      "id": "stage_grotto_intro",
+      "speaker": "Mestre de Armas",
+      "portraitId": "weapon_master",
+      "title": "A Gruta da Cachoeira",
+      "text": "Seu primeiro teste real começa na Gruta da Cachoeira. Mantenha-se em movimento, esquive das investidas e limpe os limos e morcegos que infestaram a nascente.",
+      "shortText": "Expurgue os limos e morcegos que infestaram a Gruta da Cachoeira."
+    },
+    "stage_grotto_victory": {
+      "id": "stage_grotto_victory",
+      "speaker": "Jovem Guerreiro",
+      "portraitId": "hero_living",
+      "title": "Gruta Purificada",
+      "text": "A Gruta da Cachoeira está livre novamente, mas a água carrega um cheiro estranho de enxofre. Preciso relatar ao Mestre de Armas o que encontrei lá dentro.",
+      "shortText": "Gruta da Cachoeira limpa! Retorne à Vila Natal."
+    },
+    "stage_mine_intro": {
+      "id": "stage_mine_intro",
+      "speaker": "Mestre de Armas",
+      "portraitId": "weapon_master",
+      "title": "A Mina Abandonada",
+      "text": "Escute: ossos estão caminhando na Mina Abandonada desde o anoitecer. Desça com cautela e reduza aqueles esqueletos a pó antes que alcancem a estrada da vila.",
+      "shortText": "Limpe os esqueletos surgidos durante a noite na Mina Abandonada."
+    },
+    "stage_mine_victory": {
+      "id": "stage_mine_victory",
+      "speaker": "Mestre de Armas",
+      "portraitId": "weapon_master",
+      "title": "Presságio nas Profundezas",
+      "text": "Você derrubou os mortos, mas essas runas nas paredes não são obra humana. Algo antigo foi despertado sob a rocha — prepare-se para descer ainda mais fundo.",
+      "shortText": "Mina limpa, mas um presságio sombrio ecoa nas galerias inferiores."
+    },
+    "stage_seal_intro": {
+      "id": "stage_seal_intro",
+      "speaker": "Mestre de Armas",
+      "portraitId": "weapon_master",
+      "title": "O Selo Antigo",
+      "text": "Pelos deuses... A porta ancestral no fundo da mina foi rompida! Fique atrás do meu escudo e golpeie sem hesitar — o ar está queimando!",
+      "shortText": "O Selo Antigo foi rompido no fundo da mina. Prepare-se para o pior!"
+    },
+    "village_fall_boss": {
+      "id": "village_fall_boss",
+      "speaker": "Arauto do Abismo",
+      "portraitId": "infernal_warden",
+      "title": "A Queda da Vila Natal",
+      "text": "O Selo caiu e sua vila já arde em cinzas, mortal! Sua lâmina frágil será a última chama a se apagar diante da horda do Inferno!",
+      "shortText": "Arauto do Abismo: 'Sua Vila Natal já arde em cinzas, mortal!'"
+    },
+    "village_fall_pact": {
+      "id": "village_fall_pact",
+      "speaker": "Emissário Celestial",
+      "portraitId": "emissary",
+      "title": "O Pacto Celestial",
+      "text": "Seu corpo sucumbiu ao fogo abissal, mas sua fúria ainda arde. Receba o Selo Celestial: renasça como Guerreiro Espectral no Refúgio do Submundo, cace os Generais do Inferno e reconquiste sua vida.",
+      "shortText": "Você tombou na vila, mas o Emissário Celestial cravou o Selo em sua alma."
+    },
+    "act1_briefing": {
+      "id": "act1_briefing",
+      "speaker": "Emissário Celestial",
+      "portraitId": "emissary",
+      "title": "Ato 1 — A Caçada Começa",
+      "text": "Este é o Refúgio no Submundo, espelho em ruínas do lar que você perdeu. Atravesse a Fenda, abata os Generais do Inferno — começando pelo Carcereiro Infernal — e prove o valor do seu Selo.",
+      "shortText": "Ato 1 iniciado: cace o Carcereiro Infernal através do Portal da Fenda."
     }
   },
   "dungeon_enter": "As correntes do Submundo rangem, Guerreiro Espectral. Expurgue as quatro câmaras e reivindique a cabeça do Carcereiro Infernal.",
@@ -114,5 +208,15 @@
   "altar_intro": "Canalize suas Almas no Altar para elevar atributos permanentes do Espectro.",
   "blacksmith_intro": "Aprimore itens (+1/+2/+3) com Almas ou forje relíquias Lendárias com Essência de General.",
   "portal_enter": "Atravesse o Portal da Fenda para iniciar uma nova incursão na masmorra.",
-  "boss_essence_drop": "Essência de General obtida do Carcereiro Infernal! Use-a na forja do Refúgio."
+  "boss_essence_drop": "Essência de General obtida do Carcereiro Infernal! Use-a na forja do Refúgio.",
+  "prologue_welcome": "Treine com o Mestre de Armas antes que a sombra alcance a Vila Natal.",
+  "prologue_blacksmith": "Ferreiro da Vila: aço bem temperado mantém você vivo nas incursões.",
+  "stage_grotto_intro": "Expurgue os limos e morcegos que infestaram a Gruta da Cachoeira.",
+  "stage_grotto_victory": "Gruta da Cachoeira limpa! Retorne à Vila Natal.",
+  "stage_mine_intro": "Limpe os esqueletos surgidos durante a noite na Mina Abandonada.",
+  "stage_mine_victory": "Mina limpa, mas um presságio sombrio ecoa nas galerias inferiores.",
+  "stage_seal_intro": "O Selo Antigo foi rompido no fundo da mina. Prepare-se para o pior!",
+  "village_fall_boss": "Arauto do Abismo: 'Sua Vila Natal já arde em cinzas, mortal!'",
+  "village_fall_pact": "Você tombou na vila, mas o Emissário Celestial cravou o Selo em sua alma.",
+  "act1_briefing": "Ato 1 iniciado: cace o Carcereiro Infernal através do Portal da Fenda."
 }

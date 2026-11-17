@@ -33,7 +33,9 @@ test.describe('SUBMUNDO M1 — Real Browser E2E Validation (PC 800x600 & Mobile 
       { timeout: 10000 }
     );
     await page.evaluate(() => {
-      window.__SUBMUNDO_HUB_DEBUG__!.enterDungeon();
+      const hub = window.__SUBMUNDO_HUB_DEBUG__!;
+      hub.setCampaignPhase('act1', 'act1_submundo');
+      hub.enterDungeon('act1_submundo');
     });
 
     await page.waitForFunction(

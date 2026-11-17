@@ -4,6 +4,9 @@ import type { HeroState } from '../entities/Hero';
 import type {
   AltarUpgradeDef,
   AltarUpgradeId,
+  CampaignPhase,
+  CampaignProgress,
+  CampaignStageId,
   EquipSlot,
   HeroStats,
   ItemInstance,
@@ -40,6 +43,52 @@ const ALTAR_IDS: readonly AltarUpgradeId[] = [
   'swiftness',
   'fortune',
 ];
+const CAMPAIGN_PHASES: readonly CampaignPhase[] = ['prologue', 'act1'];
+const CAMPAIGN_STAGE_IDS: readonly CampaignStageId[] = [
+  'prologue_grotto',
+  'prologue_mine',
+  'prologue_seal',
+  'act1_submundo',
+];
+
+function isCampaignPhase(value: unknown): value is CampaignPhase {
+  return (
+    typeof value === 'string' &&
+    (CAMPAIGN_PHASES as readonly string[]).includes(value)
+  );
+}
+
+function isCampaignStageId(value: unknown): value is CampaignStageId {
+  return (
+    typeof value === 'string' &&
+    (CAMPAIGN_STAGE_IDS as readonly string[]).includes(value)
+  );
+}
+
+function normalizeCampaign(raw: unknown): CampaignProgress | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return undefined;
+  }
+  const candidate = raw as Partial<CampaignProgress>;
+  return {
+    phase: isCampaignPhase(candidate.phase) ? candidate.phase : 'prologue',
+    currentStageId: isCampaignStageId(candidate.currentStageId)
+      ? candidate.currentStageId
+      : 'prologue_grotto',
+    completedStages: Array.isArray(candidate.completedStages)
+      ? candidate.completedStages.filter(isCampaignStageId)
+      : [],
+    seenDialogues: Array.isArray(candidate.seenDialogues)
+      ? candidate.seenDialogues.filter(
+          (id): id is string => typeof id === 'string'
+        )
+      : [],
+    villageFallTriggered:
+      typeof candidate.villageFallTriggered === 'boolean'
+        ? candidate.villageFallTriggered
+        : false,
+  };
+}
 
 function roundStat(value: number): number {
   return Math.round(value * 1e6) / 1e6;
@@ -158,6 +207,8 @@ export function loadOrCreateProfile(storage?: StorageLike): SaveProfile {
     equipped[slot] = loaded.equipped?.[slot] ?? null;
   }
 
+  const campaign = normalizeCampaign(loaded.campaign);
+
   return {
     version:
       typeof loaded.version === 'number' && Number.isFinite(loaded.version)
@@ -190,6 +241,7 @@ export function loadOrCreateProfile(storage?: StorageLike): SaveProfile {
       bossesDefeated: Math.max(0, loaded.stats?.bossesDefeated ?? 0),
       totalSoulsEarned: Math.max(0, loaded.stats?.totalSoulsEarned ?? 0),
     },
+    ...(campaign ? { campaign } : {}),
   };
 }
 
