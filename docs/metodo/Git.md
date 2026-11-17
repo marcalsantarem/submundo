@@ -25,7 +25,6 @@ Só existem duas branches permanentes:
 - Em pt-BR, começando pelo id da task e citando o briefing:
   `T-209 balanceamento com Núcleos pela simulação do bot (BRF-157)`
 - Várias tasks juntas: `T-210 validação do M4, T-300 ressalvas do QA e versão 0.2.2 (BRF-160, BRF-161, BRF-162)`.
-- Termina com a linha de coautoria do Claude.
 
 ## Quando fazer push
 

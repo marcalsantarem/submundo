@@ -38,8 +38,6 @@ Sempre colado na própria mensagem do chat (não só em arquivo), em pt-BR, em b
 
 ## Pendente para o dono
 <o que só o dono consegue validar, ex.: roteiro no aparelho real>
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ```
 
 ## Tag
