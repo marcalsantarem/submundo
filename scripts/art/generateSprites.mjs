@@ -1183,16 +1183,26 @@ function generateHubNpcs() {
 function generateVillageTiles() {
   const c = new PixelCanvas(64, 16);
 
-  c.ditherRect(0, 0, 16, 16, '#2f5229', '#3d6b35', 0.45);
-  c.ditherRect(4, 0, 8, 16, '#7c5836', '#926943', 0.4);
-  c.setPixel(5, 3, '#a67b51');
-  c.setPixel(10, 11, '#a67b51');
-  c.setPixel(4, 7, '#614328');
-  c.setPixel(11, 5, '#614328');
-  c.setPixel(2, 4, '#5a8f49');
-  c.setPixel(3, 12, '#5a8f49');
-  c.setPixel(13, 2, '#5a8f49');
-  c.setPixel(14, 9, '#5a8f49');
+  // Frame 0: grass_path (grama escura/musgo sombrio contínuo, sem listras)
+  c.ditherRect(0, 0, 16, 16, '#1a3322', '#1f3d28', 0.45);
+  const mossClusters = [
+    [2, 2], [3, 2], [2, 3],
+    [10, 4], [11, 5],
+    [6, 9], [7, 9], [7, 10],
+    [13, 12], [14, 12], [13, 13],
+    [0, 5], [15, 11], [5, 14], [11, 1],
+  ];
+  for (const [mx, my] of mossClusters) {
+    c.setPixel(mx, my, '#264b31');
+  }
+  // Raros tufos de grama e pedrinhas discretas distribuídos de forma equilibrada
+  c.setPixel(4, 6, '#264b31');
+  c.setPixel(4, 5, '#2f5c3c');
+  c.setPixel(12, 10, '#264b31');
+  c.setPixel(13, 9, '#2f5c3c');
+  c.setPixel(9, 2, '#2d3630');
+  c.setPixel(10, 2, '#3a423d');
+  c.setPixel(2, 13, '#2d3630');
 
   c.fillRect(16, 0, 16, 16, '#3b352f');
   const stones = [
