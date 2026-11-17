@@ -68,7 +68,7 @@
 | T-064 | Registrar animações do Herói (`idle`, `walk`, `attack`, `dash`, `hit`) em `CombatVfx.ts` e integrar troca `hero_living` (Prólogo) vs. `hero_wraith` (Ato 1), flip direcional e arco de corte rúnico em `DungeonScene.ts` (tam. M) | M5 | AG01 (Gameplay) | feita |
 | T-065 | Integrar animações `idle`/`walk`, flip direcional e troca `hero_living` (Prólogo) vs. `hero_wraith` (Ato 1) na `HubScene.ts` (tam. P) | M5 | AG02 (UI) | feita |
 | T-066 | Pré-carregar `hero_living` e `hero_wraith` (48x48) em `BootScene.ts` e subir versão para `0.5.0` em `package.json`, `src/version.ts` e `tests/core/architecture.test.ts` (tam. P) | M5 | AG07 (Arquiteto) | feita |
-| T-067 | Validação do M5 (suíte 3x, Playwright validando visual/animações do Herói no Prólogo e Ato 1, capturas PC/Mobile, `docs/qa/qa-M5.md`) e tag `v0.5.0` (tam. M) | M5 | AG03 (QA) + AG00 (Líder) | em progresso |
+| T-067 | Validação do M5 (suíte 3x, Playwright validando visual/animações do Herói no Prólogo e Ato 1, capturas PC/Mobile, `docs/qa/qa-M5.md`) e tag `v0.5.0` (tam. M) | M5 | AG03 (QA) + AG00 (Líder) | feita |
 | T-068 | Spritesheets Pixel Art detalhados de todos os Inimigos e Bosses (`abyssal_slime`, `cave_bat`, `bone_sentinel`, `abyss_herald`, `infernal_warden`) com frames de `idle`, `walk`, `attack` e `hit` + `manifest.json` (tam. M) | M6 | AG08 (Arte) | a fazer |
 | T-069 | Registrar animações dos inimigos em `CombatVfx.ts` e integrar `walk`, `attack`, `hit` e flip direcional por estado de IA em `DungeonScene.ts` (tam. M) | M6 | AG01 (Gameplay) | a fazer |
 | T-070 | Pré-carregar novos spritesheets/dimensões dos inimigos em `BootScene.ts` e subir versão para `0.6.0` em `package.json`, `src/version.ts` e `tests/core/architecture.test.ts` (tam. P) | M6 | AG07 (Arquiteto) | a fazer |
