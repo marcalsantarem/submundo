@@ -13,6 +13,9 @@ export function createGameConfig(viewport: ViewportConfig): Phaser.Types.Core.Ga
     backgroundColor: '#09090b',
     pixelArt: true,
     roundPixels: true,
+    input: {
+      activePointers: 4,
+    },
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,

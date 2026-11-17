@@ -78,3 +78,74 @@ export function resolveViewportConfig(
     aspectRatio: '9:16',
   };
 }
+
+export type EquipSlot = 'weapon' | 'armor' | 'amulet' | 'ring';
+
+export type Rarity = 'common' | 'magic' | 'rare' | 'legendary';
+
+export type StatusEffectType = 'ember' | 'bleed' | 'judgment';
+
+export type LegendaryPowerId =
+  | 'inferno_dash_trail'
+  | 'submundo_bleed_minion'
+  | 'empireo_crit_lightning'
+  | 'inferno_ember_nova'
+  | 'submundo_crimson_pact'
+  | 'empireo_judgment_haste';
+
+export interface StatBonus {
+  maxHp?: number;
+  attack?: number;
+  defense?: number;
+  moveSpeed?: number;
+  attackRange?: number;
+  cooldownReduction?: number;
+  critChance?: number;
+  critMultiplier?: number;
+  lifeSteal?: number;
+  luck?: number;
+}
+
+export interface AffixDef {
+  id: string;
+  name: string;
+  force: ForceType;
+  allowedSlots: EquipSlot[];
+  minRarity: Rarity;
+  bonuses: StatBonus;
+  description: string;
+}
+
+export interface LegendaryPowerDef {
+  id: LegendaryPowerId;
+  name: string;
+  force: ForceType;
+  description: string;
+}
+
+export interface ItemDef {
+  id: string;
+  name: string;
+  slot: EquipSlot;
+  force: ForceType;
+  baseBonuses: StatBonus;
+  iconKey: string;
+  description: string;
+}
+
+export interface ItemInstance {
+  instanceId: string;
+  defId: string;
+  name: string;
+  slot: EquipSlot;
+  rarity: Rarity;
+  force: ForceType;
+  baseBonuses: StatBonus;
+  affixes: AffixDef[];
+  legendaryPower?: LegendaryPowerDef;
+  iconKey: string;
+  powerScore: number;
+}
+
+export type EquippedGear = Record<EquipSlot, ItemInstance | null>;
+

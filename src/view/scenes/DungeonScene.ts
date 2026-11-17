@@ -238,6 +238,7 @@ export class DungeonScene extends Phaser.Scene {
 
     if (this.runState.status === 'room_cleared') {
       this.advanceRoomNow();
+      return;
     }
 
     for (const monster of this.monsters) {

@@ -62,3 +62,49 @@
 - Chave `boss_intro`: Confronto direto com o **Carcereiro Infernal** (`infernal_warden`) na Sala 5.
 - Chave `run_victory`: Extração triunfante com Almas, equipamentos e Essência de General rumo ao **Refúgio do Submundo**.
 - Chave `run_death`: Colapso da forma física na masmorra; retorno ao **Refúgio do Submundo** preservando as **Almas** coletadas.
+
+---
+
+## 5. Equipamentos, Raridades e 3 Forças (M2)
+
+### 5.1. Slots Oficiais de Equipamento
+| ID do Slot | Nome Oficial (pt-BR) | Função / Foco de Atributos |
+| :--- | :--- | :--- |
+| `weapon` | **Arma** | Define velocidade, alcance e formato do ataque básico do Espectro. |
+| `armor` | **Armadura Espectral** | Define Vida Máxima, Defesa e Resistência contra golpes abissais. |
+| `amulet` | **Amuleto / Selo** | Focado em Recarga (Cooldown) e modificadores das Skills Ativas. |
+| `ring` | **Anel de Alma** | Focado em Chance Crítica, Dano Crítico, Velocidade e Sorte. |
+
+### 5.2. Raridades Oficiais
+| ID da Raridade | Nome Oficial (pt-BR) | Estrutura de Poder |
+| :--- | :--- | :--- |
+| `common` | **Comum** | Apenas atributo base do slot. |
+| `magic` | **Mágico** | Atributo base + 1 afixo sorteado. |
+| `rare` | **Raro** | Atributo base + 2 a 3 afixos sorteados. |
+| `legendary` | **Lendário** | Atributo base + 3 afixos + **1 Poder Lendário** único. |
+
+### 5.3. Mecânicas das 3 Forças (Sinergias de Build)
+| ID da Força | Nome Oficial | ID da Mecânica | Mecânica Canônica |
+| :--- | :--- | :--- | :--- |
+| `inferno` | **Inferno** | `ember` (**Brasa**) | Acumula queimaduras no alvo que explodem em área ao atingir **5 cargas**. |
+| `submundo` | **Submundo** | `bleed` (**Sangramento & Roubo de Vida**) | Aplica dano contínuo de sangramento enquanto drena vitalidade para curar o Espectro. |
+| `empireo` | **Empíreo** | `judgment` (**Julgamento & Raio**) | Acertos críticos disparam raios celestiais em cadeia e atordoam os inimigos atingidos. |
+
+### 5.4. Os 6 Poderes Lendários Canônicos (M2)
+| ID do Poder | Nome Canônico (pt-BR) | Força | Descrição Canônica |
+| :--- | :--- | :--- | :--- |
+| `inferno_dash_trail` | **Rastro de Cinzas** | **Inferno** (`inferno`) | A Esquiva Espectral deixa um rastro de fogo infernal que aplica **Brasa** nos inimigos atravessados. |
+| `inferno_ember_nova` | **Nova de Brasa** | **Inferno** (`inferno`) | Ao atingir 5 cargas de **Brasa**, a explosão causa dano incendiário ampliado e espalha **Brasa** aos alvos próximos. |
+| `submundo_bleed_minion` | **Chamado do Obituário** | **Submundo** (`submundo`) | Inimigos abatidos sob **Sangramento** têm chance de erguer um servo espectral temporário para lutar ao seu lado. |
+| `submundo_crimson_pact` | **Pacto Carmesim** | **Submundo** (`submundo`) | Intensifica o **Sangramento** e converte parte do dano contínuo em **Roubo de Vida** direto para o Espectro. |
+| `empireo_crit_lightning` | **Veredicto Fulminante** | **Empíreo** (`empireo`) | Acertos críticos liberam um raio celestial em cadeia nos inimigos próximos, aplicando **Julgamento**. |
+| `empireo_judgment_haste` | **Ímpeto do Julgamento** | **Empíreo** (`empireo`) | Aplicar **Julgamento** ou atordoar inimigos acelera os ataques e reduz a recarga das Skills do Espectro. |
+
+---
+
+## 6. Diretrizes de Diálogos de Loot e Extração (M2)
+- Chave `loot_drop_legendary`: Alerta imediato ao cair um item **Lendário**, reforçando que a posse definitiva depende da extração.
+- Chave `inventory_hint`: Dica concisa do **Ferreiro Espiritual** sobre os 4 slots (`weapon`, `armor`, `amulet`, `ring`) e sinergias das 3 Forças.
+- Chave `extraction_loot_kept`: Confirmação na vitória de que Almas, Essências e equipamentos coletados foram garantidos no **Refúgio do Submundo**.
+- Chave `death_loot_lost`: Aviso de derrota reforçando a regra central: equipamentos não extraídos se perdem na masmorra, mas as **Almas** permanecem.
+

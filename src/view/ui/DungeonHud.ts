@@ -128,6 +128,11 @@ export class DungeonHud {
       this.skillBySlot.set(skill.slot, skill);
     }
 
+    const totalPointers = scene.input.manager?.pointersTotal ?? 2;
+    if (totalPointers < 4) {
+      scene.input.addPointer?.(4 - totalPointers);
+    }
+
     this.joystick = new VirtualJoystick(scene);
 
     // Top HUD graphics & texts
@@ -272,9 +277,18 @@ export class DungeonHud {
       .setOrigin(0.5, 0.5)
       .setInteractive({ useHandCursor: true });
 
-    this.restartBtnZone.on('pointerdown', () => {
-      this.callbacks.onRestartRun();
-    });
+    this.restartBtnZone.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _lx: number,
+        _ly: number,
+        event?: Phaser.Types.Input.EventData
+      ) => {
+        event?.stopPropagation?.();
+        this.callbacks.onRestartRun();
+      }
+    );
 
     this.restartBtnContainer = scene.add.container(0, 82, [
       this.restartBtnBg,
@@ -414,7 +428,10 @@ export class DungeonHud {
         btn.chargesText.setText(`${snapshot.potionCharges}/${snapshot.maxPotionCharges}`);
       }
 
+      btn.labelText.setVisible(!isOnCooldown);
+
       if (isOnCooldown) {
+        btn.cooldownText.setY(btn.chargesText ? -5 : 0);
         btn.cooldownText.setVisible(true);
         btn.cooldownText.setText(`${(cdRemainingMs / 1000).toFixed(1)}s`);
       } else {
@@ -584,7 +601,7 @@ export class DungeonHud {
       let chargesText: Phaser.GameObjects.Text | undefined;
       if (slot === 'potion') {
         chargesText = this.scene.add
-          .text(0, 10, '3/3', {
+          .text(0, 12, '3/3', {
             fontFamily: 'monospace',
             fontSize: '10px',
             color: '#80ed99',
@@ -599,15 +616,26 @@ export class DungeonHud {
         .setOrigin(0.5, 0.5)
         .setInteractive({ useHandCursor: true });
 
-      hitZone.on('pointerdown', () => {
-        if (
-          this.lastSnapshot.runStatus === 'victory' ||
-          this.lastSnapshot.runStatus === 'defeat'
-        ) {
-          return;
+      hitZone.on(
+        'pointerdown',
+        (
+          pointer: Phaser.Input.Pointer,
+          _lx: number,
+          _ly: number,
+          event?: Phaser.Types.Input.EventData
+        ) => {
+          event?.stopPropagation?.();
+          if (
+            this.lastSnapshot.runStatus === 'victory' ||
+            this.lastSnapshot.runStatus === 'defeat'
+          ) {
+            return;
+          }
+          if (pointer.id >= 0) {
+            this.callbacks.onUseSkill(skill.id);
+          }
         }
-        this.callbacks.onUseSkill(skill.id);
-      });
+      );
 
       children.push(hitZone);
 

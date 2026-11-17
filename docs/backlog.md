@@ -12,11 +12,11 @@
 | T-008 | HUD responsivo (`800x600` PC / `9:16` Mobile), joystick virtual flutuante de 1 polegar, botões de Dash/Skills/Poção e input `WASD`/Setas em `src/view/ui/` (tam. M) | M1 | AG02 (UI) | feita |
 | T-009 | `DungeonScene` integrando `src/core/`, renderização das 4 salas + Boss, animações de sprites e VFX de combate em `src/view/scenes/DungeonScene.ts` e `src/view/sprites/` (tam. M) | M1 | AG01 (Gameplay) + AG08 (Arte) | feita |
 | T-010 | Validação do M1 (suíte 3x, Playwright no navegador real, capturas PC `800x600` e Mobile `9:16`, `docs/qa/qa-M1.md`) e tag `v0.1.0` (tam. M) | M1 | AG03 (QA) + AG00 (Líder) | feita (passa com 2 ressalvas menores) |
-| T-011 | Ressalva do QA do M1 no HUD: ocultar rótulo do botão de skill durante o cooldown em `src/view/ui/DungeonHud.ts` (tam. P) | M2 | AG02 (UI) | em andamento |
-| T-012 | Ressalva do QA do M1 na cena: adicionar `return;` após `advanceRoomNow()` em `forceClearRoom` em `src/view/scenes/DungeonScene.ts` (tam. P) | M2 | AG01 (Gameplay) | em andamento |
-| T-013 | Contratos de tipos em `src/core/index.ts` para Equipamentos (`EquipSlot`, `Rarity`, `AffixDef`, `ItemDef`, `ItemInstance`, `StatusEffectType`, `LegendaryPowerId`) (tam. P) | M2 | AG07 (Arquiteto) | em andamento |
-| T-014 | Glossário e textos canônicos de itens base, afixos, poderes lendários e das 3 Forças (`Inferno`, `Submundo`, `Empíreo`) em `docs/narrativa.md` e `src/data/dialogues.json` (tam. P) | M2 | AG06 (Narrativa) | em andamento |
-| T-015 | Catálogo JSON de equipamentos base (4 slots: Arma, Armadura, Amuleto, Anel) e afixos/poderes lendários em `src/data/items.json` e `src/data/affixes.json` (tam. P) | M2 | AG04 (Sistemas/Meta) | em andamento |
+| T-011 | Ressalva do QA do M1 no HUD: ocultar rótulo do botão de skill durante o cooldown em `src/view/ui/DungeonHud.ts` (tam. P) | M2 | AG02 (UI) | feita |
+| T-012 | Ressalva do QA do M1 na cena: adicionar `return;` após `advanceRoomNow()` em `forceClearRoom` em `src/view/scenes/DungeonScene.ts` (tam. P) | M2 | AG01 (Gameplay) | feita |
+| T-013 | Contratos de tipos em `src/core/index.ts` para Equipamentos (`EquipSlot`, `Rarity`, `AffixDef`, `ItemDef`, `ItemInstance`, `StatusEffectType`, `LegendaryPowerId`) (tam. P) | M2 | AG07 (Arquiteto) | feita |
+| T-014 | Glossário e textos canônicos de itens base, afixos, poderes lendários e das 3 Forças (`Inferno`, `Submundo`, `Empíreo`) em `docs/narrativa.md` e `src/data/dialogues.json` (tam. P) | M2 | AG06 (Narrativa) | feita |
+| T-015 | Catálogo JSON de equipamentos base (4 slots: Arma, Armadura, Amuleto, Anel) e afixos/poderes lendários em `src/data/items.json` e `src/data/affixes.json` (tam. P) | M2 | AG04 (Sistemas/Meta) | feita |
 | T-016 | Ícones Pixel Art/2D para os 4 slots de equipamento e drops por raridade em `public/assets/sprites/` + VFX das 3 Forças em `src/view/sprites/CombatVfx.ts` (tam. M) | M2 | AG08 (Arte) | a fazer |
 | T-017 | Gerador determinístico de loot (4 raridades), inventário da run, cálculo de bônus equipados e perda de loot da run na morte em `src/core/loot/` (tam. M) | M2 | AG04 (Sistemas/Meta) | a fazer |
 | T-018 | Sinergias das 3 Forças no combate (`Brasa` 5 cargas, `Sangramento & Roubo de Vida`, `Julgamento & Raio` em críticos) e poderes lendários em `src/core/combat/` (tam. M) | M2 | AG01 (Gameplay) | a fazer |
@@ -24,9 +24,9 @@
 | T-020 | Drops físicos na `DungeonScene.ts`, coleta de itens, aplicação de equipamentos/sinergias em tempo real e resumo de espólios extraídos/perdidos (tam. M) | M2 | AG01 (Gameplay) | a fazer |
 | T-021 | Subir versão do projeto para `0.2.0` em `package.json`, `src/version.ts` e `tests/core/architecture.test.ts` (tam. P) | M2 | AG07 (Arquiteto) | a fazer |
 | T-022 | Validação do M2 (suíte 3x, Playwright, capturas PC `800x600` e Mobile `9:16`, `docs/qa/qa-M2.md`) e tag `v0.2.0` (tam. M) | M2 | AG03 (QA) + AG00 (Líder) | a fazer |
-| T-023 | Habilitar multi-touch (`input: { activePointers: 4 }`) em `src/main.ts` e `touch-action: none` em `index.html` para uso simultâneo de joystick e skills no celular (tam. P) | M2 | AG07 (Arquiteto) | em andamento |
-| T-024 | Garantir suporte a múltiplos dedos e `pointercancel` no `VirtualJoystick.ts` e botões do `DungeonHud.ts` (tam. P) | M2 | AG02 (UI) | em andamento |
-| T-025 | Ajustar balanceamento inicial do Boss (`infernal_warden`) e monstros em `src/data/monsters.json` após feedback de dificuldade no teste real (tam. P) | M2 | AG04 (Sistemas/Meta) | em andamento |
+| T-023 | Habilitar multi-touch (`input: { activePointers: 4 }`) em `src/main.ts` e `touch-action: none` em `index.html` para uso simultâneo de joystick e skills no celular (tam. P) | M2 | AG07 (Arquiteto) | feita |
+| T-024 | Garantir suporte a múltiplos dedos e `pointercancel` no `VirtualJoystick.ts` e botões do `DungeonHud.ts` (tam. P) | M2 | AG02 (UI) | feita |
+| T-025 | Ajustar balanceamento inicial do Boss (`infernal_warden`) e monstros em `src/data/monsters.json` após feedback de dificuldade no teste real (tam. P) | M2 | AG04 (Sistemas/Meta) | feita |
 | T-026 | Gerador via código e PNGs do ícone oficial do app SUBMUNDO (`public/icons/icon-192.png`, `icon-512.png`, `apple-touch-icon.png` 180x180) (tam. P) | M2 | AG08 (Arte) | feita |
-| T-027 | Configurar PWA instalável (`public/manifest.webmanifest`, `public/sw.js` e cabeçalhos PWA em `netlify.toml`) (tam. P) | M2 | AG10 (Plataforma) | em andamento |
+| T-027 | Configurar PWA instalável (`public/manifest.webmanifest`, `public/sw.js` e cabeçalhos PWA em `netlify.toml`) (tam. P) | M2 | AG10 (Plataforma) | feita |
 | T-028 | Adicionar meta tags iOS (`apple-mobile-web-app-capable`, `apple-touch-icon`, `viewport-fit=cover`) em `index.html` e registro do Service Worker em `src/main.ts` (tam. P) | M2 | AG07 (Arquiteto) | a fazer |
