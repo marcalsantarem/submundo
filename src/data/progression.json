@@ -1,0 +1,87 @@
+{
+  "altarUpgrades": [
+    {
+      "id": "vitality",
+      "name": "Vitalidade Espectral",
+      "description": "Fortalece a essência do Espectro, aumentando a Vida Máxima permanente.",
+      "maxLevel": 5,
+      "baseSoulCost": 30,
+      "costMultiplier": 1.6,
+      "bonusPerLevel": {
+        "maxHp": 20
+      }
+    },
+    {
+      "id": "might",
+      "name": "Fúria das Sombras",
+      "description": "Canaliza Almas para ampliar permanentemente o poder de Ataque.",
+      "maxLevel": 5,
+      "baseSoulCost": 35,
+      "costMultiplier": 1.65,
+      "bonusPerLevel": {
+        "attack": 3
+      }
+    },
+    {
+      "id": "bastion",
+      "name": "Bastião Abissal",
+      "description": "Endurece a carapaça espiritual, concedendo Defesa permanente.",
+      "maxLevel": 5,
+      "baseSoulCost": 30,
+      "costMultiplier": 1.6,
+      "bonusPerLevel": {
+        "defense": 2
+      }
+    },
+    {
+      "id": "swiftness",
+      "name": "Passo Espectral",
+      "description": "Acelera o deslocamento e reduz o tempo de recarga das habilidades.",
+      "maxLevel": 5,
+      "baseSoulCost": 40,
+      "costMultiplier": 1.7,
+      "bonusPerLevel": {
+        "moveSpeed": 8,
+        "cooldownReduction": 0.02
+      }
+    },
+    {
+      "id": "fortune",
+      "name": "Olho do Destino",
+      "description": "Amplia a precisão crítica e a Sorte na obtenção de relíquias raras.",
+      "maxLevel": 5,
+      "baseSoulCost": 40,
+      "costMultiplier": 1.7,
+      "bonusPerLevel": {
+        "critChance": 0.02,
+        "luck": 0.05
+      }
+    }
+  ],
+  "blacksmithUpgrade": {
+    "maxLevel": 5,
+    "baseSoulCost": 40,
+    "costPerLevel": 35,
+    "attackBonusPerLevel": 3,
+    "hpBonusPerLevel": 12,
+    "defenseBonusPerLevel": 2
+  },
+  "blacksmithForge": [
+    {
+      "id": "forge_rare",
+      "name": "Forjar Equipamento Raro",
+      "description": "Usa Almas puras para temperar um equipamento Raro aleatório com múltiplos afixos.",
+      "essenceCost": 0,
+      "soulCost": 80,
+      "rarity": "rare"
+    },
+    {
+      "id": "forge_legendary",
+      "name": "Forjar Relíquia Lendária",
+      "description": "Consome uma Essência de General e Almas para forjar um artefato Lendário com poder único.",
+      "essenceCost": 1,
+      "soulCost": 120,
+      "rarity": "legendary"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "sprites": {
     "wraith_warrior": {
       "key": "wraith_warrior",
@@ -102,6 +102,34 @@
         "magic",
         "rare",
         "legendary"
+      ]
+    },
+    "hub_tiles": {
+      "key": "hub_tiles",
+      "file": "hub_tiles.png",
+      "width": 64,
+      "height": 16,
+      "frameWidth": 16,
+      "frameHeight": 16,
+      "frames": [
+        "refuge_floor",
+        "refuge_runes",
+        "refuge_wall",
+        "refuge_brazier"
+      ]
+    },
+    "hub_npcs": {
+      "key": "hub_npcs",
+      "file": "hub_npcs.png",
+      "width": 128,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "emissary",
+        "blacksmith",
+        "soul_altar",
+        "rift_portal"
       ]
     }
   }

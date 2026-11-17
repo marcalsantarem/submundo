@@ -149,3 +149,71 @@ export interface ItemInstance {
 
 export type EquippedGear = Record<EquipSlot, ItemInstance | null>;
 
+export type AltarUpgradeId = 'vitality' | 'might' | 'bastion' | 'swiftness' | 'fortune';
+
+export interface AltarUpgradeDef {
+  id: AltarUpgradeId;
+  name: string;
+  description: string;
+  maxLevel: number;
+  baseSoulCost: number;
+  costMultiplier: number;
+  bonusPerLevel: StatBonus;
+}
+
+export interface BlacksmithUpgradeConfig {
+  maxLevel: number;
+  baseSoulCost: number;
+  costPerLevel: number;
+  attackBonusPerLevel: number;
+  hpBonusPerLevel: number;
+  defenseBonusPerLevel: number;
+}
+
+export interface BlacksmithForgeDef {
+  id: string;
+  name: string;
+  description: string;
+  essenceCost: number;
+  soulCost: number;
+  rarity: Rarity;
+  slot?: EquipSlot;
+}
+
+export interface ProgressionCatalog {
+  altarUpgrades: AltarUpgradeDef[];
+  blacksmithUpgrade: BlacksmithUpgradeConfig;
+  blacksmithForge: BlacksmithForgeDef[];
+}
+
+export interface SaveProfile {
+  version: number;
+  souls: number;
+  generalEssences: number;
+  altarLevels: Record<AltarUpgradeId, number>;
+  equipped: EquippedGear;
+  stash: ItemInstance[];
+  maxStashSize: number;
+  itemUpgradeLevels: Record<string, number>;
+  stats: {
+    runsCompleted: number;
+    runsFailed: number;
+    bossesDefeated: number;
+    totalSoulsEarned: number;
+  };
+}
+
+export interface RunEndReport {
+  victory: boolean;
+  soulsGained: number;
+  essencesGained: number;
+  monstersKilled: number;
+  bossDefeated: boolean;
+  keptItems: ItemInstance[];
+  lostItems: ItemInstance[];
+}
+
+export interface HubTransitionData {
+  fromRun?: RunEndReport;
+}
+

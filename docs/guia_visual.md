@@ -41,6 +41,8 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 | `soul_orb` | `soul_orb.png` | `16x16` px | `16x16` px | 1 | `0: idle` |
 | `loot_icons` | `loot_icons.png` | `64x16` px | `16x16` px | 4 | `0: icon_weapon`, `1: icon_armor`, `2: icon_amulet`, `3: icon_ring` |
 | `loot_drops` | `loot_drops.png` | `64x16` px | `16x16` px | 4 | `0: common (#e4e4e7)`, `1: magic (#38bdf8)`, `2: rare (#facc15)`, `3: legendary (#f97316)` |
+| `hub_tiles` | `hub_tiles.png` | `64x16` px | `16x16` px | 4 | `0: refuge_floor`, `1: refuge_runes`, `2: refuge_wall`, `3: refuge_brazier` |
+| `hub_npcs` | `hub_npcs.png` | `128x32` px | `32x32` px | 4 | `0: emissary`, `1: blacksmith`, `2: soul_altar`, `3: rift_portal` |
 
 ### 3.1. VFX das 3 Forças e Drops (`src/view/sprites/CombatVfx.ts`)
 
