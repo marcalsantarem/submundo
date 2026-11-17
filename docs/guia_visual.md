@@ -61,7 +61,8 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 
 ## 5. Ícone Oficial do App (`public/icons/`)
 
-- **Arte-mestre:** `assets/icons/submundo_icon_master.png` (`1024x1024` px, PNG RGB opaco full-bleed — Guerreiro Espectral envolto em chamas espirituais azuis empunhando lâmina rúnica sobre fundo abissal).
+- **Arte-mestre (fonte):** `assets/icons/submundo_icon_master.png` (`1024x1024` px, PNG RGB opaco full-bleed — Guerreiro Espectral envolto em chamas espirituais azuis empunhando lâmina rúnica sobre fundo abissal).
+- **Regra de distribuição:** `assets/icons/` é diretório-fonte **não distribuído em runtime** (nunca deve ser copiado para `public/`); o build (`dist/`) recebe exclusivamente os ícones derivados em `public/icons/`.
 - **Comando de regeneração:** `python3 scripts/art/generateIcons.py` (utiliza Pillow `Resampling.LANCZOS` e nitidez suave abaixo de `256x256` px).
 
 | Arquivo | Dimensões | Formato | Uso |
