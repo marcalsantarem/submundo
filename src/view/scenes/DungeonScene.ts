@@ -13,7 +13,7 @@ import {
   getCurrentRoom,
   type DungeonRunState,
 } from '../../core/dungeon/DungeonRun';
-import { createHero, moveHero, type HeroState } from '../../core/entities/Hero';
+import { moveHero, type HeroState } from '../../core/entities/Hero';
 import { spawnMonster, type MonsterInstance } from '../../core/entities/Monster';
 import {
   resolveViewportConfig,
@@ -21,6 +21,8 @@ import {
   type ItemInstance,
   type MonsterDef,
   type Rarity,
+  type RunEndReport,
+  type SaveProfile,
   type SkillDef,
   type Vector2D,
 } from '../../core/index';
@@ -41,6 +43,13 @@ import {
   RARITY_COLORS,
   shouldDropLoot,
 } from '../../core/loot/LootGenerator';
+import {
+  applyRunOutcomeToProfile,
+  buildHeroFromProfile,
+  computeAltarBonuses,
+  loadOrCreateProfile,
+  persistProfile,
+} from '../../core/progression/ProfileManager';
 import dialoguesData from '../../data/dialogues.json';
 import monstersJson from '../../data/monsters.json';
 import skillsJson from '../../data/skills.json';
@@ -78,6 +87,7 @@ export interface SubmundoDebugApi {
   forceClearRoom: () => void;
   advanceRoom: () => void;
   restartRun: () => void;
+  returnToHub?: () => void;
 }
 
 declare global {
@@ -90,6 +100,7 @@ const TILE_DISPLAY_SIZE = 32;
 const ARENA_PADDING = 36;
 const ROOM_CLEAR_AUTO_ADVANCE_MS = 1200;
 const DROP_PICKUP_RADIUS = 34;
+const EQUIP_SLOTS: readonly EquipSlot[] = ['weapon', 'armor', 'amulet', 'ring'];
 
 const RARITY_DROP_FRAME: Record<Rarity, number> = {
   common: 0,
@@ -105,6 +116,8 @@ export class DungeonScene extends Phaser.Scene {
     (skillsJson as SkillDef[]) ?? DEFAULT_SKILLS;
   private readonly monsterDefMap = new Map<string, MonsterDef>();
 
+  private activeProfile!: SaveProfile;
+  private startingHubItemIds = new Set<string>();
   private runState!: DungeonRunState;
   private hero!: HeroState;
   private monsters: MonsterInstance[] = [];
@@ -117,7 +130,7 @@ export class DungeonScene extends Phaser.Scene {
   private arenaLayer!: Phaser.GameObjects.Container;
   private lightingGraphics!: Phaser.GameObjects.Graphics;
   private heroAura!: Phaser.GameObjects.Graphics;
-  private heroSprite!: Phaser.GameObjects.Sprite;
+  private heroSprite?: Phaser.GameObjects.Sprite;
   private readonly monsterVisuals = new Map<string, MonsterVisual>();
   private readonly minionVisuals = new Map<string, Phaser.GameObjects.Graphics>();
   private groundDrops: GroundDrop[] = [];
@@ -132,6 +145,9 @@ export class DungeonScene extends Phaser.Scene {
   private runSeedCounter = 1337;
   private lootSummaryText?: string;
   private runLootResolved = false;
+  private essencesCollected = 0;
+  private bossDefeated = false;
+  private lastRunReport?: RunEndReport;
 
   constructor() {
     super({ key: 'DungeonScene' });
@@ -140,7 +156,7 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
-  public create(): void {
+  public create(data?: { profileSnapshot?: SaveProfile }): void {
     this.cameras.main.setBackgroundColor('#09090b');
     registerGameAnimations(this);
 
@@ -154,7 +170,7 @@ export class DungeonScene extends Phaser.Scene {
         this.handleUseSkill(skillId);
       },
       onRestartRun: () => {
-        this.startNewRun();
+        this.returnToHub();
       },
       onToggleInventory: () => {
         this.toggleInventoryModal();
@@ -173,7 +189,7 @@ export class DungeonScene extends Phaser.Scene {
       },
     });
 
-    this.startNewRun();
+    this.startNewRun(data?.profileSnapshot);
 
     const onResize = (gameSize: Phaser.Structs.Size) => {
       this.handleViewportResize(gameSize.width, gameSize.height);
@@ -186,6 +202,9 @@ export class DungeonScene extends Phaser.Scene {
       this.clearGroundDrops();
       this.clearMinionVisuals();
       this.destroyPortal();
+      this.heroSprite = undefined;
+      this.bannerText = undefined;
+      this.bannerExpiresAtMs = 0;
       this.inventoryModal?.destroy();
       this.hud?.destroy();
     });
@@ -203,6 +222,7 @@ export class DungeonScene extends Phaser.Scene {
         forceClearRoom: () => this.forceClearRoom(),
         advanceRoom: () => this.advanceRoomNow(),
         restartRun: () => this.startNewRun(),
+        returnToHub: () => this.returnToHub(),
       };
     }
   }
@@ -331,6 +351,9 @@ export class DungeonScene extends Phaser.Scene {
           monster.position.y,
           monster.soulReward
         );
+        if (monster.defId === 'infernal_warden' || monster.type === 'boss') {
+          this.handleBossDefeated(monster.position);
+        }
       }
     }
 
@@ -352,7 +375,15 @@ export class DungeonScene extends Phaser.Scene {
     this.loadCurrentRoom();
   }
 
-  private startNewRun(): void {
+  public returnToHub(): void {
+    if ('HubScene' in this.scene.manager.keys) {
+      this.scene.start('HubScene', { fromRun: this.lastRunReport });
+      return;
+    }
+    this.startNewRun();
+  }
+
+  private startNewRun(profileSnapshot?: SaveProfile): void {
     const width = this.scale.width || 800;
     const height = this.scale.height || 600;
 
@@ -360,20 +391,37 @@ export class DungeonScene extends Phaser.Scene {
     this.roomClearTimerMs = 0;
     this.lootSummaryText = undefined;
     this.runLootResolved = false;
+    this.essencesCollected = 0;
+    this.bossDefeated = false;
+    this.lastRunReport = undefined;
     this.clearGroundDrops();
     this.clearMinionVisuals();
     if (this.inventoryModal?.isOpen()) {
       this.inventoryModal.close();
     }
 
+    this.activeProfile = profileSnapshot ?? loadOrCreateProfile();
     this.runState = createDungeonRun(width, height, this.runSeedCounter);
     this.runSeedCounter += 7;
 
-    this.hero = createHero({ x: Math.round(width / 2), y: Math.round(height / 2) });
+    const centerPos: Vector2D = {
+      x: Math.round(width / 2),
+      y: Math.round(height / 2),
+    };
+    this.hero = buildHeroFromProfile(this.activeProfile, centerPos);
+
+    this.startingHubItemIds = new Set<string>();
     this.inventory = createRunInventory();
+    for (const slot of EQUIP_SLOTS) {
+      const equippedItem = this.activeProfile.equipped[slot];
+      if (equippedItem !== null) {
+        this.inventory.equipped[slot] = equippedItem;
+        this.startingHubItemIds.add(equippedItem.instanceId);
+      }
+    }
     this.recalculateHeroGear();
 
-    if (!this.heroSprite) {
+    if (!this.heroSprite || !this.heroSprite.scene) {
       this.heroSprite = this.add
         .sprite(this.hero.position.x, this.hero.position.y, 'wraith_warrior', 0)
         .setScale(1.5)
@@ -544,13 +592,13 @@ export class DungeonScene extends Phaser.Scene {
             event.position.x,
             event.position.y
           );
-          if (this.anims.exists('wraith_attack')) {
+          if (this.anims.exists('wraith_attack') && this.heroSprite) {
             this.heroSprite.play('wraith_attack');
             this.heroSprite.once(
               Phaser.Animations.Events.ANIMATION_COMPLETE,
               () => {
                 if (this.hero.isAlive && this.anims.exists('wraith_idle')) {
-                  this.heroSprite.play('wraith_idle', true);
+                  this.heroSprite?.play('wraith_idle', true);
                 }
               }
             );
@@ -560,13 +608,13 @@ export class DungeonScene extends Phaser.Scene {
 
         case 'hero_dash': {
           this.vfx.showDashTrail(event.position.x, event.position.y);
-          if (this.anims.exists('wraith_dash')) {
+          if (this.anims.exists('wraith_dash') && this.heroSprite) {
             this.heroSprite.play('wraith_dash');
             this.heroSprite.once(
               Phaser.Animations.Events.ANIMATION_COMPLETE,
               () => {
                 if (this.hero.isAlive && this.anims.exists('wraith_idle')) {
-                  this.heroSprite.play('wraith_idle', true);
+                  this.heroSprite?.play('wraith_idle', true);
                 }
               }
             );
@@ -623,7 +671,12 @@ export class DungeonScene extends Phaser.Scene {
           const killedMonster = this.monsters.find(
             (m) => m.instanceId === event.targetId
           );
-          const isBoss = killedMonster?.type === 'boss';
+          const isBoss =
+            killedMonster?.type === 'boss' ||
+            killedMonster?.defId === 'infernal_warden';
+          if (isBoss) {
+            this.handleBossDefeated(event.position);
+          }
           if (shouldDropLoot(isBoss, Math.random, this.hero.luck)) {
             const item = generateItemDrop({
               luck: this.hero.luck,
@@ -712,12 +765,30 @@ export class DungeonScene extends Phaser.Scene {
         }
 
         case 'hero_killed': {
-          this.heroSprite.setTint(0xef4444);
-          this.heroSprite.setAlpha(0.45);
+          this.heroSprite?.setTint(0xef4444);
+          this.heroSprite?.setAlpha(0.45);
           break;
         }
       }
     }
+  }
+
+  private handleBossDefeated(position: Vector2D): void {
+    if (this.bossDefeated) {
+      return;
+    }
+    this.bossDefeated = true;
+    this.essencesCollected += 1;
+    this.vfx.showItemPickupBanner(
+      position.x,
+      position.y - 16,
+      '+1 Essência de General',
+      '#f59e0b'
+    );
+    this.showTimedBanner(
+      dialoguesData.entries.boss_essence_drop.shortText,
+      4000
+    );
   }
 
   private checkAndUpdateRoomState(nowMs: number): void {
@@ -747,9 +818,45 @@ export class DungeonScene extends Phaser.Scene {
         if (!this.runLootResolved) {
           this.runLootResolved = true;
           const { kept, lost } = resolveRunEndLoot(this.inventory, isVictory);
-          this.lootSummaryText = isVictory
-            ? `Itens extraídos: ${kept.length}`
-            : `Itens perdidos na incursão: ${lost.length}`;
+          const runKeptDrops = kept.filter(
+            (item) => !this.startingHubItemIds.has(item.instanceId)
+          );
+          const runLostDrops = lost.filter(
+            (item) => !this.startingHubItemIds.has(item.instanceId)
+          );
+          const preservedHubCount = isVictory
+            ? kept.length - runKeptDrops.length
+            : lost.length - runLostDrops.length;
+
+          if (isVictory) {
+            const parts = [`Novos itens extraídos: ${runKeptDrops.length}`];
+            if (preservedHubCount > 0) {
+              parts.push(`Gear do Refúgio mantido: ${preservedHubCount}`);
+            }
+            if (this.essencesCollected > 0) {
+              parts.push(`+${this.essencesCollected} Essência de General`);
+            }
+            this.lootSummaryText = parts.join(' | ');
+          } else {
+            const parts = [`Itens perdidos na incursão: ${runLostDrops.length}`];
+            if (preservedHubCount > 0) {
+              parts.push(`Gear do Refúgio preservado: ${preservedHubCount}`);
+            }
+            this.lootSummaryText = parts.join(' | ');
+          }
+
+          const report: RunEndReport = {
+            victory: isVictory,
+            soulsGained: this.runState.soulsCollected,
+            essencesGained: this.essencesCollected,
+            monstersKilled: this.runState.monstersKilled,
+            bossDefeated: this.bossDefeated,
+            keptItems: runKeptDrops,
+            lostItems: runLostDrops,
+          };
+          this.lastRunReport = report;
+          applyRunOutcomeToProfile(this.activeProfile, report);
+          persistProfile(this.activeProfile);
         }
         if (this.inventoryModal?.isOpen()) {
           this.inventoryModal.close();
@@ -816,12 +923,12 @@ export class DungeonScene extends Phaser.Scene {
 
   private syncVisuals(nowMs: number): void {
     // Sync Hero Sprite & Aura
-    this.heroSprite.setPosition(this.hero.position.x, this.hero.position.y);
-    this.heroSprite.setFlipX(this.hero.facing.x < 0);
+    this.heroSprite?.setPosition(this.hero.position.x, this.hero.position.y);
+    this.heroSprite?.setFlipX(this.hero.facing.x < 0);
 
     const isInvulnerable = nowMs < this.hero.invulnerableUntilMs;
     if (this.hero.isAlive) {
-      this.heroSprite.setAlpha(isInvulnerable ? 0.65 : 1);
+      this.heroSprite?.setAlpha(isInvulnerable ? 0.65 : 1);
     }
 
     this.heroAura.clear();
@@ -1062,11 +1169,20 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private recalculateHeroGear(): void {
+    const altarBonuses = this.activeProfile
+      ? computeAltarBonuses(this.activeProfile)
+      : undefined;
     applyGearToHero(this.hero, this.hero.baseStats, this.inventory.equipped);
     const bonuses = computeGearBonuses(this.inventory.equipped);
-    this.hero.lifeSteal = bonuses.lifeSteal;
-    this.hero.cooldownReduction = bonuses.cooldownReduction;
-    this.hero.luck = bonuses.luck;
+    this.hero.lifeSteal = Math.max(
+      0,
+      (altarBonuses?.lifeSteal ?? 0) + bonuses.lifeSteal
+    );
+    this.hero.cooldownReduction = Math.max(
+      0,
+      (altarBonuses?.cooldownReduction ?? 0) + bonuses.cooldownReduction
+    );
+    this.hero.luck = Math.max(0, (altarBonuses?.luck ?? 0) + bonuses.luck);
     this.hero.equippedForces = getActiveForces(this.inventory.equipped);
     this.hero.activeLegendaryPowers = getActiveLegendaryPowers(
       this.inventory.equipped
