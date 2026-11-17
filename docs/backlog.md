@@ -23,7 +23,7 @@
 | T-019 | Painel responsivo de Inventário e Equipamentos (4 slots, cores de raridade, comparação de atributos e equipar com 1 toque) em `src/view/ui/` (tam. M) | M2 | AG02 (UI) | feita |
 | T-020 | Drops físicos na `DungeonScene.ts`, coleta de itens, aplicação de equipamentos/sinergias em tempo real e resumo de espólios extraídos/perdidos (tam. M) | M2 | AG01 (Gameplay) | feita |
 | T-021 | Subir versão do projeto para `0.2.0` em `package.json`, `src/version.ts` e `tests/core/architecture.test.ts` (tam. P) | M2 | AG07 (Arquiteto) | feita |
-| T-022 | Validação do M2 (suíte 3x, Playwright, capturas PC `800x600` e Mobile `9:16`, `docs/qa/qa-M2.md`) e tag `v0.2.0` (tam. M) | M2 | AG03 (QA) + AG00 (Líder) | em andamento |
+| T-022 | Validação do M2 (suíte 3x, Playwright, capturas PC `800x600` e Mobile `9:16`, `docs/qa/qa-M2.md`) e tag `v0.2.0` (tam. M) | M2 | AG03 (QA) + AG00 (Líder) | feita (passa com 2 ressalvas menores) |
 | T-023 | Habilitar multi-touch (`input: { activePointers: 4 }`) em `src/main.ts` e `touch-action: none` em `index.html` para uso simultâneo de joystick e skills no celular (tam. P) | M2 | AG07 (Arquiteto) | feita |
 | T-024 | Garantir suporte a múltiplos dedos e `pointercancel` no `VirtualJoystick.ts` e botões do `DungeonHud.ts` (tam. P) | M2 | AG02 (UI) | feita |
 | T-025 | Ajustar balanceamento inicial do Boss (`infernal_warden`) e monstros em `src/data/monsters.json` após feedback de dificuldade no teste real (tam. P) | M2 | AG04 (Sistemas/Meta) | feita |
@@ -40,4 +40,6 @@
 | T-036 | Integração `HubScene ⇄ DungeonScene` (aplicar bônus do Altar e gear salvo na entrada, drop de Essência de General no Boss e gravação do retorno ao Hub) em `src/view/scenes/DungeonScene.ts` (tam. M) | M3 | AG01 (Gameplay) | a fazer |
 | T-037 | Registrar `HubScene` em `src/main.ts` e `BootScene.ts` (pré-carregar `hub_tiles`/`hub_npcs`, iniciar no Refúgio) e subir versão para `0.3.0` (tam. P) | M3 | AG07 (Arquiteto) | a fazer |
 | T-038 | Validação do M3 (suíte 3x, Playwright percorrendo Hub → Altar/Ferreiro → Masmorra → retorno ao Hub, capturas PC/Mobile, `docs/qa/qa-M3.md`) e tag `v0.3.0` (tam. M) | M3 | AG03 (QA) + AG00 (Líder) | a fazer |
+| T-039 | Ressalva do QA do M2 na UI: evitar sobreposição de nome longo sobre `statsText` na Mochila em `src/view/ui/InventoryModal.ts` (tam. P) | M3 | AG02 (UI) | a fazer |
+| T-040 | Ressalva do QA do M2 nos assets: remover cópia redundante `public/assets/icons/submundo_icon_master.png` (`~1,30 MB`) do bundle final `dist/` (tam. P) | M3 | AG08 (Arte) | a fazer |
 
