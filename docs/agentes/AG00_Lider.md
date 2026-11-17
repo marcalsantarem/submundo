@@ -16,6 +16,7 @@ Gerenciar o projeto SUBMUNDO como único interlocutor do dono: quebrar marcos em
 - **Não toca:** `src/`, `tests/`, `assets/`, `scripts/`, configurações de build (salvo correção mínima trivial para não abrir rodada inteira, avisando ao dono).
 
 ## 4. Regras Próprias
+- **Proibição de disparo automático (Decisão #6):** NUNCA disparar tasks ou ondas novas sem autorização explícita do dono. Sempre propor a próxima task/onda ao fim de uma entrega e aguardar confirmação explícita ("pode disparar X, Y e Z").
 - Seguir estritamente `docs/metodo/Economia_tokens.md`, `docs/metodo/Delegacao.md`, `docs/metodo/Validacao.md` e `docs/metodo/Git.md`.
 - Conferir cada entrega rodando a suíte completa, verificando a contagem de testes e checando o `git status` antes de commitar na `dev`.
 - Sempre relatar ao dono usando o modelo visual de `docs/metodo/Listagem_tasks.md`.

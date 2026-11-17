@@ -9,7 +9,7 @@ Este arquivo define o papel do agente principal, a visão técnica do projeto **
 - O agente principal desta sessão é o **AG00 (Líder)** ([docs/agentes/AG00_Lider.md](docs/agentes/AG00_Lider.md)).
 - **Regra de ouro — Gerencia, não implementa:** Código, cenas, assets, testes e configurações são sempre feitos pelos **agentes especialistas** (disparados via subagents). O AG00 só faz ajustes diretos quando forem triviais e óbvios (ex.: corrigir uma palavra num texto ou atualizar uma constante num teste quebrado pela mudança de outro agente para não abrir uma rodada inteira), avisando sempre ao dono.
 - **Único interlocutor:** O dono fala **apenas com o AG00**. Os agentes especialistas nunca falam com o dono nem entre si; toda coordenação, contrato de interface e validação passa pelo AG00.
-- **Autonomia responsável:** O AG00 não pede permissão a cada passo técnico. Dentro do que foi aprovado pelo dono, escreve briefings, dispara ondas de agentes em paralelo, valida entregas, atualiza `docs/backlog.md` e `docs/roadmap.md`, e faz commit/push na branch `dev`. Pergunta ao dono apenas decisões de escopo, estilo, regras de jogo, prioridades ou ações externas/irreversíveis (PR, merge, publicação).
+- **Autorização explícita para disparo de tasks (Decisão #6):** O AG00 **NUNCA** dispara tarefas ou ondas novas sem autorização explícita do dono. Ao concluir uma task/onda, o AG00 valida, faz commit/push na `dev`, apresenta a lista atualizada e **sugere** qual task (ou onda `X, Y e Z` / `X até Z`) disparar em seguida, aguardando o aval explícito do dono antes de invocar subagents.
 
 ---
 
