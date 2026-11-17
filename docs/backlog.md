@@ -17,10 +17,10 @@
 | T-013 | Contratos de tipos em `src/core/index.ts` para Equipamentos (`EquipSlot`, `Rarity`, `AffixDef`, `ItemDef`, `ItemInstance`, `StatusEffectType`, `LegendaryPowerId`) (tam. P) | M2 | AG07 (Arquiteto) | feita |
 | T-014 | Glossário e textos canônicos de itens base, afixos, poderes lendários e das 3 Forças (`Inferno`, `Submundo`, `Empíreo`) em `docs/narrativa.md` e `src/data/dialogues.json` (tam. P) | M2 | AG06 (Narrativa) | feita |
 | T-015 | Catálogo JSON de equipamentos base (4 slots: Arma, Armadura, Amuleto, Anel) e afixos/poderes lendários em `src/data/items.json` e `src/data/affixes.json` (tam. P) | M2 | AG04 (Sistemas/Meta) | feita |
-| T-016 | Ícones Pixel Art/2D para os 4 slots de equipamento e drops por raridade em `public/assets/sprites/` + VFX das 3 Forças em `src/view/sprites/CombatVfx.ts` (tam. M) | M2 | AG08 (Arte) | a fazer |
-| T-017 | Gerador determinístico de loot (4 raridades), inventário da run, cálculo de bônus equipados e perda de loot da run na morte em `src/core/loot/` (tam. M) | M2 | AG04 (Sistemas/Meta) | a fazer |
-| T-018 | Sinergias das 3 Forças no combate (`Brasa` 5 cargas, `Sangramento & Roubo de Vida`, `Julgamento & Raio` em críticos) e poderes lendários em `src/core/combat/` (tam. M) | M2 | AG01 (Gameplay) | a fazer |
-| T-019 | Painel responsivo de Inventário e Equipamentos (4 slots, cores de raridade, comparação de atributos e equipar com 1 toque) em `src/view/ui/` (tam. M) | M2 | AG02 (UI) | a fazer |
+| T-016 | Ícones Pixel Art/2D para os 4 slots de equipamento e drops por raridade em `public/assets/sprites/` + VFX das 3 Forças em `src/view/sprites/CombatVfx.ts` (tam. M) | M2 | AG08 (Arte) | em andamento |
+| T-017 | Gerador determinístico de loot (4 raridades), inventário da run, cálculo de bônus equipados e perda de loot da run na morte em `src/core/loot/` (tam. M) | M2 | AG04 (Sistemas/Meta) | em andamento |
+| T-018 | Sinergias das 3 Forças no combate (`Brasa` 5 cargas, `Sangramento & Roubo de Vida`, `Julgamento & Raio` em críticos) e poderes lendários em `src/core/combat/` (tam. M) | M2 | AG01 (Gameplay) | em andamento |
+| T-019 | Painel responsivo de Inventário e Equipamentos (4 slots, cores de raridade, comparação de atributos e equipar com 1 toque) em `src/view/ui/` (tam. M) | M2 | AG02 (UI) | em andamento |
 | T-020 | Drops físicos na `DungeonScene.ts`, coleta de itens, aplicação de equipamentos/sinergias em tempo real e resumo de espólios extraídos/perdidos (tam. M) | M2 | AG01 (Gameplay) | a fazer |
 | T-021 | Subir versão do projeto para `0.2.0` em `package.json`, `src/version.ts` e `tests/core/architecture.test.ts` (tam. P) | M2 | AG07 (Arquiteto) | a fazer |
 | T-022 | Validação do M2 (suíte 3x, Playwright, capturas PC `800x600` e Mobile `9:16`, `docs/qa/qa-M2.md`) e tag `v0.2.0` (tam. M) | M2 | AG03 (QA) + AG00 (Líder) | a fazer |
