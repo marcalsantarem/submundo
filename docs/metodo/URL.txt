@@ -1,0 +1,5 @@
+Repositório no GitHub: https://github.com/marcalsantarem/submundo
+
+Site publicado o branch main: submundo-game.netlify.app
+
+Site publicado o branch dev: dev--submundo-game.netlify.app

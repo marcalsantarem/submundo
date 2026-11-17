@@ -1,0 +1,24 @@
+# Dotfiles do ambiente / home
+.bash_logout
+.bashrc
+.bash_history
+.profile
+.gitconfig
+.gemini
+.cache/
+.local/
+.npm/
+.config/
+.pki/
+.wget-hsts
+upload/
+
+# Dependências e Build
+node_modules/
+dist/
+.vite/
+coverage/
+playwright-report/
+test-results/
+*.log
+.DS_Store
