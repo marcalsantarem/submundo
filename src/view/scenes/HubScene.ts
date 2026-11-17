@@ -35,6 +35,7 @@ import {
   unequipProfileSlot,
   upgradeItemWithBlacksmith,
 } from '../../core/progression/ProfileManager';
+import { clearProfileStorage } from '../../core/progression/StorageAdapter';
 import dialoguesData from '../../data/dialogues.json';
 import { soundManager } from '../audio/SoundManager';
 import { registerGameAnimations } from '../sprites/CombatVfx';
@@ -288,6 +289,7 @@ export class HubScene extends Phaser.Scene {
         }
         this.updateHud();
       },
+      onResetSave: () => this.resetSaveAndRestart(),
     });
 
     this.altarModal = new AltarModal(this, {
@@ -654,6 +656,14 @@ export class HubScene extends Phaser.Scene {
     if (keep !== 'dialogue' && this.dialogueBox?.isOpen()) {
       this.dialogueBox.close();
     }
+  }
+
+  private resetSaveAndRestart(): void {
+    this.closeAllModalsExcept(null);
+    soundManager.unlock();
+    soundManager.play('ui_click');
+    clearProfileStorage();
+    this.scene.restart({});
   }
 
   private isAnyModalOpen(): boolean {
