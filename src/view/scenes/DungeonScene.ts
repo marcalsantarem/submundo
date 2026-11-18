@@ -96,14 +96,17 @@ const ANIMATED_SPRITESHEET_MONSTERS = new Set<string>([
   'karnak',
 ]);
 
-const TEST_ARENA_SPAWNS: ReadonlyArray<{ id: string; dx: number; dy: number }> = [
+const TEST_ARENA_WAVE_1: ReadonlyArray<{ id: string; dx: number; dy: number }> = [
   { id: 'slime', dx: -160, dy: -110 },
   { id: 'cave_bat', dx: 160, dy: -110 },
   { id: 'wolf', dx: -185, dy: 20 },
   { id: 'skeleton', dx: 185, dy: 20 },
   { id: 'skeleton_archer', dx: -120, dy: 135 },
-  { id: 'wolf_alpha', dx: 120, dy: 135 },
-  { id: 'karnak', dx: 0, dy: -155 },
+];
+
+const TEST_ARENA_WAVE_2: ReadonlyArray<{ id: string; dx: number; dy: number }> = [
+  { id: 'wolf_alpha', dx: -120, dy: -60 },
+  { id: 'karnak', dx: 120, dy: -60 },
 ];
 
 interface GroundDrop {
@@ -194,6 +197,8 @@ export class DungeonScene extends Phaser.Scene {
   private bannerText?: string;
   private bannerExpiresAtMs = 0;
   private isTestArena = false;
+  private testArenaWave = 1;
+  private testArenaWave2TriggerAtMs?: number;
   private runSeedCounter = 1337;
   private lootSummaryText?: string;
   private runLootResolved = false;
@@ -214,6 +219,8 @@ export class DungeonScene extends Phaser.Scene {
     testArena?: boolean;
   }): void {
     this.isTestArena = Boolean(data?.testArena);
+    this.testArenaWave = 1;
+    this.testArenaWave2TriggerAtMs = undefined;
     this.cameras.main.setBackgroundColor(
       this.isTestArena ? '#000000' : '#09090b'
     );
@@ -301,6 +308,8 @@ export class DungeonScene extends Phaser.Scene {
       this.bannerText = undefined;
       this.bannerExpiresAtMs = 0;
       this.isTestArena = false;
+      this.testArenaWave = 1;
+      this.testArenaWave2TriggerAtMs = undefined;
       this.cameraRig?.destroy();
       this.cameraRig = undefined;
       this.inventoryModal?.destroy();
@@ -377,9 +386,7 @@ export class DungeonScene extends Phaser.Scene {
         nowMs
       );
       this.processCombatEvents(events);
-      if (!this.isTestArena) {
-        this.checkAndUpdateRoomState(nowMs);
-      }
+      this.checkAndUpdateRoomState(nowMs);
     } else if (
       !this.isTestArena &&
       this.runState.status === 'room_cleared' &&
@@ -515,6 +522,8 @@ export class DungeonScene extends Phaser.Scene {
     const height = this.scale.height || 600;
 
     this.isTestArena = Boolean(data?.testArena);
+    this.testArenaWave = 1;
+    this.testArenaWave2TriggerAtMs = undefined;
     this.cameras.main.setBackgroundColor(
       this.isTestArena ? '#000000' : '#09090b'
     );
@@ -647,28 +656,9 @@ export class DungeonScene extends Phaser.Scene {
     };
 
     if (this.isTestArena) {
-      this.monsters = [];
-      for (const spec of TEST_ARENA_SPAWNS) {
-        const def = this.monsterDefMap.get(spec.id);
-        if (!def) {
-          continue;
-        }
-        const clampedX = Math.max(
-          ARENA_PADDING,
-          Math.min(width - ARENA_PADDING, this.hero.position.x + spec.dx)
-        );
-        const clampedY = Math.max(
-          ARENA_PADDING + 24,
-          Math.min(height - ARENA_PADDING - 24, this.hero.position.y + spec.dy)
-        );
-        const monster = spawnMonster(
-          def,
-          `test_${spec.id}`,
-          { x: clampedX, y: clampedY }
-        );
-        this.monsters.push(monster);
-        this.createMonsterVisual(monster);
-      }
+      this.testArenaWave = 1;
+      this.testArenaWave2TriggerAtMs = undefined;
+      this.spawnTestArenaWave(TEST_ARENA_WAVE_1, 1);
       return;
     }
 
@@ -1148,10 +1138,54 @@ export class DungeonScene extends Phaser.Scene {
     );
   }
 
+  private spawnTestArenaWave(
+    spawns: ReadonlyArray<{ id: string; dx: number; dy: number }>,
+    waveNum: number
+  ): void {
+    const width = this.scale.width || 800;
+    const height = this.scale.height || 600;
+    this.monsters = [];
+    for (const spec of spawns) {
+      const def = this.monsterDefMap.get(spec.id);
+      if (!def) {
+        continue;
+      }
+      const clampedX = Math.max(
+        ARENA_PADDING,
+        Math.min(width - ARENA_PADDING, this.hero.position.x + spec.dx)
+      );
+      const clampedY = Math.max(
+        ARENA_PADDING + 24,
+        Math.min(height - ARENA_PADDING - 24, this.hero.position.y + spec.dy)
+      );
+      const monster = spawnMonster(
+        def,
+        `test_w${waveNum}_${spec.id}`,
+        { x: clampedX, y: clampedY }
+      );
+      this.monsters.push(monster);
+      this.createMonsterVisual(monster);
+    }
+  }
+
   private checkAndUpdateRoomState(nowMs: number): void {
     if (this.isTestArena) {
       if (this.bannerText && nowMs >= this.bannerExpiresAtMs) {
         this.bannerText = undefined;
+      }
+      if (
+        this.testArenaWave === 1 &&
+        this.monsters.length > 0 &&
+        this.monsters.every((m) => !m.isAlive)
+      ) {
+        if (this.testArenaWave2TriggerAtMs === undefined) {
+          this.testArenaWave2TriggerAtMs = nowMs + 650;
+        } else if (nowMs >= this.testArenaWave2TriggerAtMs) {
+          this.testArenaWave = 2;
+          this.testArenaWave2TriggerAtMs = undefined;
+          this.spawnTestArenaWave(TEST_ARENA_WAVE_2, 2);
+          this.showTimedBanner('Onda 2: Chefe da Matilha & Karnak!', 2500);
+        }
       }
       return;
     }
