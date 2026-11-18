@@ -171,10 +171,10 @@ export class BootScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    if ('HubScene' in this.scene.manager.keys) {
+    if ('DungeonScene' in this.scene.manager.keys) {
+      this.scene.start('DungeonScene', { testArena: true });
+    } else if ('HubScene' in this.scene.manager.keys) {
       this.scene.start('HubScene');
-    } else if ('DungeonScene' in this.scene.manager.keys) {
-      this.scene.start('DungeonScene');
     }
   }
 

@@ -1,10 +1,11 @@
-import type { MonsterDef, MonsterType, Vector2D } from '../index';
+import type { MonsterAttackType, MonsterDef, MonsterType, Vector2D } from '../index';
 
 export interface MonsterInstance {
   instanceId: string;
   defId: string;
   name: string;
   type: MonsterType;
+  attackType: MonsterAttackType;
   spriteKey: string;
   position: Vector2D;
   hp: number;
@@ -34,6 +35,7 @@ export function spawnMonster(
     defId: def.id,
     name: def.name,
     type: def.type,
+    attackType: def.attackType ?? 'melee',
     spriteKey: def.spriteKey,
     position: { x: position.x, y: position.y },
     hp: def.maxHp,

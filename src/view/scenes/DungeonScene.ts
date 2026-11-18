@@ -169,6 +169,7 @@ export class DungeonScene extends Phaser.Scene {
   private roomClearTimerMs = 0;
   private bannerText?: string;
   private bannerExpiresAtMs = 0;
+  private isTestArena = false;
   private runSeedCounter = 1337;
   private lootSummaryText?: string;
   private runLootResolved = false;
@@ -186,8 +187,12 @@ export class DungeonScene extends Phaser.Scene {
   public create(data?: {
     profileSnapshot?: SaveProfile;
     stageId?: CampaignStageId;
+    testArena?: boolean;
   }): void {
-    this.cameras.main.setBackgroundColor('#09090b');
+    this.isTestArena = Boolean(data?.testArena);
+    this.cameras.main.setBackgroundColor(
+      this.isTestArena ? '#000000' : '#09090b'
+    );
     this.ensureCampaignFallbackTextures();
     registerGameAnimations(this);
 
@@ -271,6 +276,7 @@ export class DungeonScene extends Phaser.Scene {
       this.lastHeroFootstepFrame = -1;
       this.bannerText = undefined;
       this.bannerExpiresAtMs = 0;
+      this.isTestArena = false;
       this.cameraRig?.destroy();
       this.cameraRig = undefined;
       this.inventoryModal?.destroy();
@@ -336,7 +342,9 @@ export class DungeonScene extends Phaser.Scene {
       this.runState.elapsedMs += clampedDelta;
 
       moveHero(this.hero, moveDir, clampedDelta, bounds);
-      this.collectNearbyDrops();
+      if (!this.isTestArena) {
+        this.collectNearbyDrops();
+      }
 
       const events = tickCombat(
         this.hero,
@@ -345,8 +353,14 @@ export class DungeonScene extends Phaser.Scene {
         nowMs
       );
       this.processCombatEvents(events);
-      this.checkAndUpdateRoomState(nowMs);
-    } else if (this.runState.status === 'room_cleared' && this.hero.isAlive) {
+      if (!this.isTestArena) {
+        this.checkAndUpdateRoomState(nowMs);
+      }
+    } else if (
+      !this.isTestArena &&
+      this.runState.status === 'room_cleared' &&
+      this.hero.isAlive
+    ) {
       moveHero(this.hero, moveDir, clampedDelta, bounds);
       this.collectNearbyDrops();
       this.roomClearTimerMs -= clampedDelta;
@@ -471,12 +485,20 @@ export class DungeonScene extends Phaser.Scene {
   private startNewRun(data?: {
     profileSnapshot?: SaveProfile;
     stageId?: CampaignStageId;
+    testArena?: boolean;
   }): void {
     const width = this.scale.width || 800;
     const height = this.scale.height || 600;
 
+    this.isTestArena = Boolean(data?.testArena);
+    this.cameras.main.setBackgroundColor(
+      this.isTestArena ? '#000000' : '#09090b'
+    );
+
     this.elapsedTimeMs = 0;
     this.roomClearTimerMs = 0;
+    this.bannerText = undefined;
+    this.bannerExpiresAtMs = 0;
     this.lootSummaryText = undefined;
     this.runLootResolved = false;
     this.essencesCollected = 0;
@@ -517,7 +539,9 @@ export class DungeonScene extends Phaser.Scene {
     this.recalculateHeroGear();
 
     const heroKey: 'hero_living' | 'hero_wraith' =
-      this.activeStage.phase === 'prologue' ? 'hero_living' : 'hero_wraith';
+      this.isTestArena || this.activeStage.phase === 'prologue'
+        ? 'hero_living'
+        : 'hero_wraith';
     this.heroSpriteKey = heroKey;
     this.isHeroActionAnimPlaying = false;
     this.currentHeroActionAnim = null;
@@ -555,19 +579,21 @@ export class DungeonScene extends Phaser.Scene {
 
     this.loadCurrentRoom();
 
-    const introDialogueId =
-      this.activeStage.introDialogueIds[
-        this.activeStage.introDialogueIds.length - 1
-      ];
-    const introDialogue = introDialogueId
-      ? getDialogueLine(introDialogueId)
-      : null;
-    this.showTimedBanner(
-      introDialogue?.shortText ??
-        introDialogue?.text ??
-        dialoguesData.entries.dungeon_enter.shortText,
-      3200
-    );
+    if (!this.isTestArena) {
+      const introDialogueId =
+        this.activeStage.introDialogueIds[
+          this.activeStage.introDialogueIds.length - 1
+        ];
+      const introDialogue = introDialogueId
+        ? getDialogueLine(introDialogueId)
+        : null;
+      this.showTimedBanner(
+        introDialogue?.shortText ??
+          introDialogue?.text ??
+          dialoguesData.entries.dungeon_enter.shortText,
+        3200
+      );
+    }
     this.syncVisuals(this.elapsedTimeMs);
     this.updateHud(this.elapsedTimeMs);
   }
@@ -595,6 +621,11 @@ export class DungeonScene extends Phaser.Scene {
       x: Math.round(width / 2),
       y: Math.round(height / 2),
     };
+
+    if (this.isTestArena) {
+      this.monsters = [];
+      return;
+    }
 
     const difficultyScale =
       currentRoom.difficultyScale ?? this.activeStage?.difficultyScale ?? 1;
@@ -674,6 +705,11 @@ export class DungeonScene extends Phaser.Scene {
     biome?: BiomeId
   ): void {
     this.arenaLayer.removeAll(true);
+
+    if (this.isTestArena) {
+      this.lightingGraphics.clear();
+      return;
+    }
 
     const activeBiome: BiomeId =
       biome ?? this.activeStage?.biome ?? 'submundo_abyss';
@@ -1013,6 +1049,13 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private checkAndUpdateRoomState(nowMs: number): void {
+    if (this.isTestArena) {
+      if (this.bannerText && nowMs >= this.bannerExpiresAtMs) {
+        this.bannerText = undefined;
+      }
+      return;
+    }
+
     const livingMonsters = this.monsters.filter((m) => m.isAlive).length;
     const previousStatus = this.runState.status;
     const nextStatus = evaluateRoomState(
