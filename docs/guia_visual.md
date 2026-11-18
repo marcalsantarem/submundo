@@ -61,7 +61,11 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 | `portraits` | `portraits.png` | `512x64` px | `64x64` px | 8 | `0: hero_living`, `1: hero_wraith`, `2: weapon_master`, `3: village_blacksmith`, `4: emissary`, `5: spectral_blacksmith`, `6: infernal_warden`, `7: system` |
 | `village_tiles` | `village_tiles.png` | `64x16` px | `16x16` px | 4 | `0: grass_path`, `1: cobble_square`, `2: wood_wall`, `3: village_lantern` |
 | `village_npcs` | `village_npcs.png` | `128x32` px | `32x32` px | 4 | `0: weapon_master`, `1: village_blacksmith`, `2: potion_stall`, `3: village_gate` |
-| `cave_bat` | `cave_bat.png` | `64x32` px | `32x32` px | 2 | `0: flap0`, `1: flap1` |
+| `slime` | `slime.png` | `1600x80` px | `80x80` px | 20 | `0..3: idle0..3`, `4..9: walk0..5`, `10..15: attack0..5`, `16..19: death0..3` |
+| `cave_bat` | `cave_bat.png` | `1600x80` px | `80x80` px | 20 | `0..3: idle0..3`, `4..9: walk0..5`, `10..15: attack0..5`, `16..19: death0..3` |
+| `wolf` | `wolf.png` | `1600x80` px | `80x80` px | 20 | `0..3: idle0..3`, `4..9: walk0..5`, `10..15: attack0..5`, `16..19: death0..3` |
+| `skeleton` | `skeleton.png` | `1600x80` px | `80x80` px | 20 | `0..3: idle0..3`, `4..9: walk0..5`, `10..15: attack0..5`, `16..19: death0..3` |
+| `skeleton_archer` | `skeleton_archer.png` | `1600x80` px | `80x80` px | 20 | `0..3: idle0..3`, `4..9: walk0..5`, `10..15: attack0..5`, `16..19: death0..3` |
 
 ### 3.1. Animações 24f do Herói (`hero_living` e `hero_wraith`)
 
@@ -89,6 +93,7 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 - Os spritesheets seguem grid horizontal estrito (`width = frameWidth * frames.length`, `height = frameHeight`).
 - Para regenerar os spritesheets procedurais base: `node scripts/art/generateSprites.mjs`.
 - Para regenerar `hero_living.png` (`1920x80`, 24f), `hero_wraith.png` (`1920x80`, 24f), as prévias em `assets/mockups/preview_hero_*.png` e atualizar `manifest.json` a partir dos sprites base em `assets/sprites_src/` (sem dependências externas): `python scripts/art/buildHeroAndWeapons.py`.
+- Para regenerar os 5 spritesheets animados dos monstros (`slime.png`, `cave_bat.png`, `wolf.png`, `skeleton.png`, `skeleton_archer.png`, todos `1600x80`, 20f), a prévia `assets/mockups/preview_monsters_5_20f.png` e atualizar `manifest.json` (sem dependências externas): `python scripts/art/buildMonstersSheets.py`.
 - Qualquer arquivo `.png` em `public/assets/sprites/` pode ser editado ou substituído no LibreSprite/Pixelorama mantendo a mesma chave, dimensão de frame e ordem de índices em `manifest.json`.
 
 ---

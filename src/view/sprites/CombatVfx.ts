@@ -12,6 +12,43 @@ interface AnimationSpec {
   repeat: number;
 }
 
+function createMonsterAnimSpecs(
+  texture: string,
+  idleFrameRate = 6,
+  walkFrameRate = 10,
+): AnimationSpec[] {
+  return [
+    {
+      key: `${texture}_idle`,
+      texture,
+      frames: [0, 1, 2, 3],
+      frameRate: idleFrameRate,
+      repeat: -1,
+    },
+    {
+      key: `${texture}_walk`,
+      texture,
+      frames: [4, 5, 6, 7, 8, 9],
+      frameRate: walkFrameRate,
+      repeat: -1,
+    },
+    {
+      key: `${texture}_attack`,
+      texture,
+      frames: [10, 11, 12, 13, 14, 15],
+      frameRate: 16,
+      repeat: 0,
+    },
+    {
+      key: `${texture}_death`,
+      texture,
+      frames: [16, 17, 18, 19],
+      frameRate: 10,
+      repeat: 0,
+    },
+  ];
+}
+
 const ANIMATION_SPECS: readonly AnimationSpec[] = [
   // Hero Living (Prologue) — 1920x80 (24 frames of 80x80)
   {
@@ -85,7 +122,13 @@ const ANIMATION_SPECS: readonly AnimationSpec[] = [
     frameRate: 14,
     repeat: 0,
   },
-  // Legacy fallback specs if wraith_warrior exists
+  // Monsters (20 frames of 80x80: idle 0-3, walk 4-9, attack 10-15, death 16-19)
+  ...createMonsterAnimSpecs('slime', 6, 10),
+  ...createMonsterAnimSpecs('cave_bat', 8, 12),
+  ...createMonsterAnimSpecs('wolf', 6, 12),
+  ...createMonsterAnimSpecs('skeleton', 6, 10),
+  ...createMonsterAnimSpecs('skeleton_archer', 6, 10),
+  // Legacy fallback specs if wraith_warrior or legacy monster textures exist
   {
     key: 'wraith_idle',
     texture: 'wraith_warrior',
@@ -126,13 +169,6 @@ const ANIMATION_SPECS: readonly AnimationSpec[] = [
     texture: 'infernal_warden',
     frames: [0, 1],
     frameRate: 3,
-    repeat: -1,
-  },
-  {
-    key: 'bat_idle',
-    texture: 'cave_bat',
-    frames: [0, 1],
-    frameRate: 6,
     repeat: -1,
   },
 ];
@@ -191,6 +227,35 @@ export function registerGameAnimations(scene: Phaser.Scene): void {
       repeat: spec.repeat,
     });
   }
+}
+
+export type MonsterAnimState = 'idle' | 'walk' | 'attack' | 'death';
+
+const ANIMATED_MONSTER_KEYS = new Set<string>([
+  'slime',
+  'cave_bat',
+  'wolf',
+  'skeleton',
+  'skeleton_archer',
+]);
+
+const LEGACY_MONSTER_ANIM_FALLBACKS: Record<string, string> = {
+  abyssal_slime: 'slime_idle',
+  bone_sentinel: 'sentinel_idle',
+  infernal_warden: 'warden_idle',
+};
+
+/**
+ * Resolves the animation key for a monster sprite and state, falling back safely for legacy textures.
+ */
+export function resolveMonsterAnimKey(
+  spriteKey: string,
+  state: MonsterAnimState,
+): string | null {
+  if (ANIMATED_MONSTER_KEYS.has(spriteKey)) {
+    return `${spriteKey}_${state}`;
+  }
+  return LEGACY_MONSTER_ANIM_FALLBACKS[spriteKey] ?? null;
 }
 
 /**
