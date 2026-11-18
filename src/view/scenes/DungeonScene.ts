@@ -67,6 +67,7 @@ import {
   CombatVfxManager,
   HERO_WALK_FOOTSTEP_FRAMES,
   registerGameAnimations,
+  resolveMonsterAnimKey,
   spawnFootstepDust,
 } from '../sprites/CombatVfx';
 import { HeroWeaponRig } from '../sprites/HeroWeaponRig';
@@ -80,7 +81,26 @@ import {
 interface MonsterVisual {
   sprite: Phaser.GameObjects.Sprite;
   hpBar: Phaser.GameObjects.Graphics;
+  isActionPlaying?: boolean;
+  isDying?: boolean;
+  deathFinished?: boolean;
 }
+
+const ANIMATED_80X80_MONSTERS = new Set<string>([
+  'slime',
+  'cave_bat',
+  'wolf',
+  'skeleton',
+  'skeleton_archer',
+]);
+
+const TEST_ARENA_SPAWNS: ReadonlyArray<{ id: string; dx: number; dy: number }> = [
+  { id: 'slime', dx: -135, dy: -95 },
+  { id: 'cave_bat', dx: 135, dy: -95 },
+  { id: 'wolf', dx: -150, dy: 55 },
+  { id: 'skeleton', dx: 150, dy: 55 },
+  { id: 'skeleton_archer', dx: 0, dy: 135 },
+];
 
 interface GroundDrop {
   item: ItemInstance;
@@ -624,6 +644,27 @@ export class DungeonScene extends Phaser.Scene {
 
     if (this.isTestArena) {
       this.monsters = [];
+      for (const spec of TEST_ARENA_SPAWNS) {
+        const def = this.monsterDefMap.get(spec.id);
+        if (!def) {
+          continue;
+        }
+        const clampedX = Math.max(
+          ARENA_PADDING,
+          Math.min(width - ARENA_PADDING, this.hero.position.x + spec.dx)
+        );
+        const clampedY = Math.max(
+          ARENA_PADDING + 24,
+          Math.min(height - ARENA_PADDING - 24, this.hero.position.y + spec.dy)
+        );
+        const monster = spawnMonster(
+          def,
+          `test_${spec.id}`,
+          { x: clampedX, y: clampedY }
+        );
+        this.monsters.push(monster);
+        this.createMonsterVisual(monster);
+      }
       return;
     }
 
@@ -658,23 +699,7 @@ export class DungeonScene extends Phaser.Scene {
     });
 
     for (const monster of this.monsters) {
-      const isAbyssHerald = monster.defId === 'abyss_herald';
-      const sprite = this.add
-        .sprite(monster.position.x, monster.position.y, monster.spriteKey, 0)
-        .setScale(isAbyssHerald ? 1.75 : 1.5)
-        .setDepth(monster.type === 'boss' ? 19 : 18);
-
-      if (isAbyssHerald) {
-        sprite.setTint(0xdc2626);
-      }
-
-      const animKey = this.resolveMonsterIdleAnim(monster.spriteKey);
-      if (animKey && this.anims.exists(animKey)) {
-        sprite.play(animKey, true);
-      }
-
-      const hpBar = this.add.graphics().setDepth(25);
-      this.monsterVisuals.set(monster.instanceId, { sprite, hpBar });
+      this.createMonsterVisual(monster);
     }
 
     if (currentRoom.isBossRoom) {
@@ -695,6 +720,29 @@ export class DungeonScene extends Phaser.Scene {
     } else if (currentRoom.roomNumber > 1) {
       this.showTimedBanner(currentRoom.title, 2000);
     }
+  }
+
+  private createMonsterVisual(monster: MonsterInstance): void {
+    const isAbyssHerald = monster.defId === 'abyss_herald';
+    const isAnimated80 = ANIMATED_80X80_MONSTERS.has(monster.spriteKey);
+    const scale = isAnimated80 ? 0.88 : isAbyssHerald ? 1.75 : 1.5;
+
+    const sprite = this.add
+      .sprite(monster.position.x, monster.position.y, monster.spriteKey, 0)
+      .setScale(scale)
+      .setDepth(monster.type === 'boss' ? 19 : 18);
+
+    if (isAbyssHerald) {
+      sprite.setTint(0xdc2626);
+    }
+
+    const idleKey = resolveMonsterAnimKey(monster.spriteKey, 'idle');
+    if (idleKey && this.anims.exists(idleKey)) {
+      sprite.play(idleKey, true);
+    }
+
+    const hpBar = this.add.graphics().setDepth(25);
+    this.monsterVisuals.set(monster.instanceId, { sprite, hpBar });
   }
 
   private buildArenaTilesAndLighting(
@@ -993,6 +1041,40 @@ export class DungeonScene extends Phaser.Scene {
             false,
             true
           );
+          const attacker = this.monsters.find(
+            (m) => m.instanceId === event.sourceId
+          );
+          const attackerVisual = attacker
+            ? this.monsterVisuals.get(attacker.instanceId)
+            : undefined;
+          if (
+            attacker &&
+            attacker.isAlive &&
+            attackerVisual &&
+            !attackerVisual.isDying
+          ) {
+            const attackAnim = resolveMonsterAnimKey(
+              attacker.spriteKey,
+              'attack'
+            );
+            if (
+              attackAnim &&
+              attackAnim.endsWith('_attack') &&
+              this.anims.exists(attackAnim)
+            ) {
+              attackerVisual.isActionPlaying = true;
+              attackerVisual.sprite.play(attackAnim, true);
+              attackerVisual.sprite.once(
+                Phaser.Animations.Events.ANIMATION_COMPLETE,
+                () => {
+                  attackerVisual.isActionPlaying = false;
+                }
+              );
+            }
+            if (attacker.attackType === 'ranged') {
+              this.spawnRangedArrow(attacker.position, this.hero.position);
+            }
+          }
           this.playHeroActionAnim('hit');
           if (this.heroSprite && this.hero.isAlive) {
             this.heroSprite.setTint(0xfca5a5);
@@ -1270,14 +1352,48 @@ export class DungeonScene extends Phaser.Scene {
     // Sync Monster Sprites & Individual HP Bars
     for (const monster of this.monsters) {
       const visual = this.monsterVisuals.get(monster.instanceId);
-      if (!visual) {
+      if (!visual || visual.deathFinished) {
         continue;
       }
 
       if (!monster.isAlive || monster.hp <= 0) {
-        visual.sprite.setVisible(false);
         visual.hpBar.clear();
         visual.hpBar.setVisible(false);
+
+        if (!visual.isDying) {
+          const deathAnim = resolveMonsterAnimKey(monster.spriteKey, 'death');
+          if (
+            deathAnim &&
+            deathAnim.endsWith('_death') &&
+            this.anims.exists(deathAnim)
+          ) {
+            visual.isDying = true;
+            visual.isActionPlaying = false;
+            visual.sprite.setVisible(true);
+            visual.sprite.play(deathAnim, true);
+            visual.sprite.once(
+              Phaser.Animations.Events.ANIMATION_COMPLETE,
+              () => {
+                if (!visual.sprite.scene) {
+                  return;
+                }
+                this.tweens.add({
+                  targets: visual.sprite,
+                  alpha: 0,
+                  duration: 250,
+                  ease: 'Quad.easeOut',
+                  onComplete: () => {
+                    visual.deathFinished = true;
+                    visual.sprite.setVisible(false);
+                  },
+                });
+              }
+            );
+          } else {
+            visual.deathFinished = true;
+            visual.sprite.setVisible(false);
+          }
+        }
         continue;
       }
 
@@ -1285,10 +1401,24 @@ export class DungeonScene extends Phaser.Scene {
       visual.sprite.setPosition(monster.position.x, monster.position.y);
       visual.sprite.setFlipX(this.hero.position.x < monster.position.x);
 
+      if (!visual.isActionPlaying) {
+        const dist = distanceBetween(monster.position, this.hero.position);
+        const desiredState = dist > monster.attackRange ? 'walk' : 'idle';
+        const animKey = resolveMonsterAnimKey(monster.spriteKey, desiredState);
+        if (
+          animKey &&
+          this.anims.exists(animKey) &&
+          visual.sprite.anims.currentAnim?.key !== animKey
+        ) {
+          visual.sprite.play(animKey, true);
+        }
+      }
+
       const isBoss = monster.type === 'boss';
+      const isAnimated80 = ANIMATED_80X80_MONSTERS.has(monster.spriteKey);
       const barWidth = isBoss ? 56 : 34;
       const barHeight = isBoss ? 6 : 4;
-      const offsetY = isBoss ? 44 : 26;
+      const offsetY = isBoss ? 44 : isAnimated80 ? 34 : 26;
       const barX = monster.position.x - barWidth / 2;
       const barY = monster.position.y - offsetY;
       const ratio =
@@ -1792,31 +1922,53 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
-  private resolveMonsterIdleAnim(spriteKey: string): string | null {
-    switch (spriteKey) {
-      case 'abyssal_slime':
-        return 'slime_idle';
-      case 'bone_sentinel':
-        return 'sentinel_idle';
-      case 'infernal_warden':
-        return 'warden_idle';
-      case 'cave_bat':
-        return 'bat_idle';
-      default:
-        return null;
-    }
+  private spawnRangedArrow(from: Vector2D, to: Vector2D): void {
+    const angle = Math.atan2(to.y - from.y, to.x - from.x);
+    const arrow = this.add
+      .graphics({ x: from.x, y: from.y })
+      .setDepth(25)
+      .setRotation(angle);
+
+    arrow.lineStyle(2.5, 0xb45309, 1);
+    arrow.lineBetween(-9, 0, 5, 0);
+    arrow.fillStyle(0xe2e8f0, 1);
+    arrow.fillTriangle(11, 0, 4, -3.5, 4, 3.5);
+    arrow.lineStyle(1.5, 0xfef3c7, 0.9);
+    arrow.lineBetween(-9, 0, -12, -2.5);
+    arrow.lineBetween(-9, 0, -12, 2.5);
+
+    this.tweens.add({
+      targets: arrow,
+      x: to.x,
+      y: to.y,
+      duration: 160,
+      ease: 'Linear',
+      onComplete: () => {
+        arrow.destroy();
+      },
+    });
   }
 
   private ensureCampaignFallbackTextures(): void {
-    if (!this.textures.exists('cave_bat')) {
-      const gfx = this.make.graphics({ x: 0, y: 0 });
-      gfx.fillStyle(0x7c3aed, 1);
-      gfx.fillTriangle(16, 8, 4, 22, 28, 22);
-      gfx.fillStyle(0xfef08a, 1);
-      gfx.fillRect(12, 14, 2, 2);
-      gfx.fillRect(18, 14, 2, 2);
-      gfx.generateTexture('cave_bat', 32, 32);
-      gfx.destroy();
+    const fallbackColors: Record<string, number> = {
+      slime: 0x22c55e,
+      cave_bat: 0x7c3aed,
+      wolf: 0x64748b,
+      skeleton: 0xe2e8f0,
+      skeleton_archer: 0xcbd5e1,
+    };
+
+    for (const [key, color] of Object.entries(fallbackColors)) {
+      if (!this.textures.exists(key)) {
+        const gfx = this.make.graphics({ x: 0, y: 0 });
+        gfx.fillStyle(color, 1);
+        gfx.fillCircle(40, 44, 18);
+        gfx.fillStyle(0xfef08a, 1);
+        gfx.fillRect(34, 38, 3, 3);
+        gfx.fillRect(43, 38, 3, 3);
+        gfx.generateTexture(key, 80, 80);
+        gfx.destroy();
+      }
     }
   }
 
