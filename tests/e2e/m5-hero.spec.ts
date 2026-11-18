@@ -18,8 +18,8 @@ interface DebugSpriteSnapshot {
   };
 }
 
-test.describe('SUBMUNDO M5 — Hero 48x48 Spritesheets & Animations (Living vs Wraith) E2E', () => {
-  test('validates v0.5.0 boot, hero_living/hero_wraith textures & 10 animations, Prologue living hero, Act 1 wraith hero, and 4 PC/Mobile screenshots', async ({
+test.describe('SUBMUNDO M5 — Hero 80x80 Spritesheets, Weapons & Animations (Living vs Wraith) E2E', () => {
+  test('validates v0.5.0 boot, hero_living/hero_wraith 80x80, weapons 48x48, HeroWeaponRig, 10 animations, Prologue/Act 1, and 4 PC/Mobile screenshots', async ({
     page,
   }) => {
     mkdirSync(SCREENSHOT_DIR, { recursive: true });
@@ -71,7 +71,7 @@ test.describe('SUBMUNDO M5 — Hero 48x48 Spritesheets & Animations (Living vs W
       );
     }
 
-    // 2. Validate v0.5.0, BootScene textures (hero_living & hero_wraith 768x48, 16 frames of 48x48), and 10 animations
+    // 2. Validate v0.5.0, BootScene textures (hero_living & hero_wraith 1280x80, weapons 192x48), weaponRig, and 10 animations
     const assetsAndAnimsCheck = await page.evaluate(() => {
       const hub = window.__SUBMUNDO_HUB_DEBUG__!;
       const scene = hub.scene as unknown as {
@@ -79,6 +79,7 @@ test.describe('SUBMUNDO M5 — Hero 48x48 Spritesheets & Animations (Living vs W
           exists: (key: string) => boolean;
           get: (key: string) => {
             source: Array<{ width: number; height: number }>;
+            frameTotal: number;
             getFrameNames: () => string[];
             get: (frame: number) => { width: number; height: number };
           };
@@ -87,6 +88,13 @@ test.describe('SUBMUNDO M5 — Hero 48x48 Spritesheets & Animations (Living vs W
           exists: (key: string) => boolean;
         };
         heroSprite: DebugSpriteSnapshot;
+        weaponRig?: {
+          weaponSprite?: {
+            visible: boolean;
+            texture: { key: string };
+            frame: { name: string | number };
+          };
+        };
       };
 
       const inspectTexture = (key: string) => {
@@ -98,6 +106,7 @@ test.describe('SUBMUNDO M5 — Hero 48x48 Spritesheets & Animations (Living vs W
         return {
           width: tex.source[0]?.width ?? 0,
           height: tex.source[0]?.height ?? 0,
+          frameTotal: tex.frameTotal,
           frameCount: tex.getFrameNames().length,
           frameWidth: frame0?.width ?? 0,
           frameHeight: frame0?.height ?? 0,
@@ -121,14 +130,24 @@ test.describe('SUBMUNDO M5 — Hero 48x48 Spritesheets & Animations (Living vs W
         expectedAnims.map((key) => [key, scene.anims.exists(key)])
       );
 
+      const weaponSprite = scene.weaponRig?.weaponSprite;
+
       return {
         title: document.title,
         phase: hub.getProfile().campaign?.phase,
         heroLiving: inspectTexture('hero_living'),
         heroWraith: inspectTexture('hero_wraith'),
+        weapons: inspectTexture('weapons'),
         animResults,
         hubHeroTexture: scene.heroSprite.texture.key,
         hubHeroAnim: scene.heroSprite.anims.currentAnim?.key ?? null,
+        hubWeaponRig: weaponSprite
+          ? {
+              visible: weaponSprite.visible,
+              textureKey: weaponSprite.texture.key,
+              frame: Number(weaponSprite.frame.name),
+            }
+          : null,
       };
     });
 
@@ -136,16 +155,26 @@ test.describe('SUBMUNDO M5 — Hero 48x48 Spritesheets & Animations (Living vs W
     expect(assetsAndAnimsCheck.title).toBe('SUBMUNDO v0.5.0');
     expect(assetsAndAnimsCheck.phase).toBe('prologue');
     expect(assetsAndAnimsCheck.heroLiving).toEqual({
-      width: 768,
-      height: 48,
+      width: 1280,
+      height: 80,
+      frameTotal: 17,
       frameCount: 16,
-      frameWidth: 48,
-      frameHeight: 48,
+      frameWidth: 80,
+      frameHeight: 80,
     });
     expect(assetsAndAnimsCheck.heroWraith).toEqual({
-      width: 768,
-      height: 48,
+      width: 1280,
+      height: 80,
+      frameTotal: 17,
       frameCount: 16,
+      frameWidth: 80,
+      frameHeight: 80,
+    });
+    expect(assetsAndAnimsCheck.weapons).toEqual({
+      width: 192,
+      height: 48,
+      frameTotal: 5,
+      frameCount: 4,
       frameWidth: 48,
       frameHeight: 48,
     });
@@ -163,6 +192,11 @@ test.describe('SUBMUNDO M5 — Hero 48x48 Spritesheets & Animations (Living vs W
     });
     expect(assetsAndAnimsCheck.hubHeroTexture).toBe('hero_living');
     expect(assetsAndAnimsCheck.hubHeroAnim).toBe('hero_living_idle');
+    expect(assetsAndAnimsCheck.hubWeaponRig).toEqual({
+      visible: true,
+      textureKey: 'weapons',
+      frame: 0,
+    });
 
     // 3. Validate flipX & hero_living_walk on movement in Vila Natal
     await page.keyboard.down('KeyA');
@@ -224,6 +258,13 @@ test.describe('SUBMUNDO M5 — Hero 48x48 Spritesheets & Animations (Living vs W
       const dbg = window.__SUBMUNDO_DEBUG__!;
       const scene = dbg.scene as unknown as {
         heroSprite: DebugSpriteSnapshot;
+        weaponRig?: {
+          weaponSprite?: {
+            visible: boolean;
+            texture: { key: string };
+            frame: { name: string | number };
+          };
+        };
       };
       const hero = dbg.getHero();
       const monsters = dbg.getMonsters();
@@ -231,12 +272,25 @@ test.describe('SUBMUNDO M5 — Hero 48x48 Spritesheets & Animations (Living vs W
         hero.position.x = monsters[0].position.x - 24;
         hero.position.y = monsters[0].position.y;
       }
+      const weaponSprite = scene.weaponRig?.weaponSprite;
       return {
         initialTexture: scene.heroSprite.texture.key,
+        weaponRig: weaponSprite
+          ? {
+              visible: weaponSprite.visible,
+              textureKey: weaponSprite.texture.key,
+              frame: Number(weaponSprite.frame.name),
+            }
+          : null,
       };
     });
 
     expect(prologueDungeonInit.initialTexture).toBe('hero_living');
+    expect(prologueDungeonInit.weaponRig).toEqual({
+      visible: true,
+      textureKey: 'weapons',
+      frame: 0,
+    });
 
     await page.waitForFunction(
       () => {
@@ -339,17 +393,37 @@ test.describe('SUBMUNDO M5 — Hero 48x48 Spritesheets & Animations (Living vs W
       const hub = window.__SUBMUNDO_HUB_DEBUG__!;
       const scene = hub.scene as unknown as {
         heroSprite: DebugSpriteSnapshot;
+        weaponRig?: {
+          weaponSprite?: {
+            visible: boolean;
+            texture: { key: string };
+            frame: { name: string | number };
+          };
+        };
       };
+      const weaponSprite = scene.weaponRig?.weaponSprite;
       return {
         phase: hub.getProfile().campaign?.phase,
         texture: scene.heroSprite.texture.key,
         anim: scene.heroSprite.anims.currentAnim?.key ?? null,
+        weaponRig: weaponSprite
+          ? {
+              visible: weaponSprite.visible,
+              textureKey: weaponSprite.texture.key,
+              frame: Number(weaponSprite.frame.name),
+            }
+          : null,
       };
     });
 
     expect(act1RefugeIdle.phase).toBe('act1');
     expect(act1RefugeIdle.texture).toBe('hero_wraith');
     expect(act1RefugeIdle.anim).toBe('hero_wraith_idle');
+    expect(act1RefugeIdle.weaponRig).toEqual({
+      visible: true,
+      textureKey: 'weapons',
+      frame: 1,
+    });
 
     // Verify hero_wraith_walk in Refúgio
     await page.keyboard.down('KeyD');
@@ -397,6 +471,13 @@ test.describe('SUBMUNDO M5 — Hero 48x48 Spritesheets & Animations (Living vs W
       const dbg = window.__SUBMUNDO_DEBUG__!;
       const scene = dbg.scene as unknown as {
         heroSprite: DebugSpriteSnapshot;
+        weaponRig?: {
+          weaponSprite?: {
+            visible: boolean;
+            texture: { key: string };
+            frame: { name: string | number };
+          };
+        };
       };
       const canvas = document.querySelector('canvas');
       const hero = dbg.getHero();
@@ -406,11 +487,19 @@ test.describe('SUBMUNDO M5 — Hero 48x48 Spritesheets & Animations (Living vs W
         hero.position.y = monsters[0].position.y;
       }
 
+      const weaponSprite = scene.weaponRig?.weaponSprite;
       return {
         canvasWidth: canvas?.width ?? 0,
         canvasHeight: canvas?.height ?? 0,
         initialTexture: scene.heroSprite.texture.key,
         initialAnim: scene.heroSprite.anims.currentAnim?.key ?? null,
+        weaponRig: weaponSprite
+          ? {
+              visible: weaponSprite.visible,
+              textureKey: weaponSprite.texture.key,
+              frame: Number(weaponSprite.frame.name),
+            }
+          : null,
       };
     });
 
@@ -420,6 +509,11 @@ test.describe('SUBMUNDO M5 — Hero 48x48 Spritesheets & Animations (Living vs W
     expect(['hero_wraith_idle', 'hero_wraith_walk']).toContain(
       act1DungeonCheck.initialAnim
     );
+    expect(act1DungeonCheck.weaponRig).toEqual({
+      visible: true,
+      textureKey: 'weapons',
+      frame: 1,
+    });
 
     await page.waitForFunction(
       () => {

@@ -39,6 +39,7 @@ import { clearProfileStorage } from '../../core/progression/StorageAdapter';
 import dialoguesData from '../../data/dialogues.json';
 import { soundManager } from '../audio/SoundManager';
 import { registerGameAnimations } from '../sprites/CombatVfx';
+import { HeroWeaponRig } from '../sprites/HeroWeaponRig';
 import { AltarModal, type AltarModalSnapshot } from '../ui/AltarModal';
 import {
   BlacksmithModal,
@@ -190,6 +191,7 @@ export class HubScene extends Phaser.Scene {
   private heroAura!: Phaser.GameObjects.Graphics;
   private heroSprite!: Phaser.GameObjects.Sprite;
   private heroSpriteKey: 'hero_living' | 'hero_wraith' = 'hero_living';
+  private weaponRig?: HeroWeaponRig;
 
   private stations: HubStationView[] = [];
   private nearbyStationId: HubStationId | null = null;
@@ -266,11 +268,17 @@ export class HubScene extends Phaser.Scene {
     this.heroSpriteKey = heroKey;
     this.heroSprite = this.add
       .sprite(this.hero.position.x, this.hero.position.y, this.heroSpriteKey, 0)
-      .setScale(1.35)
+      .setScale(0.88)
       .setDepth(20);
     if (this.anims.exists(`${this.heroSpriteKey}_idle`)) {
       this.heroSprite.play(`${this.heroSpriteKey}_idle`, true);
     }
+    this.weaponRig = new HeroWeaponRig(
+      this,
+      this.heroSprite,
+      this.profile.equipped.weapon,
+      this.heroSpriteKey === 'hero_wraith'
+    );
 
     this.hud = new HubHud(this, {
       onOpenAltar: () => this.openAltar(),
@@ -457,7 +465,7 @@ export class HubScene extends Phaser.Scene {
     this.updateHud();
   }
 
-  public update(_time: number, delta: number): void {
+  public update(time: number, delta: number): void {
     if (!this.hero || !this.hud || this.enteringDungeon) {
       return;
     }
@@ -498,16 +506,15 @@ export class HubScene extends Phaser.Scene {
     if (Math.abs(dx) > 0.5) {
       this.heroSprite.setFlipX(dx < 0);
     }
-    if (
-      Math.hypot(dx, dy) > 0.5 &&
-      this.anims.exists(`${this.heroSpriteKey}_walk`)
-    ) {
+    const isMoving = Math.hypot(dx, dy) > 0.5;
+    if (isMoving && this.anims.exists(`${this.heroSpriteKey}_walk`)) {
       this.heroSprite.play(`${this.heroSpriteKey}_walk`, true);
     } else if (this.anims.exists(`${this.heroSpriteKey}_idle`)) {
       this.heroSprite.play(`${this.heroSpriteKey}_idle`, true);
     }
 
     this.syncVisuals();
+    this.weaponRig?.sync(isMoving, time);
     this.cameraRig?.syncLayers();
     this.updateHud();
   }
@@ -693,6 +700,10 @@ export class HubScene extends Phaser.Scene {
     const facing = this.hero ? { ...this.hero.facing } : { x: 1, y: 0 };
     this.hero = buildHeroFromProfile(this.profile, pos);
     this.hero.facing = facing;
+    this.weaponRig?.setEquippedWeapon(
+      this.profile.equipped.weapon,
+      this.heroSpriteKey === 'hero_wraith'
+    );
   }
 
   private buildAltarSnapshot(): AltarModalSnapshot {
@@ -839,11 +850,15 @@ export class HubScene extends Phaser.Scene {
     const phase = this.getCampaignPhase();
     this.heroSpriteKey = phase === 'prologue' ? 'hero_living' : 'hero_wraith';
     if (this.heroSprite) {
-      this.heroSprite.setTexture(this.heroSpriteKey, 0).setScale(1.35);
+      this.heroSprite.setTexture(this.heroSpriteKey, 0).setScale(0.88);
       if (this.anims.exists(`${this.heroSpriteKey}_idle`)) {
         this.heroSprite.play(`${this.heroSpriteKey}_idle`, true);
       }
     }
+    this.weaponRig?.setEquippedWeapon(
+      this.profile.equipped.weapon,
+      this.heroSpriteKey === 'hero_wraith'
+    );
     this.cameras.main.setBackgroundColor(
       phase === 'prologue' ? '#121a14' : '#090b12'
     );
@@ -1301,19 +1316,28 @@ export class HubScene extends Phaser.Scene {
     if (!this.textures.exists('hero_living')) {
       const gfx = this.make.graphics({ x: 0, y: 0 });
       gfx.fillStyle(0xd97706, 1);
-      gfx.fillRect(8, 6, 32, 36);
+      gfx.fillRect(14, 10, 52, 60);
       gfx.lineStyle(2, 0xfef3c7, 1);
-      gfx.strokeRect(8, 6, 32, 36);
-      gfx.generateTexture('hero_living', 48, 48);
+      gfx.strokeRect(14, 10, 52, 60);
+      gfx.generateTexture('hero_living', 80, 80);
       gfx.destroy();
     }
     if (!this.textures.exists('hero_wraith')) {
       const gfx = this.make.graphics({ x: 0, y: 0 });
       gfx.fillStyle(0x38bdf8, 1);
-      gfx.fillRect(8, 6, 32, 36);
+      gfx.fillRect(14, 10, 52, 60);
       gfx.lineStyle(2, 0x09090b, 1);
-      gfx.strokeRect(8, 6, 32, 36);
-      gfx.generateTexture('hero_wraith', 48, 48);
+      gfx.strokeRect(14, 10, 52, 60);
+      gfx.generateTexture('hero_wraith', 80, 80);
+      gfx.destroy();
+    }
+    if (!this.textures.exists('weapons')) {
+      const gfx = this.make.graphics({ x: 0, y: 0 });
+      gfx.fillStyle(0xe2e8f0, 1);
+      gfx.fillRect(20, 6, 8, 36);
+      gfx.fillStyle(0xfbbf24, 1);
+      gfx.fillRect(14, 30, 20, 5);
+      gfx.generateTexture('weapons', 48, 48);
       gfx.destroy();
     }
   }
@@ -1339,6 +1363,8 @@ export class HubScene extends Phaser.Scene {
     this.arenaLayer?.destroy();
     this.lightingGraphics?.destroy();
     this.heroAura?.destroy();
+    this.weaponRig?.destroy();
+    this.weaponRig = undefined;
     this.heroSprite?.destroy();
 
     this.dialogueBox?.destroy();

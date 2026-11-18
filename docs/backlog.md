@@ -85,4 +85,7 @@
 | T-081 | Validação do M8 (suíte 3x, Playwright validando HUD, modais e retratos 2D em PC/Mobile, `docs/qa/qa-M8.md`) e tag `v0.8.0` (tam. M) | M8 | AG03 (QA) + AG00 (Líder) | a fazer |
 | T-082 | Botão `Resetar` save no `HubHud.ts` (confirmação em 2 cliques, PC e Mobile) conectado a `clearProfileStorage()` + `scene.restart({})` na `HubScene.ts` para retestar a Vila Natal (tam. P) | M5 | AG02 (UI) | feita |
 | T-083 | Câmera com zoom (`1.45x` Mobile / `1.65x` PC) seguindo o Herói (`SceneCameraRig` + `uiCamera` fixa em `zoom=1`) e escala `1.35` do Herói na `HubScene.ts` e `DungeonScene.ts` para alinhar perspectiva ao mockup (tam. M) | M5 | AG02 (UI) + AG01 (Gameplay) | feita |
+| T-084 | Gerar `hero_villager_unarmed`, remover fundo com precisão e montar spritesheets finais `80×80` (`hero_living.png`, `hero_wraith.png`, 16 frames) e `weapons.png` (`48×48`, 4 armas) + `manifest.json` (tam. M) | M5 | AG08 (Arte) | feita |
+| T-085 | Atualizar `BootScene.ts` (`80×80` + `weapons` `48×48`) e acoplar sprite dinâmico da arma equipada na mão do Herói na `HubScene.ts` e `DungeonScene.ts` (tam. M) | M5 | AG07 (Arquiteto) + AG01 (Gameplay) + AG02 (UI) | feita |
+| T-086 | Atualizar `tests/e2e/m5-hero.spec.ts` para `80×80` + `weapons.png`, validar suíte 3× e gerar capturas finais do M5 (tam. P) | M5 | AG03 (QA) + AG00 (Líder) | feita |
 

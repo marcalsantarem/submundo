@@ -45,8 +45,9 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 
 | Key | Arquivo | Dimensões Totais | Frame (`LxA`) | Qtd. Frames | Convenção de Frames (Índice: Nome) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `hero_living` | `hero_living.png` | `768x48` px | `48x48` px | 16 | `0..3: idle0..3`, `4..7: walk0..3`, `8..11: attack0..3`, `12..13: dash0..1`, `14..15: hit0..1` |
-| `hero_wraith` | `hero_wraith.png` | `768x48` px | `48x48` px | 16 | `0..3: idle0..3`, `4..7: walk0..3`, `8..11: attack0..3`, `12..13: dash0..1`, `14..15: hit0..1` |
+| `hero_living` | `hero_living.png` | `1280x80` px | `80x80` px | 16 | `0..3: idle0..3`, `4..7: walk0..3`, `8..11: attack0..3`, `12..13: dash0..1`, `14..15: hit0..1` |
+| `hero_wraith` | `hero_wraith.png` | `1280x80` px | `80x80` px | 16 | `0..3: idle0..3`, `4..7: walk0..3`, `8..11: attack0..3`, `12..13: dash0..1`, `14..15: hit0..1` |
+| `weapons` | `weapons.png` | `192x48` px | `48x48` px | 4 | `0: iron_sword`, `1: cyan_runeblade`, `2: inferno_axe`, `3: crimson_dagger` |
 | `wraith_warrior` | `wraith_warrior.png` | `128x32` px | `32x32` px | 4 | `0: idle0`, `1: idle1`, `2: attack`, `3: dash` |
 | `abyssal_slime` | `abyssal_slime.png` | `64x32` px | `32x32` px | 2 | `0: idle0`, `1: idle1` |
 | `bone_sentinel` | `bone_sentinel.png` | `64x32` px | `32x32` px | 2 | `0: idle0`, `1: attack` |
@@ -74,7 +75,8 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 ## 4. Pipeline e Substituição Futura
 
 - Os spritesheets seguem grid horizontal estrito (`width = frameWidth * frames.length`, `height = frameHeight`).
-- Para regenerar todos os assets via código: `node scripts/art/generateSprites.mjs`.
+- Para regenerar os spritesheets procedurais base: `node scripts/art/generateSprites.mjs`.
+- Para regenerar `hero_living.png` (`80x80`), `hero_wraith.png` (`80x80`) e `weapons.png` (`48x48`) a partir das artes conceituais em `assets/sprites_src/`: `python3 scripts/art/buildHeroAndWeapons.py`.
 - Qualquer arquivo `.png` em `public/assets/sprites/` pode ser editado ou substituído no LibreSprite/Pixelorama mantendo a mesma chave, dimensão de frame e ordem de índices em `manifest.json`.
 
 ---

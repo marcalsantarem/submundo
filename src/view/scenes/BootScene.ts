@@ -20,15 +20,15 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
   {
     key: 'hero_living',
     file: 'assets/sprites/hero_living.png',
-    frameWidth: 48,
-    frameHeight: 48,
+    frameWidth: 80,
+    frameHeight: 80,
     fallbackColor: 0xe2e8f0,
   },
   {
     key: 'hero_wraith',
     file: 'assets/sprites/hero_wraith.png',
-    frameWidth: 48,
-    frameHeight: 48,
+    frameWidth: 80,
+    frameHeight: 80,
     fallbackColor: 0x38bdf8,
   },
   {
@@ -121,6 +121,13 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
     frameWidth: 32,
     frameHeight: 32,
     fallbackColor: 0x7c3aed,
+  },
+  {
+    key: 'weapons',
+    file: 'assets/sprites/weapons.png',
+    frameWidth: 48,
+    frameHeight: 48,
+    fallbackColor: 0x94a3b8,
   },
 ];
 

@@ -67,6 +67,7 @@ import {
   CombatVfxManager,
   registerGameAnimations,
 } from '../sprites/CombatVfx';
+import { HeroWeaponRig } from '../sprites/HeroWeaponRig';
 import { SceneCameraRig } from '../ui/CameraRig';
 import { DungeonHud, type HudSnapshot } from '../ui/DungeonHud';
 import {
@@ -146,6 +147,7 @@ export class DungeonScene extends Phaser.Scene {
   private heroAura!: Phaser.GameObjects.Graphics;
   private heroSprite?: Phaser.GameObjects.Sprite;
   private heroSpriteKey: 'hero_living' | 'hero_wraith' = 'hero_wraith';
+  private weaponRig?: HeroWeaponRig;
   private isHeroActionAnimPlaying = false;
   private heroIsMoving = false;
   private heroFlipX = false;
@@ -245,6 +247,8 @@ export class DungeonScene extends Phaser.Scene {
       this.clearGroundDrops();
       this.clearMinionVisuals();
       this.destroyPortal();
+      this.weaponRig?.destroy();
+      this.weaponRig = undefined;
       this.heroSprite = undefined;
       this.isHeroActionAnimPlaying = false;
       this.heroIsMoving = false;
@@ -502,17 +506,25 @@ export class DungeonScene extends Phaser.Scene {
     if (!this.heroSprite || !this.heroSprite.scene) {
       this.heroSprite = this.add
         .sprite(this.hero.position.x, this.hero.position.y, heroKey, 0)
-        .setScale(1.35)
+        .setScale(0.88)
         .setDepth(20);
     } else {
       this.heroSprite
         .setTexture(heroKey, 0)
         .setPosition(this.hero.position.x, this.hero.position.y)
-        .setScale(1.35)
+        .setScale(0.88)
         .setDepth(20)
         .setAlpha(1)
         .clearTint();
     }
+
+    this.weaponRig?.destroy();
+    this.weaponRig = new HeroWeaponRig(
+      this,
+      this.heroSprite,
+      this.inventory.equipped.weapon,
+      this.heroSpriteKey === 'hero_wraith'
+    );
 
     this.cameraRig?.follow(this.heroSprite);
     this.updateHeroLocomotionAnim();
@@ -738,6 +750,9 @@ export class DungeonScene extends Phaser.Scene {
             this.heroSpriteKey === 'hero_wraith'
           );
           this.playHeroActionAnim('attack');
+          this.weaponRig?.playAttackSwing(
+            this.heroSprite?.flipX ?? this.heroFlipX
+          );
           break;
         }
 
@@ -922,6 +937,7 @@ export class DungeonScene extends Phaser.Scene {
           this.heroSprite?.stop();
           this.heroSprite?.setTint(0xef4444);
           this.heroSprite?.setAlpha(0.45);
+          this.weaponRig?.setVisible(false);
           break;
         }
       }
@@ -1126,8 +1142,12 @@ export class DungeonScene extends Phaser.Scene {
 
     const isInvulnerable = nowMs < this.hero.invulnerableUntilMs;
     if (this.hero.isAlive) {
-      this.heroSprite?.setAlpha(isInvulnerable ? 0.65 : 1);
+      const alpha = isInvulnerable ? 0.65 : 1;
+      this.heroSprite?.setAlpha(alpha);
+      this.weaponRig?.setVisible(true);
+      this.weaponRig?.setAlpha(alpha);
     }
+    this.weaponRig?.sync(this.heroIsMoving, nowMs);
 
     this.heroAura.clear();
     if (this.hero.isAlive) {
@@ -1402,6 +1422,10 @@ export class DungeonScene extends Phaser.Scene {
     this.hero.equippedForces = getActiveForces(this.inventory.equipped);
     this.hero.activeLegendaryPowers = getActiveLegendaryPowers(
       this.inventory.equipped
+    );
+    this.weaponRig?.setEquippedWeapon(
+      this.inventory.equipped.weapon,
+      this.heroSpriteKey === 'hero_wraith'
     );
   }
 

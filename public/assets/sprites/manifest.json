@@ -4,10 +4,10 @@
     "hero_living": {
       "key": "hero_living",
       "file": "hero_living.png",
-      "width": 768,
-      "height": 48,
-      "frameWidth": 48,
-      "frameHeight": 48,
+      "width": 1280,
+      "height": 80,
+      "frameWidth": 80,
+      "frameHeight": 80,
       "frames": [
         "idle0",
         "idle1",
@@ -30,10 +30,10 @@
     "hero_wraith": {
       "key": "hero_wraith",
       "file": "hero_wraith.png",
-      "width": 768,
-      "height": 48,
-      "frameWidth": 48,
-      "frameHeight": 48,
+      "width": 1280,
+      "height": 80,
+      "frameWidth": 80,
+      "frameHeight": 80,
       "frames": [
         "idle0",
         "idle1",
@@ -51,6 +51,20 @@
         "dash1",
         "hit0",
         "hit1"
+      ]
+    },
+    "weapons": {
+      "key": "weapons",
+      "file": "weapons.png",
+      "width": 192,
+      "height": 48,
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "frames": [
+        "iron_sword",
+        "cyan_runeblade",
+        "inferno_axe",
+        "crimson_dagger"
       ]
     },
     "wraith_warrior": {
