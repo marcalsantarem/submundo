@@ -65,7 +65,9 @@ import skillsJson from '../../data/skills.json';
 import { soundManager } from '../audio/SoundManager';
 import {
   CombatVfxManager,
+  HERO_WALK_FOOTSTEP_FRAMES,
   registerGameAnimations,
+  spawnFootstepDust,
 } from '../sprites/CombatVfx';
 import { HeroWeaponRig } from '../sprites/HeroWeaponRig';
 import { SceneCameraRig } from '../ui/CameraRig';
@@ -112,6 +114,8 @@ const TILE_DISPLAY_SIZE = 32;
 const ARENA_PADDING = 36;
 const ROOM_CLEAR_AUTO_ADVANCE_MS = 1200;
 const DROP_PICKUP_RADIUS = 34;
+const HERO_ATTACK_CANCEL_FRAME = 12;
+const HERO_HIT_CANCEL_FRAME = 21;
 const EQUIP_SLOTS: readonly EquipSlot[] = ['weapon', 'armor', 'amulet', 'ring'];
 
 const RARITY_DROP_FRAME: Record<Rarity, number> = {
@@ -149,8 +153,11 @@ export class DungeonScene extends Phaser.Scene {
   private heroSpriteKey: 'hero_living' | 'hero_wraith' = 'hero_wraith';
   private weaponRig?: HeroWeaponRig;
   private isHeroActionAnimPlaying = false;
+  private currentHeroActionAnim: 'attack' | 'dash' | 'hit' | null = null;
   private heroIsMoving = false;
   private heroFlipX = false;
+  private lastMoveDirX = 0;
+  private lastHeroFootstepFrame = -1;
   private readonly monsterVisuals = new Map<string, MonsterVisual>();
   private readonly minionVisuals = new Map<string, Phaser.GameObjects.Graphics>();
   private groundDrops: GroundDrop[] = [];
@@ -231,6 +238,12 @@ export class DungeonScene extends Phaser.Scene {
       boundsHeight: this.viewport.height,
     });
 
+    this.isHeroActionAnimPlaying = false;
+    this.currentHeroActionAnim = null;
+    this.heroIsMoving = false;
+    this.lastMoveDirX = 0;
+    this.lastHeroFootstepFrame = -1;
+
     this.startNewRun(data);
     this.cameraRig.syncLayers();
 
@@ -251,8 +264,11 @@ export class DungeonScene extends Phaser.Scene {
       this.weaponRig = undefined;
       this.heroSprite = undefined;
       this.isHeroActionAnimPlaying = false;
+      this.currentHeroActionAnim = null;
       this.heroIsMoving = false;
       this.heroFlipX = false;
+      this.lastMoveDirX = 0;
+      this.lastHeroFootstepFrame = -1;
       this.bannerText = undefined;
       this.bannerExpiresAtMs = 0;
       this.cameraRig?.destroy();
@@ -287,6 +303,8 @@ export class DungeonScene extends Phaser.Scene {
 
     if (this.inventoryModal?.isOpen()) {
       this.heroIsMoving = false;
+      this.lastMoveDirX = 0;
+      this.lastHeroFootstepFrame = -1;
       this.syncVisuals(this.elapsedTimeMs);
       this.updateHud(this.elapsedTimeMs);
       this.cameraRig?.syncLayers();
@@ -309,6 +327,7 @@ export class DungeonScene extends Phaser.Scene {
       (this.runState.status === 'in_progress' ||
         this.runState.status === 'room_cleared');
     this.heroIsMoving = canMove && (moveDir.x !== 0 || moveDir.y !== 0);
+    this.lastMoveDirX = canMove ? moveDir.x : 0;
     if (canMove && moveDir.x !== 0) {
       this.heroFlipX = moveDir.x < 0;
     }
@@ -342,6 +361,7 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     this.syncVisuals(nowMs);
+    this.updateHeroFootstepDust();
     this.updateHud(nowMs);
     this.cameraRig?.syncLayers();
   }
@@ -500,7 +520,10 @@ export class DungeonScene extends Phaser.Scene {
       this.activeStage.phase === 'prologue' ? 'hero_living' : 'hero_wraith';
     this.heroSpriteKey = heroKey;
     this.isHeroActionAnimPlaying = false;
+    this.currentHeroActionAnim = null;
     this.heroIsMoving = false;
+    this.lastMoveDirX = 0;
+    this.lastHeroFootstepFrame = -1;
     this.heroFlipX = this.hero.facing.x < 0;
 
     if (!this.heroSprite || !this.heroSprite.scene) {
@@ -509,6 +532,7 @@ export class DungeonScene extends Phaser.Scene {
         .setScale(0.88)
         .setDepth(20);
     } else {
+      this.heroSprite.off(Phaser.Animations.Events.ANIMATION_COMPLETE);
       this.heroSprite
         .setTexture(heroKey, 0)
         .setPosition(this.hero.position.x, this.hero.position.y)
@@ -556,6 +580,8 @@ export class DungeonScene extends Phaser.Scene {
     this.destroyPortal();
     this.clearMonsterVisuals();
     this.clearGroundDrops();
+    this.cancelHeroActionAnim();
+    this.lastHeroFootstepFrame = -1;
     this.buildArenaTilesAndLighting(
       width,
       height,
@@ -738,10 +764,14 @@ export class DungeonScene extends Phaser.Scene {
         case 'hero_basic_attack': {
           soundManager.play(event.isCrit ? 'crit' : 'attack');
           const dx = event.position.x - this.hero.position.x;
-          if (Math.abs(dx) > 0.5) {
+          if (
+            Math.abs(dx) > 0.5 &&
+            (!this.heroIsMoving || this.lastMoveDirX === 0)
+          ) {
             this.heroFlipX = dx < 0;
             this.heroSprite?.setFlipX(this.heroFlipX);
           }
+          const facingLeft = this.heroSprite?.flipX ?? this.heroFlipX;
           this.vfx.showSlashEffect(
             this.hero.position.x,
             this.hero.position.y,
@@ -749,10 +779,10 @@ export class DungeonScene extends Phaser.Scene {
             event.position.y,
             this.heroSpriteKey === 'hero_wraith'
           );
-          this.playHeroActionAnim('attack');
-          this.weaponRig?.playAttackSwing(
-            this.heroSprite?.flipX ?? this.heroFlipX
-          );
+          if (!this.heroIsMoving) {
+            this.playHeroActionAnim('attack');
+          }
+          this.weaponRig?.playAttackSwing(facingLeft, false);
           break;
         }
 
@@ -785,6 +815,13 @@ export class DungeonScene extends Phaser.Scene {
               event.position.y,
               skill.radius ?? 80,
               skill.force
+            );
+            if (this.currentHeroActionAnim !== 'dash') {
+              this.playHeroActionAnim('attack');
+            }
+            this.weaponRig?.playAttackSwing(
+              this.heroSprite?.flipX ?? this.heroFlipX,
+              true
             );
           }
           break;
@@ -933,7 +970,8 @@ export class DungeonScene extends Phaser.Scene {
         }
 
         case 'hero_killed': {
-          this.isHeroActionAnimPlaying = false;
+          this.cancelHeroActionAnim();
+          this.lastHeroFootstepFrame = -1;
           this.heroSprite?.stop();
           this.heroSprite?.setTint(0xef4444);
           this.heroSprite?.setAlpha(0.45);
@@ -1591,6 +1629,14 @@ export class DungeonScene extends Phaser.Scene {
       return;
     }
 
+    if (
+      this.isHeroActionAnimPlaying &&
+      this.currentHeroActionAnim === 'dash' &&
+      action !== 'dash'
+    ) {
+      return;
+    }
+
     const animKey = `${this.heroSpriteKey}_${action}`;
     const fallbackKey =
       action === 'attack'
@@ -1609,17 +1655,82 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     this.isHeroActionAnimPlaying = true;
+    this.currentHeroActionAnim = action;
+    this.lastHeroFootstepFrame = -1;
     this.heroSprite.off(Phaser.Animations.Events.ANIMATION_COMPLETE);
     this.heroSprite.play(resolvedKey);
     this.heroSprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       this.isHeroActionAnimPlaying = false;
+      this.currentHeroActionAnim = null;
       this.updateHeroLocomotionAnim();
     });
   }
 
-  private updateHeroLocomotionAnim(): void {
-    if (!this.heroSprite || !this.hero.isAlive || this.isHeroActionAnimPlaying) {
+  private cancelHeroActionAnim(): void {
+    this.isHeroActionAnimPlaying = false;
+    this.currentHeroActionAnim = null;
+    this.heroSprite?.off(Phaser.Animations.Events.ANIMATION_COMPLETE);
+  }
+
+  private getCurrentHeroFrameIndex(): number {
+    if (!this.heroSprite) {
+      return 0;
+    }
+    const parsed = Number(this.heroSprite.frame?.name);
+    return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+  }
+
+  private updateHeroFootstepDust(): void {
+    if (!this.heroSprite || !this.hero.isAlive) {
+      this.lastHeroFootstepFrame = -1;
       return;
+    }
+
+    const currentAnimKey = this.heroSprite.anims.currentAnim?.key;
+    const isWalkingAnim =
+      currentAnimKey === `${this.heroSpriteKey}_walk` &&
+      this.heroSprite.anims.isPlaying;
+
+    if (!isWalkingAnim) {
+      this.lastHeroFootstepFrame = -1;
+      return;
+    }
+
+    const frameIdx = this.getCurrentHeroFrameIndex();
+    if (frameIdx === this.lastHeroFootstepFrame) {
+      return;
+    }
+
+    this.lastHeroFootstepFrame = frameIdx;
+    if (HERO_WALK_FOOTSTEP_FRAMES.includes(frameIdx)) {
+      spawnFootstepDust(
+        this,
+        this.heroSprite.x,
+        this.heroSprite.y + 31 * this.heroSprite.scaleY,
+        this.heroSpriteKey === 'hero_wraith'
+      );
+    }
+  }
+
+  private updateHeroLocomotionAnim(): void {
+    if (!this.heroSprite || !this.hero.isAlive) {
+      return;
+    }
+
+    if (this.isHeroActionAnimPlaying) {
+      const frameIdx = this.getCurrentHeroFrameIndex();
+      const canCancelAttack =
+        this.currentHeroActionAnim === 'attack' &&
+        frameIdx >= HERO_ATTACK_CANCEL_FRAME;
+      const canCancelHit =
+        this.currentHeroActionAnim === 'hit' &&
+        frameIdx >= HERO_HIT_CANCEL_FRAME;
+
+      if (this.heroIsMoving && (canCancelAttack || canCancelHit)) {
+        this.cancelHeroActionAnim();
+      } else {
+        return;
+      }
     }
 
     const desiredKey = this.heroIsMoving

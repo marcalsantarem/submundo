@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 
 export type SkillForceVfx = 'inferno' | 'submundo' | 'empireo' | 'none';
 
+export const HERO_WALK_FOOTSTEP_FRAMES: readonly number[] = [4, 7];
+
 interface AnimationSpec {
   key: string;
   texture: string;
@@ -11,7 +13,7 @@ interface AnimationSpec {
 }
 
 const ANIMATION_SPECS: readonly AnimationSpec[] = [
-  // Hero Living (Prologue) — 768x48 (16 frames of 48x48)
+  // Hero Living (Prologue) — 1920x80 (24 frames of 80x80)
   {
     key: 'hero_living_idle',
     texture: 'hero_living',
@@ -22,32 +24,32 @@ const ANIMATION_SPECS: readonly AnimationSpec[] = [
   {
     key: 'hero_living_walk',
     texture: 'hero_living',
-    frames: [4, 5, 6, 7],
-    frameRate: 10,
+    frames: [4, 5, 6, 7, 8, 9],
+    frameRate: 12,
     repeat: -1,
   },
   {
     key: 'hero_living_attack',
     texture: 'hero_living',
-    frames: [8, 9, 10, 11],
-    frameRate: 14,
+    frames: [10, 11, 12, 13, 14, 15],
+    frameRate: 18,
     repeat: 0,
   },
   {
     key: 'hero_living_dash',
     texture: 'hero_living',
-    frames: [12, 13],
-    frameRate: 12,
+    frames: [16, 17, 18, 19],
+    frameRate: 16,
     repeat: 0,
   },
   {
     key: 'hero_living_hit',
     texture: 'hero_living',
-    frames: [14, 15],
-    frameRate: 12,
+    frames: [20, 21, 22, 23],
+    frameRate: 14,
     repeat: 0,
   },
-  // Hero Wraith (Act 1+) — 768x48 (16 frames of 48x48)
+  // Hero Wraith (Act 1+) — 1920x80 (24 frames of 80x80)
   {
     key: 'hero_wraith_idle',
     texture: 'hero_wraith',
@@ -58,29 +60,29 @@ const ANIMATION_SPECS: readonly AnimationSpec[] = [
   {
     key: 'hero_wraith_walk',
     texture: 'hero_wraith',
-    frames: [4, 5, 6, 7],
-    frameRate: 10,
+    frames: [4, 5, 6, 7, 8, 9],
+    frameRate: 12,
     repeat: -1,
   },
   {
     key: 'hero_wraith_attack',
     texture: 'hero_wraith',
-    frames: [8, 9, 10, 11],
-    frameRate: 14,
+    frames: [10, 11, 12, 13, 14, 15],
+    frameRate: 18,
     repeat: 0,
   },
   {
     key: 'hero_wraith_dash',
     texture: 'hero_wraith',
-    frames: [12, 13],
-    frameRate: 12,
+    frames: [16, 17, 18, 19],
+    frameRate: 16,
     repeat: 0,
   },
   {
     key: 'hero_wraith_hit',
     texture: 'hero_wraith',
-    frames: [14, 15],
-    frameRate: 12,
+    frames: [20, 21, 22, 23],
+    frameRate: 14,
     repeat: 0,
   },
   // Legacy fallback specs if wraith_warrior exists
@@ -187,6 +189,49 @@ export function registerGameAnimations(scene: Phaser.Scene): void {
       frames: animFrames,
       frameRate: spec.frameRate,
       repeat: spec.repeat,
+    });
+  }
+}
+
+/**
+ * Spawns lightweight footstep dust (Living) or spectral mist (Wraith) particles on walk contact frames.
+ */
+export function spawnFootstepDust(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  isWraith: boolean,
+): void {
+  const primaryColor = isWraith ? 0x38bdf8 : 0xd6c7a9;
+  const secondaryColor = isWraith ? 0x94a3b8 : 0xa89878;
+
+  const puffs = [
+    { offsetX: -5, offsetY: 0, driftX: -9, driftY: -5, radius: 2.6, duration: 230 },
+    { offsetX: 0, offsetY: 1, driftX: 0, driftY: -6, radius: 2.1, duration: 250 },
+    { offsetX: 5, offsetY: 0, driftX: 9, driftY: -4, radius: 2.4, duration: 240 },
+  ];
+
+  for (let i = 0; i < puffs.length; i++) {
+    const puff = puffs[i];
+    const dust = scene.add
+      .graphics({ x: x + puff.offsetX, y: y + puff.offsetY })
+      .setDepth(19);
+    const color = i % 2 === 0 ? primaryColor : secondaryColor;
+    dust.fillStyle(color, isWraith ? 0.55 : 0.65);
+    dust.fillCircle(0, 0, puff.radius);
+
+    scene.tweens.add({
+      targets: dust,
+      x: x + puff.offsetX + puff.driftX,
+      y: y + puff.offsetY + puff.driftY,
+      scaleX: 1.5,
+      scaleY: 1.3,
+      alpha: 0,
+      duration: puff.duration,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        dust.destroy();
+      },
     });
   }
 }

@@ -38,7 +38,11 @@ import {
 import { clearProfileStorage } from '../../core/progression/StorageAdapter';
 import dialoguesData from '../../data/dialogues.json';
 import { soundManager } from '../audio/SoundManager';
-import { registerGameAnimations } from '../sprites/CombatVfx';
+import {
+  HERO_WALK_FOOTSTEP_FRAMES,
+  registerGameAnimations,
+  spawnFootstepDust,
+} from '../sprites/CombatVfx';
 import { HeroWeaponRig } from '../sprites/HeroWeaponRig';
 import { AltarModal, type AltarModalSnapshot } from '../ui/AltarModal';
 import {
@@ -192,6 +196,7 @@ export class HubScene extends Phaser.Scene {
   private heroSprite!: Phaser.GameObjects.Sprite;
   private heroSpriteKey: 'hero_living' | 'hero_wraith' = 'hero_living';
   private weaponRig?: HeroWeaponRig;
+  private lastFootstepFrame = -1;
 
   private stations: HubStationView[] = [];
   private nearbyStationId: HubStationId | null = null;
@@ -216,6 +221,7 @@ export class HubScene extends Phaser.Scene {
     this.elapsedTimeMs = 0;
     this.nearbyStationId = null;
     this.emissaryDialogueIndex = 0;
+    this.lastFootstepFrame = -1;
 
     const width = this.scale.width || 800;
     const height = this.scale.height || 600;
@@ -462,6 +468,8 @@ export class HubScene extends Phaser.Scene {
     this.triggerAutomaticEntryDialogues(transitionExt);
     this.updateProximityState();
     this.syncVisuals();
+    this.weaponRig?.sync(false, this.time?.now ?? this.elapsedTimeMs);
+    this.cameraRig?.syncLayers();
     this.updateHud();
   }
 
@@ -477,11 +485,13 @@ export class HubScene extends Phaser.Scene {
       this.bannerText = undefined;
     }
 
+    const canMove = !this.isAnyModalOpen();
+    let moveDir: Vector2D = { x: 0, y: 0 };
     let dx = 0;
     let dy = 0;
 
-    if (!this.isAnyModalOpen()) {
-      const moveDir = this.hud.getMoveVector();
+    if (canMove) {
+      moveDir = this.hud.getMoveVector();
       const bounds = this.getMovementBounds(this.viewport);
       const prevX = this.hero.position.x;
       const prevY = this.hero.position.y;
@@ -503,17 +513,46 @@ export class HubScene extends Phaser.Scene {
       this.updateProximityState();
     }
 
-    if (Math.abs(dx) > 0.5) {
+    if (canMove && Math.abs(moveDir.x) > 0.05) {
+      this.heroSprite.setFlipX(moveDir.x < 0);
+    } else if (Math.abs(dx) > 0.05) {
       this.heroSprite.setFlipX(dx < 0);
     }
-    const isMoving = Math.hypot(dx, dy) > 0.5;
-    if (isMoving && this.anims.exists(`${this.heroSpriteKey}_walk`)) {
-      this.heroSprite.play(`${this.heroSpriteKey}_walk`, true);
-    } else if (this.anims.exists(`${this.heroSpriteKey}_idle`)) {
-      this.heroSprite.play(`${this.heroSpriteKey}_idle`, true);
+
+    const hasMoveIntent =
+      canMove && (Math.abs(moveDir.x) > 0.05 || Math.abs(moveDir.y) > 0.05);
+    const isMoving = hasMoveIntent && Math.hypot(dx, dy) > 0.05;
+
+    const walkKey = `${this.heroSpriteKey}_walk`;
+    const idleKey = `${this.heroSpriteKey}_idle`;
+    const desiredKey =
+      isMoving && this.anims.exists(walkKey) ? walkKey : idleKey;
+    if (
+      this.anims.exists(desiredKey) &&
+      this.heroSprite.anims.currentAnim?.key !== desiredKey
+    ) {
+      this.heroSprite.play(desiredKey, true);
     }
 
     this.syncVisuals();
+
+    if (isMoving && this.heroSprite.anims.currentAnim?.key === walkKey) {
+      const frameIdx = Number(this.heroSprite.frame?.name);
+      if (Number.isFinite(frameIdx) && frameIdx !== this.lastFootstepFrame) {
+        this.lastFootstepFrame = frameIdx;
+        if (HERO_WALK_FOOTSTEP_FRAMES.includes(frameIdx)) {
+          spawnFootstepDust(
+            this,
+            this.heroSprite.x,
+            this.heroSprite.y + 31 * this.heroSprite.scaleY,
+            this.heroSpriteKey === 'hero_wraith'
+          );
+        }
+      }
+    } else {
+      this.lastFootstepFrame = -1;
+    }
+
     this.weaponRig?.sync(isMoving, time);
     this.cameraRig?.syncLayers();
     this.updateHud();
@@ -849,6 +888,7 @@ export class HubScene extends Phaser.Scene {
   private rebuildPhaseScenario(): void {
     const phase = this.getCampaignPhase();
     this.heroSpriteKey = phase === 'prologue' ? 'hero_living' : 'hero_wraith';
+    this.lastFootstepFrame = -1;
     if (this.heroSprite) {
       this.heroSprite.setTexture(this.heroSpriteKey, 0).setScale(0.88);
       if (this.anims.exists(`${this.heroSpriteKey}_idle`)) {
@@ -866,6 +906,8 @@ export class HubScene extends Phaser.Scene {
     this.createStations(this.viewport);
     this.updateProximityState();
     this.syncVisuals();
+    this.weaponRig?.sync(false, this.time?.now ?? this.elapsedTimeMs);
+    this.cameraRig?.syncLayers();
     this.updateHud();
   }
 
@@ -1296,6 +1338,7 @@ export class HubScene extends Phaser.Scene {
 
     this.updateProximityState();
     this.syncVisuals();
+    this.weaponRig?.sync(false, this.time?.now ?? this.elapsedTimeMs);
     this.cameraRig?.syncLayers();
     this.updateHud();
   }
@@ -1343,6 +1386,7 @@ export class HubScene extends Phaser.Scene {
   }
 
   private cleanupScene(): void {
+    this.lastFootstepFrame = -1;
     if (this.resizeHandler) {
       this.scale.off('resize', this.resizeHandler);
       this.resizeHandler = undefined;
