@@ -92,4 +92,5 @@
 | T-088 | Atualizar `CombatVfx.ts` (24 frames + `playFootstepDust`), sincronizar `HeroWeaponRig.ts` por frame/estado real e tornar movimentação/combate fluidos na `DungeonScene.ts` (sem travar passos no ataque automático + animação/swing em skills) (tam. M) | M5 | AG01 (Gameplay) | feita |
 | T-089 | Refinar movimentação e passos fluidos na `HubScene.ts` (sem flicker `idle`/`walk`, `HeroWeaponRig` sincronizado, poeira de passos e fallback de 24 frames) (tam. P) | M5 | AG02 (UI) | feita |
 | T-090 | Atualizar `tests/e2e/m5-hero.spec.ts` para 24 frames (`1920×80`) e verificação real de variação entre frames de passos/ataque/dash, rodar suíte 3× e atualizar `docs/qa/qa-M5.md` (tam. P) | M5 | AG03 (QA) + AG00 (Líder) | feita (passa com ressalva: CI/Playwright pendente sem Node local) |
+| T-091 | Invalidar cache antigo do Service Worker (`CACHE_NAME`) e usar `networkFirst` para `/assets/` sem hash em `public/sw.js` para evitar sprites antigos em cache no mobile (tam. P) | M5 | AG10 (Plataforma) | feita |
 
