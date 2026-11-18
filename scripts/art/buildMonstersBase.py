@@ -9,8 +9,10 @@ ao lado do Heroi (hero_living_base.png).
 
 from __future__ import annotations
 
+from collections import deque
 import math
 import struct
+import subprocess
 import zlib
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -957,143 +959,143 @@ def build_wolf_alpha_base() -> Canvas:
 # 7. KARNAK (Demonio escuro/vermelho com machado grande, maior que o Heroi)
 # ---------------------------------------------------------------------------
 
+def _ensure_karnak_ref_png() -> Path:
+    ref_png = MONSTERS_DIR / "karnak_ref.png"
+    if ref_png.exists():
+        return ref_png
+    ref_jpg = MONSTERS_DIR / "karnak_ref.jpg"
+    if not ref_jpg.exists():
+        raise FileNotFoundError(f"Referencia nao encontrada: {ref_jpg}")
+    ps = (
+        "Add-Type -AssemblyName System.Drawing; "
+        f"$img = [System.Drawing.Image]::FromFile('{ref_jpg}'); "
+        f"$img.Save('{ref_png}', [System.Drawing.Imaging.ImageFormat]::Png); "
+        "$img.Dispose()"
+    )
+    subprocess.run(["powershell", "-NoProfile", "-Command", ps], check=True)
+    return ref_png
+
+
 def build_karnak_base() -> Canvas:
-    pal_skin: Pal4 = (
-        (48, 10, 14),
-        (86, 18, 24),
-        (132, 32, 38),
-        (176, 54, 58),
-    )
-    pal_skin_dark = dim_palette(pal_skin, 0.72)
-    pal_armor: Pal4 = (
-        (20, 18, 24),
-        (38, 34, 46),
-        (60, 54, 70),
-        (88, 80, 102),
-    )
-    pal_horn: Pal4 = (
-        (46, 38, 36),
-        (78, 66, 62),
-        (118, 102, 94),
-        (160, 142, 130),
-    )
-    pal_axe_blade: Pal4 = (
-        (34, 34, 42),
-        (62, 62, 74),
-        (104, 106, 122),
-        (168, 174, 194),
-    )
-    pal_axe_haft: Pal4 = (
-        (30, 18, 16),
-        (54, 32, 28),
-        (82, 50, 42),
-        (112, 72, 60),
-    )
+    ref = read_png(_ensure_karnak_ref_png())
+    w, h = ref.w, ref.h
+    bg_r, bg_g, bg_b, _ = ref.get(0, 0)
 
-    # 1. Camada traseira: perna direita + braco esquerdo segurando o cabo
-    back = Canvas(FW, FH)
-    draw_capsule(back, (46, 50), (48, 62), 3.6, 3.0, pal_skin_dark)
-    draw_capsule(back, (48, 62), (49, 73), 3.0, 2.8, pal_armor)
-    draw_ellipse(back, 50.5, 74.5, 4.2, 2.0, pal_armor)
-    # Braco esquerdo (fundo) alcancando o cabo do machado
-    draw_capsule(back, (50, 31), (55, 37), 3.4, 2.8, pal_skin_dark)
-    draw_capsule(back, (55, 37), (52, 41), 2.8, 2.5, pal_armor)
-    back_out = add_outline(back, OUTLINE)
+    # 1. Flood-fill do fundo cinza a partir das bordas (incluindo sombra do chao)
+    bg_mask = bytearray(w * h)
+    q: deque[Tuple[int, int]] = deque()
+    for x in range(w):
+        q.append((x, 0))
+        q.append((x, h - 1))
+    for y in range(h):
+        q.append((0, y))
+        q.append((w - 1, y))
 
-    # 2. Camada principal: corpo demoníaco, armadura, perna frontal, chifres
-    body = Canvas(FW, FH)
-    # Perna esquerda (frontal)
-    draw_capsule(body, (33, 50), (31, 62), 3.8, 3.2, pal_skin)
-    draw_capsule(body, (31, 62), (30, 73), 3.2, 2.9, pal_armor)
-    draw_ellipse(body, 29.5, 74.5, 4.3, 2.0, pal_armor)
+    def is_bg_pixel(x: int, y: int) -> bool:
+        r, g, b, _ = ref.get(x, y)
+        chroma = max(r, g, b) - min(r, g, b)
+        if abs(r - bg_r) <= 22 and abs(g - bg_g) <= 22 and abs(b - bg_b) <= 22 and chroma <= 18:
+            return True
+        if y >= 880 and r <= 65 and g <= 68 and b <= 72 and chroma <= 16:
+            if not (r <= 14 and g <= 14 and b <= 16):
+                return True
+        return False
 
-    # Tanga/saiote e cinto de guerra
-    draw_polygon_shaded(body, [(28, 47), (51, 47), (53, 57), (26, 57)], pal_armor)
-    draw_capsule(body, (29, 47), (50, 47), 2.4, 2.4, pal_armor)
-    # Fivela carmesim no cinto
-    for bx in range(38, 43):
-        for by in range(46, 49):
-            body.put(bx, by, (195, 38, 42, 255))
+    while q:
+        x, y = q.popleft()
+        idx = y * w + x
+        if bg_mask[idx] or not is_bg_pixel(x, y):
+            continue
+        bg_mask[idx] = 1
+        if x > 0:
+            q.append((x - 1, y))
+        if x < w - 1:
+            q.append((x + 1, y))
+        if y > 0:
+            q.append((x, y - 1))
+        if y < h - 1:
+            q.append((x, y + 1))
 
-    # Tronco largo e musculoso
-    draw_capsule(body, (39, 31), (40, 45), 9.6, 8.2, pal_skin)
-    draw_ellipse(body, 36.0, 34.0, 5.0, 4.2, pal_skin)
-    draw_ellipse(body, 44.0, 34.0, 4.8, 4.2, pal_skin)
+    # 2. Remove pequenos bolsoes internos fechados com a cor exata do fundo cinza
+    for y in range(h):
+        for x in range(w):
+            idx = y * w + x
+            if bg_mask[idx]:
+                continue
+            r, g, b, _ = ref.get(x, y)
+            if 40 <= r <= 52 and 44 <= g <= 56 and 48 <= b <= 62 and (max(r, g, b) - min(r, g, b)) <= 12:
+                bg_mask[idx] = 1
 
-    # Ombreiras de ferro negro com pontas
-    draw_ellipse(body, 28.0, 30.0, 4.8, 3.8, pal_armor)
-    draw_polygon_shaded(body, [(25, 29), (21, 23), (29, 26)], pal_armor)
-    draw_ellipse(body, 51.0, 30.0, 4.6, 3.8, pal_armor)
-    draw_polygon_shaded(body, [(50, 26), (57, 23), (54, 29)], pal_armor)
+    # 3. Bounding box do foreground
+    xs = [x for y in range(h) for x in range(w) if not bg_mask[y * w + x]]
+    ys = [y for y in range(h) for x in range(w) if not bg_mask[y * w + x]]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+    fg_w = max_x - min_x + 1
+    fg_h = max_y - min_y + 1
 
-    # Cabeca demoníaca e chifres grandes (topo em y=2, altura total ~75 px)
-    draw_capsule(body, (39, 23), (40, 27), 4.0, 4.5, pal_skin)
-    draw_ellipse(body, 40.0, 19.0, 6.4, 5.8, pal_skin)
+    # 4. Downscale crisp para 96x96 (altura ~84px > Heroi 68px, cascos em y=91, chao em y=92)
+    out_w, out_h = 96, 96
+    target_h = 84
+    target_w = max(1, round(fg_w * (target_h / fg_h)))
+    dx0 = (out_w - target_w) // 2
+    dy0 = 92 - target_h
 
-    # Chifres curvos
-    draw_capsule(body, (35, 15), (30, 9), 2.4, 1.7, pal_horn)
-    draw_capsule(body, (30, 9), (28, 3), 1.6, 0.9, pal_horn)
-    draw_capsule(body, (45, 15), (50, 9), 2.4, 1.7, pal_horn)
-    draw_capsule(body, (50, 9), (52, 3), 1.6, 0.9, pal_horn)
+    raw_cv = Canvas(out_w, out_h)
+    for ty in range(target_h):
+        sy0 = min_y + int(ty * fg_h / target_h)
+        sy1 = min(max_y + 1, min_y + max(sy0 - min_y + 1, int((ty + 1) * fg_h / target_h)))
+        for tx in range(target_w):
+            sx0 = min_x + int(tx * fg_w / target_w)
+            sx1 = min(max_x + 1, min_x + max(sx0 - min_x + 1, int((tx + 1) * fg_w / target_w)))
 
-    # Olhos incandescentes + sobrancelha franzida escura
-    for bx in range(36, 45):
-        body.put(bx, 17, (34, 8, 10, 255))
-    for ex in (37, 42):
-        body.put(ex, 18, (255, 140, 20, 255))
-        body.put(ex + 1, 18, (255, 235, 110, 255))
-        body.put(ex, 19, (255, 200, 50, 255))
-        body.put(ex + 1, 19, (255, 255, 220, 255))
+            fg_cols: List[Tuple[int, int, int, int]] = []
+            total = 0
+            for sy in range(sy0, sy1):
+                for sx in range(sx0, sx1):
+                    total += 1
+                    if not bg_mask[sy * w + sx]:
+                        r, g, b, _ = ref.get(sx, sy)
+                        fg_cols.append((r + g + b, r, g, b))
 
-    # Boca escura e presas inferiores
-    for mx in range(38, 43):
-        body.put(mx, 22, (28, 8, 12, 255))
-    body.put(38, 21, (242, 236, 225, 255))
-    body.put(42, 21, (242, 236, 225, 255))
+            if not fg_cols or len(fg_cols) < total * 0.36:
+                continue
 
-    body_out = add_outline(body, OUTLINE)
+            non_halo = [
+                c for c in fg_cols
+                if not (34 <= c[1] <= 58 and 38 <= c[2] <= 62 and 42 <= c[3] <= 66 and (max(c[1], c[2], c[3]) - min(c[1], c[2], c[3])) <= 14)
+            ]
+            pool = non_halo if non_halo else fg_cols
+            pool.sort(key=lambda c: c[0])
 
-    # 3. Camada frontal: machado gigante + braco direito (frontal)
-    front = Canvas(FW, FH)
-    # Cabo longo diagonal do machado
-    draw_capsule(front, (29, 60), (63, 22), 1.6, 1.6, pal_axe_haft)
+            darks = [c for c in pool if c[0] < 54]
+            if len(darks) >= len(pool) * 0.55:
+                chosen = darks[len(darks) // 2]
+                col = OUTLINE if chosen[0] < 42 else (chosen[1], chosen[2], chosen[3], 255)
+            else:
+                chosen = pool[len(pool) // 2]
+                col = (chosen[1], chosen[2], chosen[3], 255)
 
-    # Cabeca do machado: esporao traseiro + lamina crescente de guerra
-    draw_polygon_shaded(front, [(58, 22), (52, 17), (56, 26)], pal_axe_blade)
-    axe_pts = [
-        (59, 21),
-        (58, 15),
-        (68, 9),
-        (74, 15),
-        (76, 24),
-        (72, 33),
-        (67, 36),
-        (63, 28),
-        (59, 25),
-    ]
-    draw_polygon_shaded(front, axe_pts, pal_axe_blade)
-    # Fio brilhante na borda externa crescente da lamina
-    for fx, fy in (
-        (68, 10), (70, 12), (72, 14), (74, 16), (75, 19),
-        (75, 22), (75, 25), (74, 28), (72, 31), (70, 33), (68, 35),
-    ):
-        front.put(fx, fy, (224, 230, 244, 255))
-    # Detalhe carmesim no nucleo da lamina
-    for rx, ry in ((64, 21), (65, 21), (64, 22), (65, 22)):
-        front.put(rx, ry, (185, 32, 38, 255))
+            raw_cv.put(dx0 + tx, dy0 + ty, col)
 
-    # Braco direito (frontal) segurando o cabo
-    draw_capsule(front, (27, 32), (30, 42), 3.6, 3.0, pal_skin)
-    draw_capsule(front, (30, 42), (37, 48), 3.0, 2.7, pal_armor)
-    draw_ellipse(front, 38.0, 48.0, 2.8, 2.5, pal_skin)
+    cleaned = remove_isolated_pixels(raw_cv)
 
-    front_out = add_outline(front, OUTLINE)
+    # 5. Limpa halo residual nas bordas externas e garante contorno 1px escuro
+    final_cv = cleaned.copy()
+    for y in range(out_h):
+        for x in range(out_w):
+            c = cleaned.get(x, y)
+            if c[3] == 0:
+                continue
+            is_edge = False
+            for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                if not (0 <= nx < out_w and 0 <= ny < out_h) or cleaned.get(nx, ny)[3] == 0:
+                    is_edge = True
+                    break
+            if is_edge and (c[0] + c[1] + c[2]) <= 120:
+                final_cv.put(x, y, OUTLINE)
 
-    res = Canvas(FW, FH)
-    res.composite(back_out)
-    res.composite(body_out)
-    res.composite(front_out)
-    return remove_isolated_pixels(res)
+    return final_cv
 
 
 # ---------------------------------------------------------------------------
@@ -1151,8 +1153,10 @@ def build_comparison_sheet(
 ) -> Canvas:
     cols = 3
     rows = max(1, (len(entries) + cols - 1) // cols)
-    cell_w = FW * scale + 28
-    cell_h = FH * scale + 42
+    box_dim_w = max(spr.w for _, spr in entries)
+    box_dim_h = max(spr.h for _, spr in entries)
+    cell_w = box_dim_w * scale + 28
+    cell_h = box_dim_h * scale + 42
     pad = 16
     total_w = cols * cell_w + (cols + 1) * pad
     total_h = rows * cell_h + (rows + 1) * pad + 24
@@ -1160,6 +1164,7 @@ def build_comparison_sheet(
     sheet = Canvas(total_w, total_h, (24, 26, 34, 255))
     draw_text(sheet, pad, 8, title, (235, 225, 195, 255), scale=2)
 
+    guide_foot_y = box_dim_h - 4
     for idx, (label, spr) in enumerate(entries):
         c = idx % cols
         r = idx // cols
@@ -1167,8 +1172,8 @@ def build_comparison_sheet(
         y0 = 28 + pad + r * (cell_h + pad)
 
         # Fundo xadrez neutro dentro da celula
-        box_w = FW * scale
-        box_h = FH * scale
+        box_w = box_dim_w * scale
+        box_h = box_dim_h * scale
         bx0 = x0 + (cell_w - box_w) // 2
         by0 = y0 + 24
         for py in range(box_h):
@@ -1177,20 +1182,23 @@ def build_comparison_sheet(
                 bg = (54, 58, 68, 255) if checker else (44, 47, 56, 255)
                 sheet.put(bx0 + px, by0 + py, bg)
 
-        # Linha guia do chao (y = 76)
-        gy = by0 + FOOT_Y * scale
+        # Linha guia do chao (alinhada para 80x80 y=76 e 96x96 y=92)
+        gy = by0 + guide_foot_y * scale
         for px in range(box_w):
             sheet.put(bx0 + px, gy, (110, 180, 120, 255))
 
-        # Sprite ampliado nearest-neighbor
-        for sy in range(FH):
-            for sx in range(FW):
+        # Sprite ampliado nearest-neighbor alinhado pelo centro X e linha do chao
+        spr_foot_y = spr.h - 4
+        ox = (box_dim_w - spr.w) // 2
+        oy = guide_foot_y - spr_foot_y
+        for sy in range(spr.h):
+            for sx in range(spr.w):
                 col = spr.get(sx, sy)
                 if col[3] == 0:
                     continue
                 for dy in range(scale):
                     for dx in range(scale):
-                        sheet.blend_pixel(bx0 + sx * scale + dx, by0 + sy * scale + dy, col)
+                        sheet.blend_pixel(bx0 + (ox + sx) * scale + dx, by0 + (oy + sy) * scale + dy, col)
 
         draw_text(sheet, bx0, y0 + 4, label, (220, 230, 245, 255), scale=2)
 
