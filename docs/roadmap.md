@@ -10,4 +10,5 @@
 | M6 | v0.6.0 | Inimigos | Refatoração Pixel Art detalhada de todos os monstros e Bosses (Limo, Morcego, Esqueleto c/ escudo, Arauto e Carcereiro Infernal) com animações de `idle`, `walk`, `attack` e `hit` |
 | M7 | v0.7.0 | Mapas | Cenários 2.5D top-down com paredes/arcos rúnicos, pisos variados, props (tochas animadas, destroços, pilares, baús) e iluminação dinâmica para Vila, Gruta, Mina, Selo e Submundo |
 | M8 | v0.8.0 | UI | Refatoração visual de HUD, modais, barras de vida, ícones 2D de alta qualidade e retratos 2D estilizados alinhados aos mockups de referência |
-| M9 | v0.9.0 | Fenda Diária e Profundezas | Semente diária de 24h determinística, card compartilhável de resultado e modo infinito com modificadores |
+| M9 | v0.9.0 | Polimento e Melhoramento do Combate | Expansão de armas, tipos distintos com animações próprias e polimento geral do combate (escopo detalhado a definir pelo dono) |
+| M10 | v0.10.0 | Fenda Diária e Profundezas | Semente diária de 24h determinística, card compartilhável de resultado e modo infinito com modificadores |
