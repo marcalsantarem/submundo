@@ -1033,14 +1033,16 @@ export class DungeonScene extends Phaser.Scene {
         }
 
         case 'hero_damaged': {
-          soundManager.play('hit_player');
-          this.vfx.showDamageNumber(
-            event.position.x,
-            event.position.y,
-            event.value ?? 1,
-            false,
-            true
-          );
+          if (!this.isTestArena) {
+            soundManager.play('hit_player');
+            this.vfx.showDamageNumber(
+              event.position.x,
+              event.position.y,
+              event.value ?? 1,
+              false,
+              true
+            );
+          }
           const attacker = this.monsters.find(
             (m) => m.instanceId === event.sourceId
           );
@@ -1075,6 +1077,11 @@ export class DungeonScene extends Phaser.Scene {
               this.spawnRangedArrow(attacker.position, this.hero.position);
             }
           }
+          if (this.isTestArena) {
+            this.hero.hp = this.hero.maxHp;
+            this.hero.isAlive = true;
+            break;
+          }
           this.playHeroActionAnim('hit');
           if (this.heroSprite && this.hero.isAlive) {
             this.heroSprite.setTint(0xfca5a5);
@@ -1088,6 +1095,11 @@ export class DungeonScene extends Phaser.Scene {
         }
 
         case 'hero_killed': {
+          if (this.isTestArena) {
+            this.hero.hp = this.hero.maxHp;
+            this.hero.isAlive = true;
+            return;
+          }
           this.cancelHeroActionAnim();
           this.lastHeroFootstepFrame = -1;
           this.heroSprite?.stop();

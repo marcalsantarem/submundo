@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = ROOT / "assets" / "sprites_src"
 MONSTERS_DIR = SRC_DIR / "monsters"
 PREVIEW_PATH = ROOT / "assets" / "mockups" / "preview_monsters_5_base.png"
+PREVIEW_M6_PATH = ROOT / "assets" / "mockups" / "preview_m6_resize_and_bosses.png"
 
 FW, FH = 80, 80
 FOOT_Y = 76
@@ -413,14 +414,13 @@ def build_slime_base() -> Canvas:
         (126, 240, 92),  # hi top
     )
     cx, base_y = 40, FOOT_Y
-    top_y = 43
+    top_y = 60
 
-    # Domo gelatinoso bem arredondado (~44x33 px, estilo mockup)
+    # Domo gelatinoso compacto (~22x17 px, 50% do tamanho anterior)
     for py in range(top_y, base_y + 1):
-        t_y = (py - top_y) / float(base_y - top_y)  # 0 no topo, 1 na base
-        # Curva de cúpula: raiz quadrada no topo para ficar bem redondo, base larga
+        t_y = (py - top_y) / float(base_y - top_y)
         profile = math.sin(clamp(t_y, 0.0, 1.0) * math.pi * 0.56 + 0.14)
-        half_w = 22.0 * (profile ** 0.72)
+        half_w = 11.0 * (profile ** 0.72)
         if t_y > 0.85:
             half_w *= 1.0 - 0.10 * ((t_y - 0.85) / 0.15) ** 2
         for px in range(int(cx - half_w - 1), int(cx + half_w + 2)):
@@ -430,46 +430,35 @@ def build_slime_base() -> Canvas:
                 nx = dx / max(1.0, half_w)
                 ny = (t_y - 0.38) * 1.35
                 shade = (-0.48 * nx - 0.82 * ny) + 0.22 * (1.0 - abs(nx))
-                if py >= wave_y - 2.0:
+                if py >= wave_y - 1.0:
                     col = pal_slime[0]
-                elif py >= wave_y - 5.0 and shade < 0.05:
+                elif py >= wave_y - 3.0 and shade < 0.05:
                     col = pal_slime[1]
                 else:
                     col = pick_tone(shade, pal_slime)
                 body.put(px, py, rgba(col))
 
     # Gotinha lateral esquerda na base
-    draw_ellipse(body, 17.5, 73.5, 2.8, 2.0, pal_slime)
+    draw_ellipse(body, 28.0, 74.5, 1.5, 1.1, pal_slime)
 
-    # Reflexos especulares suaves em arco no topo-esquerdo (estilo mockup)
+    # Reflexos especulares suaves no topo-esquerdo
     spec_hi = (210, 255, 195, 255)
     spec_bright = (255, 255, 255, 255)
-    for sx, sy in (
-        (29, 47), (30, 46), (31, 46), (32, 46), (33, 46), (34, 47),
-        (27, 49), (28, 48), (29, 48), (27, 50), (26, 51),
-        (48, 48), (49, 49),
-    ):
+    for sx, sy in ((34, 63), (35, 62), (36, 62), (37, 62), (33, 64), (33, 65), (44, 63)):
         body.put(sx, sy, spec_hi)
-    for sx, sy in ((30, 47), (31, 47), (32, 47), (28, 49)):
+    for sx, sy in ((35, 63), (36, 63)):
         body.put(sx, sy, spec_bright)
 
-    # Bolhas internas sutis (apenas 1 tom mais claro, sem contorno)
-    for bx, by in ((27, 63), (51, 61)):
-        body.put(bx, by, rgba(pal_slime[3]))
-        body.put(bx + 1, by, rgba(pal_slime[3]))
-        body.put(bx, by + 1, rgba(pal_slime[2]))
-
-    # Rosto expressivo 3/4 para a direita (olhos + boca rabugenta como no mockup)
+    # Olhos e boca expressivos, nitidos na escala menor
     eye_dark = (10, 22, 12, 255)
-    for ex, ey in ((36, 58), (47, 58)):
-        for dy in range(-2, 3):
-            for dx in range(-1, 2):
-                if abs(dx) + abs(dy) <= 2:
-                    body.put(ex + dx, ey + dy, eye_dark)
-        body.put(ex - 1, ey - 1, spec_bright)
+    for ex, ey in ((38, 68), (44, 68)):
+        body.put(ex, ey, spec_bright)
+        body.put(ex + 1, ey, eye_dark)
+        body.put(ex, ey + 1, eye_dark)
+        body.put(ex + 1, ey + 1, eye_dark)
 
-    # Boca curvada para baixo (estilo slime do mockup)
-    for mx, my in ((38, 66), (39, 65), (40, 64), (41, 64), (42, 64), (43, 64), (44, 65), (45, 66)):
+    # Boca curvada para baixo
+    for mx, my in ((39, 72), (40, 71), (41, 71), (42, 71), (43, 72)):
         body.put(mx, my, eye_dark)
 
     return remove_isolated_pixels(add_outline(body, OUTLINE))
@@ -506,70 +495,65 @@ def build_cave_bat_base() -> Canvas:
     )
 
     wings = Canvas(FW, FH)
-    # Asa esquerda (mais aberta, perspectiva 3/4)
+    # Asa esquerda (~30x20 px total do morcego, centralizado no ar em y~44)
     left_wing_pts = [
-        (34, 42), (24, 30), (11, 26), (9, 36),
-        (14, 48), (19, 43), (24, 51), (29, 46), (34, 52),
+        (37, 44), (32, 38), (25, 36), (25, 41),
+        (27, 47), (30, 45), (33, 49), (36, 46),
     ]
     draw_polygon_shaded(wings, left_wing_pts, pal_membrane)
-    # Asa direita (recolhida atras)
+    # Asa direita
     right_wing_pts = [
-        (46, 42), (56, 29), (68, 26), (71, 36),
-        (66, 47), (61, 42), (56, 50), (51, 45), (46, 51),
+        (43, 44), (48, 38), (55, 36), (55, 41),
+        (53, 47), (50, 45), (47, 49), (44, 46),
     ]
     draw_polygon_shaded(wings, right_wing_pts, dim_palette(pal_membrane, 0.85))
 
-    # Ossos/dedos das asas
-    draw_capsule(wings, (34, 42), (24, 30), 2.0, 1.5, pal_wing_bone)
-    draw_capsule(wings, (24, 30), (11, 26), 1.5, 1.1, pal_wing_bone)
-    draw_capsule(wings, (24, 30), (14, 47), 1.2, 0.8, pal_wing_bone)
-    draw_capsule(wings, (24, 30), (24, 50), 1.2, 0.8, pal_wing_bone)
+    # Ossos finos das asas
+    draw_capsule(wings, (37, 44), (32, 38), 1.0, 0.8, pal_wing_bone)
+    draw_capsule(wings, (32, 38), (25, 36), 0.9, 0.6, pal_wing_bone)
+    draw_line(wings, (32, 38), (27, 46), rgba(pal_wing_bone[2]))
+    draw_line(wings, (32, 38), (33, 48), rgba(pal_wing_bone[1]))
 
     bone_r = dim_palette(pal_wing_bone, 0.88)
-    draw_capsule(wings, (46, 42), (56, 29), 2.0, 1.5, bone_r)
-    draw_capsule(wings, (56, 29), (68, 26), 1.5, 1.1, bone_r)
-    draw_capsule(wings, (56, 29), (66, 46), 1.2, 0.8, bone_r)
-    draw_capsule(wings, (56, 29), (56, 49), 1.2, 0.8, bone_r)
+    draw_capsule(wings, (43, 44), (48, 38), 1.0, 0.8, bone_r)
+    draw_capsule(wings, (48, 38), (55, 36), 0.9, 0.6, bone_r)
+    draw_line(wings, (48, 38), (53, 46), rgba(bone_r[2]))
+    draw_line(wings, (48, 38), (47, 48), rgba(bone_r[1]))
 
     # Garrinhas no topo das asas
     claw_col = (218, 212, 198, 255)
-    wings.put(24, 27, claw_col)
-    wings.put(24, 28, claw_col)
-    wings.put(56, 26, claw_col)
-    wings.put(56, 27, claw_col)
+    wings.put(32, 37, claw_col)
+    wings.put(48, 37, claw_col)
 
     wings_out = add_outline(wings, OUTLINE)
 
     body = Canvas(FW, FH)
-    # Pés/garras inferiores
-    draw_capsule(body, (37, 54), (35, 60), 1.3, 1.0, pal_wing_bone)
-    draw_capsule(body, (43, 54), (45, 60), 1.3, 1.0, pal_wing_bone)
+    # Pes/garras inferiores
+    draw_line(body, (38, 50), (37, 53), rgba(pal_wing_bone[2]))
+    draw_line(body, (42, 50), (43, 53), rgba(pal_wing_bone[2]))
 
     # Tronco peludo
-    draw_ellipse(body, 40.0, 47.0, 7.6, 8.5, pal_fur)
-    draw_ellipse(body, 40.5, 45.0, 4.6, 4.2, (pal_fur[1], pal_fur[2], pal_fur[3], (148, 124, 186)))
+    draw_ellipse(body, 40.0, 46.5, 4.0, 4.3, pal_fur)
 
-    # Orelhas pontudas inclinadas para fora (sem pixels soltos)
-    draw_polygon_shaded(body, [(33, 35), (29, 21), (38, 28)], pal_fur)
-    draw_polygon_shaded(body, [(34, 33), (31, 24), (37, 29)], pal_ear_in)
-    draw_polygon_shaded(body, [(43, 28), (51, 21), (47, 35)], pal_fur)
-    draw_polygon_shaded(body, [(44, 29), (49, 24), (46, 33)], pal_ear_in)
+    # Orelhas pontudas
+    draw_polygon_shaded(body, [(36, 40), (34, 33), (39, 37)], pal_fur)
+    draw_polygon_shaded(body, [(41, 37), (46, 33), (44, 40)], pal_fur)
+    body.put(36, 37, rgba(pal_ear_in[2]))
+    body.put(44, 37, rgba(pal_ear_in[2]))
 
     # Cabeca
-    draw_ellipse(body, 40.5, 36.0, 7.4, 6.2, pal_fur)
+    draw_ellipse(body, 40.0, 40.5, 4.0, 3.2, pal_fur)
 
-    # Olhos vermelhos/ambar expressivos (2x2)
-    for ex, ey in ((37, 35), (43, 35)):
-        body.put(ex, ey, (215, 28, 28, 255))
-        body.put(ex + 1, ey, (255, 78, 36, 255))
-        body.put(ex, ey + 1, (255, 195, 70, 255))
-        body.put(ex + 1, ey + 1, (255, 235, 130, 255))
+    # Olhos vermelhos/ambar nitidos (2x1 cada)
+    body.put(37, 40, (220, 30, 30, 255))
+    body.put(38, 40, (255, 200, 70, 255))
+    body.put(42, 40, (255, 200, 70, 255))
+    body.put(43, 40, (220, 30, 30, 255))
 
-    # Focinho e presinhas brancas
-    body.put(40, 39, (28, 18, 40, 255))
-    body.put(41, 39, (28, 18, 40, 255))
-    body.put(38, 41, (245, 242, 236, 255))
-    body.put(43, 41, (245, 242, 236, 255))
+    # Focinho e presinhas
+    body.put(40, 42, (28, 18, 40, 255))
+    body.put(39, 43, (245, 242, 236, 255))
+    body.put(41, 43, (245, 242, 236, 255))
 
     body_out = add_outline(body, OUTLINE)
 
@@ -866,6 +850,253 @@ def build_skeleton_archer_base() -> Canvas:
 
 
 # ---------------------------------------------------------------------------
+# 6. WOLF ALPHA (Chefe da Matilha - maior que Wolf, pelagem marrom/vermelha)
+# ---------------------------------------------------------------------------
+
+def build_wolf_alpha_base() -> Canvas:
+    pal_fur: Pal4 = (
+        (48, 18, 16),
+        (86, 30, 24),
+        (132, 50, 34),
+        (176, 80, 50),
+    )
+    pal_fur_back = dim_palette(pal_fur, 0.70)
+    pal_mane: Pal4 = (
+        (72, 24, 20),
+        (120, 44, 30),
+        (168, 72, 46),
+        (212, 114, 72),
+    )
+    pal_claw: Pal4 = (
+        (90, 82, 78),
+        (135, 126, 120),
+        (185, 176, 168),
+        (226, 218, 210),
+    )
+
+    back = Canvas(FW, FH)
+    # Cauda felpuda grande erguida
+    draw_capsule(back, (18, 45), (10, 33), 4.6, 3.6, pal_fur)
+    draw_capsule(back, (10, 33), (6, 21), 3.6, 1.8, pal_mane)
+    # Pata traseira direita (fundo)
+    draw_capsule(back, (25, 51), (21, 63), 4.0, 2.6, pal_fur_back)
+    draw_capsule(back, (21, 63), (23, 74), 2.5, 2.0, pal_fur_back)
+    draw_ellipse(back, 24.5, 74.5, 3.2, 1.8, pal_fur_back)
+    # Pata dianteira direita (fundo)
+    draw_capsule(back, (52, 50), (55, 62), 3.6, 2.4, pal_fur_back)
+    draw_capsule(back, (55, 62), (57, 74), 2.3, 1.9, pal_fur_back)
+    draw_ellipse(back, 58.5, 74.5, 3.0, 1.8, pal_fur_back)
+    back_out = add_outline(back, OUTLINE)
+
+    front = Canvas(FW, FH)
+    # Torso robusto
+    draw_capsule(front, (21, 46), (48, 42), 8.6, 10.2, pal_fur)
+    # Juba e peito imponentes (mechas eriçadas no pescoco e ombros)
+    draw_ellipse(front, 49.0, 43.0, 8.2, 8.6, pal_mane)
+    draw_polygon_shaded(front, [(32, 39), (38, 28), (47, 34), (40, 43)], pal_fur)
+    draw_polygon_shaded(front, [(37, 37), (43, 24), (54, 31), (47, 42)], pal_fur)
+    draw_polygon_shaded(front, [(41, 38), (48, 26), (57, 34), (49, 44)], pal_mane)
+    draw_polygon_shaded(front, [(44, 46), (53, 52), (57, 42)], pal_mane)
+
+    # Pata traseira esquerda (frontal)
+    draw_capsule(front, (19, 49), (15, 62), 4.5, 2.8, pal_fur)
+    draw_capsule(front, (15, 62), (17, 74), 2.7, 2.2, pal_fur)
+    draw_ellipse(front, 18.5, 74.5, 3.4, 1.9, pal_mane)
+    draw_ellipse(front, 21.0, 75.0, 1.2, 0.9, pal_claw)
+
+    # Pata dianteira esquerda (frontal)
+    draw_capsule(front, (46, 49), (48, 62), 4.0, 2.6, pal_fur)
+    draw_capsule(front, (48, 62), (50, 74), 2.5, 2.0, pal_fur)
+    draw_ellipse(front, 51.5, 74.5, 3.2, 1.9, pal_mane)
+    draw_ellipse(front, 54.0, 75.0, 1.2, 0.9, pal_claw)
+
+    # Cabeca grande 3/4 para a direita
+    draw_ellipse(front, 56.5, 29.0, 8.2, 7.0, pal_fur)
+    # Orelhas pontudas grandes
+    draw_polygon_shaded(front, [(49, 25), (46, 14), (54, 21)], pal_fur)
+    draw_polygon_shaded(front, [(56, 23), (58, 13), (62, 23)], pal_fur)
+    front.put(49, 19, (180, 96, 86, 255))
+    front.put(58, 18, (180, 96, 86, 255))
+
+    # Focinho poderoso + mandibula rosnando
+    draw_capsule(front, (59, 29), (72, 30), 4.0, 2.4, pal_mane)
+    draw_capsule(front, (59, 34), (70, 35), 2.3, 1.6, pal_mane)
+    # Nariz preto
+    for nx, ny in ((73, 29), (73, 30), (72, 29)):
+        front.put(nx, ny, (16, 12, 14, 255))
+    # Boca com presas maiores
+    for mx in range(62, 71):
+        front.put(mx, 32, (130, 22, 28, 255))
+        front.put(mx, 33, (95, 16, 22, 255))
+    for fx in (64, 67, 70):
+        front.put(fx, 31, (248, 244, 236, 255))
+        front.put(fx, 32, (248, 244, 236, 255))
+
+    # Olho vermelho/ambar feroz 2x2
+    front.put(58, 26, (220, 36, 24, 255))
+    front.put(59, 26, (255, 190, 50, 255))
+    front.put(58, 27, (255, 95, 30, 255))
+    front.put(59, 27, (255, 240, 140, 255))
+
+    # Cicatriz de batalha na bochecha/focinho
+    scar_col = (232, 168, 152, 255)
+    front.put(56, 23, scar_col)
+    front.put(57, 24, scar_col)
+    front.put(61, 29, scar_col)
+    front.put(62, 30, scar_col)
+
+    front_out = add_outline(front, OUTLINE)
+
+    res = Canvas(FW, FH)
+    res.composite(back_out)
+    res.composite(front_out)
+    return remove_isolated_pixels(res)
+
+
+# ---------------------------------------------------------------------------
+# 7. KARNAK (Demonio escuro/vermelho com machado grande, maior que o Heroi)
+# ---------------------------------------------------------------------------
+
+def build_karnak_base() -> Canvas:
+    pal_skin: Pal4 = (
+        (48, 10, 14),
+        (86, 18, 24),
+        (132, 32, 38),
+        (176, 54, 58),
+    )
+    pal_skin_dark = dim_palette(pal_skin, 0.72)
+    pal_armor: Pal4 = (
+        (20, 18, 24),
+        (38, 34, 46),
+        (60, 54, 70),
+        (88, 80, 102),
+    )
+    pal_horn: Pal4 = (
+        (46, 38, 36),
+        (78, 66, 62),
+        (118, 102, 94),
+        (160, 142, 130),
+    )
+    pal_axe_blade: Pal4 = (
+        (34, 34, 42),
+        (62, 62, 74),
+        (104, 106, 122),
+        (168, 174, 194),
+    )
+    pal_axe_haft: Pal4 = (
+        (30, 18, 16),
+        (54, 32, 28),
+        (82, 50, 42),
+        (112, 72, 60),
+    )
+
+    # 1. Camada traseira: perna direita + braco esquerdo segurando o cabo
+    back = Canvas(FW, FH)
+    draw_capsule(back, (46, 50), (48, 62), 3.6, 3.0, pal_skin_dark)
+    draw_capsule(back, (48, 62), (49, 73), 3.0, 2.8, pal_armor)
+    draw_ellipse(back, 50.5, 74.5, 4.2, 2.0, pal_armor)
+    # Braco esquerdo (fundo) alcancando o cabo do machado
+    draw_capsule(back, (50, 31), (55, 37), 3.4, 2.8, pal_skin_dark)
+    draw_capsule(back, (55, 37), (52, 41), 2.8, 2.5, pal_armor)
+    back_out = add_outline(back, OUTLINE)
+
+    # 2. Camada principal: corpo demoníaco, armadura, perna frontal, chifres
+    body = Canvas(FW, FH)
+    # Perna esquerda (frontal)
+    draw_capsule(body, (33, 50), (31, 62), 3.8, 3.2, pal_skin)
+    draw_capsule(body, (31, 62), (30, 73), 3.2, 2.9, pal_armor)
+    draw_ellipse(body, 29.5, 74.5, 4.3, 2.0, pal_armor)
+
+    # Tanga/saiote e cinto de guerra
+    draw_polygon_shaded(body, [(28, 47), (51, 47), (53, 57), (26, 57)], pal_armor)
+    draw_capsule(body, (29, 47), (50, 47), 2.4, 2.4, pal_armor)
+    # Fivela carmesim no cinto
+    for bx in range(38, 43):
+        for by in range(46, 49):
+            body.put(bx, by, (195, 38, 42, 255))
+
+    # Tronco largo e musculoso
+    draw_capsule(body, (39, 31), (40, 45), 9.6, 8.2, pal_skin)
+    draw_ellipse(body, 36.0, 34.0, 5.0, 4.2, pal_skin)
+    draw_ellipse(body, 44.0, 34.0, 4.8, 4.2, pal_skin)
+
+    # Ombreiras de ferro negro com pontas
+    draw_ellipse(body, 28.0, 30.0, 4.8, 3.8, pal_armor)
+    draw_polygon_shaded(body, [(25, 29), (21, 23), (29, 26)], pal_armor)
+    draw_ellipse(body, 51.0, 30.0, 4.6, 3.8, pal_armor)
+    draw_polygon_shaded(body, [(50, 26), (57, 23), (54, 29)], pal_armor)
+
+    # Cabeca demoníaca e chifres grandes (topo em y=2, altura total ~75 px)
+    draw_capsule(body, (39, 23), (40, 27), 4.0, 4.5, pal_skin)
+    draw_ellipse(body, 40.0, 19.0, 6.4, 5.8, pal_skin)
+
+    # Chifres curvos
+    draw_capsule(body, (35, 15), (30, 9), 2.4, 1.7, pal_horn)
+    draw_capsule(body, (30, 9), (28, 3), 1.6, 0.9, pal_horn)
+    draw_capsule(body, (45, 15), (50, 9), 2.4, 1.7, pal_horn)
+    draw_capsule(body, (50, 9), (52, 3), 1.6, 0.9, pal_horn)
+
+    # Olhos incandescentes + sobrancelha franzida escura
+    for bx in range(36, 45):
+        body.put(bx, 17, (34, 8, 10, 255))
+    for ex in (37, 42):
+        body.put(ex, 18, (255, 140, 20, 255))
+        body.put(ex + 1, 18, (255, 235, 110, 255))
+        body.put(ex, 19, (255, 200, 50, 255))
+        body.put(ex + 1, 19, (255, 255, 220, 255))
+
+    # Boca escura e presas inferiores
+    for mx in range(38, 43):
+        body.put(mx, 22, (28, 8, 12, 255))
+    body.put(38, 21, (242, 236, 225, 255))
+    body.put(42, 21, (242, 236, 225, 255))
+
+    body_out = add_outline(body, OUTLINE)
+
+    # 3. Camada frontal: machado gigante + braco direito (frontal)
+    front = Canvas(FW, FH)
+    # Cabo longo diagonal do machado
+    draw_capsule(front, (29, 60), (63, 22), 1.6, 1.6, pal_axe_haft)
+
+    # Cabeca do machado: esporao traseiro + lamina crescente de guerra
+    draw_polygon_shaded(front, [(58, 22), (52, 17), (56, 26)], pal_axe_blade)
+    axe_pts = [
+        (59, 21),
+        (58, 15),
+        (68, 9),
+        (74, 15),
+        (76, 24),
+        (72, 33),
+        (67, 36),
+        (63, 28),
+        (59, 25),
+    ]
+    draw_polygon_shaded(front, axe_pts, pal_axe_blade)
+    # Fio brilhante na borda externa crescente da lamina
+    for fx, fy in (
+        (68, 10), (70, 12), (72, 14), (74, 16), (75, 19),
+        (75, 22), (75, 25), (74, 28), (72, 31), (70, 33), (68, 35),
+    ):
+        front.put(fx, fy, (224, 230, 244, 255))
+    # Detalhe carmesim no nucleo da lamina
+    for rx, ry in ((64, 21), (65, 21), (64, 22), (65, 22)):
+        front.put(rx, ry, (185, 32, 38, 255))
+
+    # Braco direito (frontal) segurando o cabo
+    draw_capsule(front, (27, 32), (30, 42), 3.6, 3.0, pal_skin)
+    draw_capsule(front, (30, 42), (37, 48), 3.0, 2.7, pal_armor)
+    draw_ellipse(front, 38.0, 48.0, 2.8, 2.5, pal_skin)
+
+    front_out = add_outline(front, OUTLINE)
+
+    res = Canvas(FW, FH)
+    res.composite(back_out)
+    res.composite(body_out)
+    res.composite(front_out)
+    return remove_isolated_pixels(res)
+
+
+# ---------------------------------------------------------------------------
 # Prancha de Comparação 3x (Heroi + 5 Monstros)
 # ---------------------------------------------------------------------------
 
@@ -894,6 +1125,7 @@ FONT_3X5: Dict[str, Tuple[str, ...]] = {
     "W": ("101", "101", "101", "111", "101"),
     "X": ("101", "101", "010", "101", "101"),
     "Y": ("101", "101", "010", "010", "010"),
+    "Z": ("111", "001", "010", "100", "111"),
     "_": ("000", "000", "000", "000", "111"),
     " ": ("000", "000", "000", "000", "000"),
 }
@@ -912,9 +1144,13 @@ def draw_text(cv: Canvas, x: int, y: int, text: str, col: Color, scale: int = 2)
         cx += 4 * scale
 
 
-def build_comparison_sheet(entries: Sequence[Tuple[str, Canvas]], scale: int = 3) -> Canvas:
+def build_comparison_sheet(
+    entries: Sequence[Tuple[str, Canvas]],
+    scale: int = 3,
+    title: str = "HEROI VS 5 MONSTROS BASE",
+) -> Canvas:
     cols = 3
-    rows = 2
+    rows = max(1, (len(entries) + cols - 1) // cols)
     cell_w = FW * scale + 28
     cell_h = FH * scale + 42
     pad = 16
@@ -922,7 +1158,7 @@ def build_comparison_sheet(entries: Sequence[Tuple[str, Canvas]], scale: int = 3
     total_h = rows * cell_h + (rows + 1) * pad + 24
 
     sheet = Canvas(total_w, total_h, (24, 26, 34, 255))
-    draw_text(sheet, pad, 8, "HEROI VS 5 MONSTROS BASE", (235, 225, 195, 255), scale=2)
+    draw_text(sheet, pad, 8, title, (235, 225, 195, 255), scale=2)
 
     for idx, (label, spr) in enumerate(entries):
         c = idx % cols
@@ -965,12 +1201,22 @@ def main() -> None:
     MONSTERS_DIR.mkdir(parents=True, exist_ok=True)
     hero = read_png(SRC_DIR / "hero_living_base.png")
 
+    slime = build_slime_base()
+    cave_bat = build_cave_bat_base()
+    wolf = build_wolf_base()
+    skeleton = build_skeleton_base()
+    skeleton_archer = build_skeleton_archer_base()
+    wolf_alpha = build_wolf_alpha_base()
+    karnak = build_karnak_base()
+
     monsters: List[Tuple[str, Canvas]] = [
-        ("slime", build_slime_base()),
-        ("cave_bat", build_cave_bat_base()),
-        ("wolf", build_wolf_base()),
-        ("skeleton", build_skeleton_base()),
-        ("skeleton_archer", build_skeleton_archer_base()),
+        ("slime", slime),
+        ("cave_bat", cave_bat),
+        ("wolf", wolf),
+        ("skeleton", skeleton),
+        ("skeleton_archer", skeleton_archer),
+        ("wolf_alpha", wolf_alpha),
+        ("karnak", karnak),
     ]
 
     for name, cv in monsters:
@@ -978,9 +1224,21 @@ def main() -> None:
         write_png(out_path, cv)
         print(f"Gerado: {out_path} ({cv.w}x{cv.h})")
 
-    sheet = build_comparison_sheet([("hero_living", hero)] + monsters, scale=3)
+    sheet = build_comparison_sheet([("hero_living", hero)] + monsters[:5], scale=3)
     write_png(PREVIEW_PATH, sheet)
     print(f"Preview: {PREVIEW_PATH} ({sheet.w}x{sheet.h})")
+
+    m6_entries: List[Tuple[str, Canvas]] = [
+        ("hero_living", hero),
+        ("slime", slime),
+        ("cave_bat", cave_bat),
+        ("wolf", wolf),
+        ("wolf_alpha", wolf_alpha),
+        ("karnak", karnak),
+    ]
+    sheet_m6 = build_comparison_sheet(m6_entries, scale=3, title="RESIZE AND BOSSES")
+    write_png(PREVIEW_M6_PATH, sheet_m6)
+    print(f"Preview M6: {PREVIEW_M6_PATH} ({sheet_m6.w}x{sheet_m6.h})")
 
 
 if __name__ == "__main__":

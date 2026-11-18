@@ -95,4 +95,6 @@
 | T-091 | Invalidar cache antigo do Service Worker (`CACHE_NAME`) e usar `networkFirst` para `/assets/` sem hash em `public/sw.js` para evitar sprites antigos em cache no mobile (tam. P) | M5 | AG10 (Plataforma) | feita |
 | T-092 | Entrada direta em Dungeon de Teste escura (sala toda preta) apenas com o Herói na forma humana (`hero_living`, com movimentação/passos, câmera e arma), sem Hub/diálogos/monstros automáticos (tam. M) | M6 | AG07 (Arquiteto) + AG01 (Gameplay) | feita |
 | T-093 | Salvar dados e narrativa dos 5 novos monstros (*Slime*, *Morcego*, *Lobo*, *Esqueleto*, *Esqueleto Arqueiro*) em `src/data/monsters.json`, `docs/narrativa.md` e suporte a ataque à distância em `src/core/` (tam. M) | M6 | AG04 (Sistemas/Meta) + AG06 (Narrativa) | feita |
+| T-094 | Reduzir pela metade os sprites base de `slime` e `cave_bat` e criar sprites base dos 2 bosses (*Chefe da Matilha* `wolf_alpha` e *Karnak* `karnak`) + prancha de comparação para aprovação do dono (tam. M) | M6 | AG08 (Arte) | feita (aguardando aprovação do dono) |
+| T-095 | Tornar o Herói momentaneamente invencível na `testArena` (`DungeonScene.ts`) mantendo as animações de ataque e projéteis dos monstros para teste ingame (tam. P) | M6 | AG01 (Gameplay) | feita |
 
