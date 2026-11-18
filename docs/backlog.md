@@ -91,5 +91,5 @@
 | T-087 | Refazer animações dos spritesheets `80×80` do Herói (`hero_living.png` e `hero_wraith.png`, 24 frames `1920×80`: `idle` 4f, `walk` 6f com passos reais de pernas/braços/capa, `attack` 6f, `dash` 4f, `hit` 4f) em `scripts/art/buildHeroAndWeapons.py` + `manifest.json` e `docs/guia_visual.md` (tam. M) | M5 | AG08 (Arte) | feita |
 | T-088 | Atualizar `CombatVfx.ts` (24 frames + `playFootstepDust`), sincronizar `HeroWeaponRig.ts` por frame/estado real e tornar movimentação/combate fluidos na `DungeonScene.ts` (sem travar passos no ataque automático + animação/swing em skills) (tam. M) | M5 | AG01 (Gameplay) | feita |
 | T-089 | Refinar movimentação e passos fluidos na `HubScene.ts` (sem flicker `idle`/`walk`, `HeroWeaponRig` sincronizado, poeira de passos e fallback de 24 frames) (tam. P) | M5 | AG02 (UI) | feita |
-| T-090 | Atualizar `tests/e2e/m5-hero.spec.ts` para 24 frames (`1920×80`) e verificação real de variação entre frames de passos/ataque/dash, rodar suíte 3× e atualizar `docs/qa/qa-M5.md` (tam. P) | M5 | AG03 (QA) + AG00 (Líder) | a fazer |
+| T-090 | Atualizar `tests/e2e/m5-hero.spec.ts` para 24 frames (`1920×80`) e verificação real de variação entre frames de passos/ataque/dash, rodar suíte 3× e atualizar `docs/qa/qa-M5.md` (tam. P) | M5 | AG03 (QA) + AG00 (Líder) | feita (passa com ressalva: CI/Playwright pendente sem Node local) |
 

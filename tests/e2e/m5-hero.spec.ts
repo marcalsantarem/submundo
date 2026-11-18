@@ -11,6 +11,9 @@ interface DebugSpriteSnapshot {
     key: string;
   };
   flipX: boolean;
+  frame?: {
+    name: string | number;
+  };
   anims: {
     currentAnim: {
       key: string;
@@ -18,8 +21,8 @@ interface DebugSpriteSnapshot {
   };
 }
 
-test.describe('SUBMUNDO M5 — Hero 80x80 Spritesheets, Weapons & Animations (Living vs Wraith) E2E', () => {
-  test('validates v0.5.0 boot, hero_living/hero_wraith 80x80, weapons 48x48, HeroWeaponRig, 10 animations, Prologue/Act 1, and 4 PC/Mobile screenshots', async ({
+test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations (Living vs Wraith) E2E', () => {
+  test('validates v0.5.0 boot, hero_living/hero_wraith 1920x80 (24f), weapons 192x48, 10 animation frame counts, anti-sliding legs check, walk progression, HeroWeaponRig, Prologue/Act 1, and 4 PC/Mobile screenshots', async ({
     page,
   }) => {
     mkdirSync(SCREENSHOT_DIR, { recursive: true });
@@ -71,14 +74,18 @@ test.describe('SUBMUNDO M5 — Hero 80x80 Spritesheets, Weapons & Animations (Li
       );
     }
 
-    // 2. Validate v0.5.0, BootScene textures (hero_living & hero_wraith 1280x80, weapons 192x48), weaponRig, and 10 animations
+    // 2. Validate v0.5.0, BootScene textures (hero_living & hero_wraith 1920x80 24f, weapons 192x48), weaponRig, 10 animations & anti-sliding pixel diff
     const assetsAndAnimsCheck = await page.evaluate(() => {
       const hub = window.__SUBMUNDO_HUB_DEBUG__!;
       const scene = hub.scene as unknown as {
         textures: {
           exists: (key: string) => boolean;
           get: (key: string) => {
-            source: Array<{ width: number; height: number }>;
+            source: Array<{
+              width: number;
+              height: number;
+              image?: CanvasImageSource;
+            }>;
             frameTotal: number;
             getFrameNames: () => string[];
             get: (frame: number) => { width: number; height: number };
@@ -86,6 +93,7 @@ test.describe('SUBMUNDO M5 — Hero 80x80 Spritesheets, Weapons & Animations (Li
         };
         anims: {
           exists: (key: string) => boolean;
+          get: (key: string) => { frames: unknown[] } | undefined;
         };
         heroSprite: DebugSpriteSnapshot;
         weaponRig?: {
@@ -113,6 +121,76 @@ test.describe('SUBMUNDO M5 — Hero 80x80 Spritesheets, Weapons & Animations (Li
         };
       };
 
+      const measureLegsDiffRatio = (
+        textureKey: string,
+        frameA: number,
+        frameB: number
+      ): number => {
+        if (!scene.textures.exists(textureKey)) {
+          return -1;
+        }
+        const tex = scene.textures.get(textureKey);
+        const sourceImage = tex.source[0]?.image;
+        if (!sourceImage) {
+          return -1;
+        }
+
+        const frameWidth = 80;
+        const bandStartY = 50;
+        const bandEndY = 78;
+        const bandHeight = bandEndY - bandStartY + 1;
+        const canvas = document.createElement('canvas');
+        canvas.width = frameWidth;
+        canvas.height = bandHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return -1;
+        }
+
+        ctx.clearRect(0, 0, frameWidth, bandHeight);
+        ctx.drawImage(
+          sourceImage,
+          frameA * frameWidth,
+          bandStartY,
+          frameWidth,
+          bandHeight,
+          0,
+          0,
+          frameWidth,
+          bandHeight
+        );
+        const dataA = ctx.getImageData(0, 0, frameWidth, bandHeight).data;
+
+        ctx.clearRect(0, 0, frameWidth, bandHeight);
+        ctx.drawImage(
+          sourceImage,
+          frameB * frameWidth,
+          bandStartY,
+          frameWidth,
+          bandHeight,
+          0,
+          0,
+          frameWidth,
+          bandHeight
+        );
+        const dataB = ctx.getImageData(0, 0, frameWidth, bandHeight).data;
+
+        const totalPixels = frameWidth * bandHeight;
+        let diffPixels = 0;
+        for (let i = 0; i < dataA.length; i += 4) {
+          if (
+            Math.abs(dataA[i] - dataB[i]) > 2 ||
+            Math.abs(dataA[i + 1] - dataB[i + 1]) > 2 ||
+            Math.abs(dataA[i + 2] - dataB[i + 2]) > 2 ||
+            Math.abs(dataA[i + 3] - dataB[i + 3]) > 2
+          ) {
+            diffPixels += 1;
+          }
+        }
+
+        return diffPixels / totalPixels;
+      };
+
       const expectedAnims = [
         'hero_living_idle',
         'hero_living_walk',
@@ -129,6 +207,19 @@ test.describe('SUBMUNDO M5 — Hero 80x80 Spritesheets, Weapons & Animations (Li
       const animResults = Object.fromEntries(
         expectedAnims.map((key) => [key, scene.anims.exists(key)])
       );
+      const animFrameCounts = Object.fromEntries(
+        expectedAnims.map((key) => [
+          key,
+          scene.anims.get(key)?.frames.length ?? 0,
+        ])
+      );
+
+      const antiSliding = {
+        heroLivingWalk0VsWalk3: measureLegsDiffRatio('hero_living', 4, 7),
+        heroLivingIdle0VsAttack2: measureLegsDiffRatio('hero_living', 0, 12),
+        heroWraithWalk0VsWalk3: measureLegsDiffRatio('hero_wraith', 4, 7),
+        heroWraithIdle0VsAttack2: measureLegsDiffRatio('hero_wraith', 0, 12),
+      };
 
       const weaponSprite = scene.weaponRig?.weaponSprite;
 
@@ -139,6 +230,8 @@ test.describe('SUBMUNDO M5 — Hero 80x80 Spritesheets, Weapons & Animations (Li
         heroWraith: inspectTexture('hero_wraith'),
         weapons: inspectTexture('weapons'),
         animResults,
+        animFrameCounts,
+        antiSliding,
         hubHeroTexture: scene.heroSprite.texture.key,
         hubHeroAnim: scene.heroSprite.anims.currentAnim?.key ?? null,
         hubWeaponRig: weaponSprite
@@ -155,18 +248,18 @@ test.describe('SUBMUNDO M5 — Hero 80x80 Spritesheets, Weapons & Animations (Li
     expect(assetsAndAnimsCheck.title).toBe('SUBMUNDO v0.5.0');
     expect(assetsAndAnimsCheck.phase).toBe('prologue');
     expect(assetsAndAnimsCheck.heroLiving).toEqual({
-      width: 1280,
+      width: 1920,
       height: 80,
-      frameTotal: 17,
-      frameCount: 16,
+      frameTotal: 25,
+      frameCount: 24,
       frameWidth: 80,
       frameHeight: 80,
     });
     expect(assetsAndAnimsCheck.heroWraith).toEqual({
-      width: 1280,
+      width: 1920,
       height: 80,
-      frameTotal: 17,
-      frameCount: 16,
+      frameTotal: 25,
+      frameCount: 24,
       frameWidth: 80,
       frameHeight: 80,
     });
@@ -190,6 +283,30 @@ test.describe('SUBMUNDO M5 — Hero 80x80 Spritesheets, Weapons & Animations (Li
       hero_wraith_dash: true,
       hero_wraith_hit: true,
     });
+    expect(assetsAndAnimsCheck.animFrameCounts).toEqual({
+      hero_living_idle: 4,
+      hero_living_walk: 6,
+      hero_living_attack: 6,
+      hero_living_dash: 4,
+      hero_living_hit: 4,
+      hero_wraith_idle: 4,
+      hero_wraith_walk: 6,
+      hero_wraith_attack: 6,
+      hero_wraith_dash: 4,
+      hero_wraith_hit: 4,
+    });
+    expect(assetsAndAnimsCheck.antiSliding.heroLivingWalk0VsWalk3).toBeGreaterThan(
+      0.2
+    );
+    expect(
+      assetsAndAnimsCheck.antiSliding.heroLivingIdle0VsAttack2
+    ).toBeGreaterThan(0.2);
+    expect(assetsAndAnimsCheck.antiSliding.heroWraithWalk0VsWalk3).toBeGreaterThan(
+      0.2
+    );
+    expect(
+      assetsAndAnimsCheck.antiSliding.heroWraithIdle0VsAttack2
+    ).toBeGreaterThan(0.2);
     expect(assetsAndAnimsCheck.hubHeroTexture).toBe('hero_living');
     expect(assetsAndAnimsCheck.hubHeroAnim).toBe('hero_living_idle');
     expect(assetsAndAnimsCheck.hubWeaponRig).toEqual({
@@ -198,38 +315,82 @@ test.describe('SUBMUNDO M5 — Hero 80x80 Spritesheets, Weapons & Animations (Li
       frame: 0,
     });
 
-    // 3. Validate flipX & hero_living_walk on movement in Vila Natal
-    await page.keyboard.down('KeyA');
-    await page.waitForTimeout(160);
-    const moveLeftState = await page.evaluate(() => {
-      const scene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
-        heroSprite: DebugSpriteSnapshot;
-      };
-      return {
-        flipX: scene.heroSprite.flipX,
-        anim: scene.heroSprite.anims.currentAnim?.key ?? null,
-      };
-    });
-    await page.keyboard.up('KeyA');
+    // 3. Validate flipX, hero_living_walk, and live frame progression within walk range (4..9) in Vila Natal
+    const sampleWalkDirection = async (
+      key: 'KeyA' | 'KeyD',
+      expectedAnim: 'hero_living_walk' | 'hero_wraith_walk'
+    ) => {
+      const samples: Array<{
+        flipX: boolean;
+        anim: string | null;
+        frame: number;
+      }> = [];
 
-    expect(moveLeftState.flipX).toBe(true);
-    expect(moveLeftState.anim).toBe('hero_living_walk');
+      await page.keyboard.down(key);
+      try {
+        await page.waitForFunction(
+          (targetAnim: string) => {
+            const scene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
+              heroSprite: DebugSpriteSnapshot;
+            };
+            return scene.heroSprite.anims.currentAnim?.key === targetAnim;
+          },
+          expectedAnim,
+          { timeout: 2500 }
+        );
 
-    await page.keyboard.down('KeyD');
-    await page.waitForTimeout(160);
-    const moveRightState = await page.evaluate(() => {
-      const scene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
-        heroSprite: DebugSpriteSnapshot;
-      };
-      return {
-        flipX: scene.heroSprite.flipX,
-        anim: scene.heroSprite.anims.currentAnim?.key ?? null,
-      };
-    });
-    await page.keyboard.up('KeyD');
+        for (let i = 0; i < 6; i += 1) {
+          const snap = await page.evaluate(() => {
+            const scene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
+              heroSprite: DebugSpriteSnapshot;
+            };
+            return {
+              flipX: scene.heroSprite.flipX,
+              anim: scene.heroSprite.anims.currentAnim?.key ?? null,
+              frame: Number(scene.heroSprite.frame?.name),
+            };
+          });
+          samples.push(snap);
+          if (i < 5) {
+            await page.waitForTimeout(70);
+          }
+        }
+      } finally {
+        await page.keyboard.up(key);
+      }
 
-    expect(moveRightState.flipX).toBe(false);
-    expect(moveRightState.anim).toBe('hero_living_walk');
+      return samples;
+    };
+
+    const moveLeftSamples = await sampleWalkDirection(
+      'KeyA',
+      'hero_living_walk'
+    );
+    expect(moveLeftSamples.length).toBeGreaterThanOrEqual(2);
+    for (const sample of moveLeftSamples) {
+      expect(sample.flipX).toBe(true);
+      expect(sample.anim).toBe('hero_living_walk');
+      expect(Number.isInteger(sample.frame)).toBe(true);
+      expect(sample.frame).toBeGreaterThanOrEqual(4);
+      expect(sample.frame).toBeLessThanOrEqual(9);
+    }
+    expect(new Set(moveLeftSamples.map((s) => s.frame)).size).toBeGreaterThan(1);
+
+    const moveRightSamples = await sampleWalkDirection(
+      'KeyD',
+      'hero_living_walk'
+    );
+    expect(moveRightSamples.length).toBeGreaterThanOrEqual(2);
+    for (const sample of moveRightSamples) {
+      expect(sample.flipX).toBe(false);
+      expect(sample.anim).toBe('hero_living_walk');
+      expect(Number.isInteger(sample.frame)).toBe(true);
+      expect(sample.frame).toBeGreaterThanOrEqual(4);
+      expect(sample.frame).toBeLessThanOrEqual(9);
+    }
+    expect(new Set(moveRightSamples.map((s) => s.frame)).size).toBeGreaterThan(
+      1
+    );
 
     await page.waitForTimeout(120);
     const pcPrologueVillagePath = join(
@@ -425,17 +586,22 @@ test.describe('SUBMUNDO M5 — Hero 80x80 Spritesheets, Weapons & Animations (Li
       frame: 1,
     });
 
-    // Verify hero_wraith_walk in Refúgio
-    await page.keyboard.down('KeyD');
-    await page.waitForTimeout(160);
-    const act1RefugeWalk = await page.evaluate(() => {
-      const scene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
-        heroSprite: DebugSpriteSnapshot;
-      };
-      return scene.heroSprite.anims.currentAnim?.key ?? null;
-    });
-    await page.keyboard.up('KeyD');
-    expect(act1RefugeWalk).toBe('hero_wraith_walk');
+    // Verify hero_wraith_walk & live frame progression (4..9) in Refúgio
+    const act1RefugeWalkSamples = await sampleWalkDirection(
+      'KeyD',
+      'hero_wraith_walk'
+    );
+    expect(act1RefugeWalkSamples.length).toBeGreaterThanOrEqual(2);
+    for (const sample of act1RefugeWalkSamples) {
+      expect(sample.flipX).toBe(false);
+      expect(sample.anim).toBe('hero_wraith_walk');
+      expect(Number.isInteger(sample.frame)).toBe(true);
+      expect(sample.frame).toBeGreaterThanOrEqual(4);
+      expect(sample.frame).toBeLessThanOrEqual(9);
+    }
+    expect(
+      new Set(act1RefugeWalkSamples.map((s) => s.frame)).size
+    ).toBeGreaterThan(1);
 
     await page.waitForTimeout(120);
     const pcAct1RefugePath = join(SCREENSHOT_DIR, 'm5_pc_act1_refuge.png');
