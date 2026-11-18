@@ -119,14 +119,14 @@ def render_slime_frame(
     face_dy: float = 0.0,
     eye_mode: str = "normal",
     mouth_mode: str = "frown",
-    droplets: Sequence[Tuple[float, float, float, float]] = ((17.5, 73.5, 2.8, 2.0),),
+    droplets: Sequence[Tuple[float, float, float, float]] = ((28.0, 74.5, 1.5, 1.1),),
     trail_drops: Sequence[Tuple[float, float, float, float]] = (),
     alpha_fade: float = 1.0,
 ) -> Canvas:
     body = Canvas(FW, FH)
     iy_top = max(2, int(math.floor(top_y)))
     iy_base = min(FH - 2, int(math.ceil(base_y)))
-    h_span = max(3.0, base_y - top_y)
+    h_span = max(2.0, base_y - top_y)
 
     for py in range(iy_top, iy_base + 1):
         t_y = clamp((py - top_y) / h_span, 0.0, 1.0)
@@ -142,9 +142,9 @@ def render_slime_frame(
                 nx = dx / max(1.0, cur_hw)
                 ny = (t_y - 0.38) * 1.35
                 shade = (-0.48 * nx - 0.82 * ny) + 0.22 * (1.0 - abs(nx))
-                if py >= wave_y - 2.0:
+                if py >= wave_y - 1.0:
                     col = PAL_SLIME[0]
-                elif py >= wave_y - 5.0 and shade < 0.05:
+                elif py >= wave_y - 3.0 and shade < 0.05:
                     col = PAL_SLIME[1]
                 else:
                     col = pick_tone(shade, PAL_SLIME)
@@ -155,66 +155,55 @@ def render_slime_frame(
     for dx, dy, rx, ry in trail_drops:
         draw_ellipse(body, dx, dy, rx, ry, PAL_SLIME)
 
-    # Reflexos especulares proporcionais ao domo
+    # Reflexos especulares proporcionais ao domo 50%
     spec_hi = (210, 255, 195, 255)
     spec_bright = (255, 255, 255, 255)
-    if h_span >= 12.0:
-        sx0 = int(round(cx + tilt_x * 0.8 - half_w * 0.45))
-        sy0 = int(round(top_y + h_span * 0.12))
-        for ox, oy in ((0, 0), (1, -1), (2, -1), (3, -1), (4, 0), (-2, 2), (-1, 1), (0, 1)):
+    if h_span >= 7.0:
+        sx0 = int(round(cx + tilt_x * 0.75 - half_w * 0.45))
+        sy0 = int(round(top_y + h_span * 0.18))
+        for ox, oy in ((0, 0), (1, -1), (2, -1), (3, -1), (-1, 1), (-1, 2)):
             body.put(sx0 + ox, sy0 + oy, spec_hi)
-        for ox, oy in ((1, 0), (2, 0), (3, 0)):
-            body.put(sx0 + ox, sy0 + oy, spec_bright)
+        body.put(sx0 + 1, sy0, spec_bright)
+        body.put(sx0 + 2, sy0, spec_bright)
     else:
-        sx0 = int(round(cx - half_w * 0.35))
+        sx0 = int(round(cx - half_w * 0.30))
         sy0 = int(round(top_y + 1))
-        for ox in range(4):
+        for ox in range(3):
             body.put(sx0 + ox, sy0, spec_hi)
 
-    # Bolhas internas
-    if h_span >= 16.0:
-        bx1 = int(round(cx - half_w * 0.55))
-        bx2 = int(round(cx + half_w * 0.50))
-        by = int(round(top_y + h_span * 0.58))
-        for bx in (bx1, bx2):
-            body.put(bx, by, rgba(PAL_SLIME[3]))
-            body.put(bx + 1, by, rgba(PAL_SLIME[3]))
-            body.put(bx, by + 1, rgba(PAL_SLIME[2]))
-
-    # Rosto
+    # Rosto nitido na escala 50%
     eye_dark = (10, 22, 12, 255)
     if eye_mode != "none":
-        ex_l = int(round(cx - 4 + face_dx + tilt_x * 0.4))
-        ex_r = int(round(cx + 7 + face_dx + tilt_x * 0.4))
-        ey = int(round(top_y + h_span * 0.46 + face_dy))
+        ex_l = int(round(cx - 2 + face_dx + tilt_x * 0.4))
+        ex_r = int(round(cx + 4 + face_dx + tilt_x * 0.4))
+        ey = int(round(top_y + h_span * 0.50 + face_dy))
         if eye_mode == "normal":
             for ex in (ex_l, ex_r):
-                for dy in range(-2, 3):
-                    for dx in range(-1, 2):
-                        if abs(dx) + abs(dy) <= 2:
-                            body.put(ex + dx, ey + dy, eye_dark)
-                body.put(ex - 1, ey - 1, spec_bright)
+                body.put(ex, ey, spec_bright)
+                body.put(ex + 1, ey, eye_dark)
+                body.put(ex, ey + 1, eye_dark)
+                body.put(ex + 1, ey + 1, eye_dark)
         elif eye_mode == "angry":
             for ex in (ex_l, ex_r):
-                for dy in range(-1, 2):
-                    for dx in range(-1, 2):
-                        body.put(ex + dx, ey + dy, eye_dark)
-                body.put(ex, ey - 1, (255, 220, 120, 255))
+                body.put(ex, ey, (255, 220, 120, 255))
+                body.put(ex + 1, ey, eye_dark)
+                body.put(ex, ey + 1, eye_dark)
+                body.put(ex + 1, ey + 1, eye_dark)
         elif eye_mode == "x":
             draw_x_eye(body, ex_l, ey, eye_dark)
             draw_x_eye(body, ex_r, ey, eye_dark)
 
-        my = ey + 7
-        mx0 = int(round(cx - 2 + face_dx + tilt_x * 0.4))
+        my = ey + 4
+        mx0 = int(round(cx - 1 + face_dx + tilt_x * 0.4))
         if mouth_mode == "frown":
-            for i, oy in enumerate((1, 0, -1, -1, -1, -1, 0, 1)):
+            for i, oy in enumerate((0, -1, -1, -1, 0)):
                 body.put(mx0 + i, my + oy, eye_dark)
         elif mouth_mode == "open":
-            for dy in range(-1, 2):
-                for dx in range(0, 7):
+            for dy in range(-1, 1):
+                for dx in range(0, 5):
                     body.put(mx0 + dx, my + dy, eye_dark)
             body.put(mx0 + 1, my - 1, (220, 255, 210, 255))
-            body.put(mx0 + 5, my - 1, (220, 255, 210, 255))
+            body.put(mx0 + 3, my - 1, (220, 255, 210, 255))
 
     out = remove_isolated_pixels(add_outline(body, OUTLINE))
     if alpha_fade < 1.0:
@@ -226,51 +215,51 @@ def render_slime_frame(
 
 def build_slime_frames() -> List[Canvas]:
     frames: List[Canvas] = []
-    # 0..3 idle (respiracao gelatinosa, base fixa em y=76)
+    # 0..3 idle (escala 50%, base fixa em y=76, altura ~16px)
     idle_params = [
-        (40.0, 76.0, 43.0, 22.0, 0.0, 0.0),
-        (40.0, 76.0, 45.0, 23.5, 0.0, 0.5),
-        (40.0, 76.0, 41.0, 20.5, 0.0, -0.5),
-        (40.0, 76.0, 44.0, 22.8, 0.0, 0.0),
+        (40.0, 76.0, 60.0, 11.0, 0.0, 0.0),
+        (40.0, 76.0, 61.5, 11.8, 0.0, 0.4),
+        (40.0, 76.0, 59.0, 10.3, 0.0, -0.4),
+        (40.0, 76.0, 60.8, 11.4, 0.0, 0.0),
     ]
     for cx, by, ty, hw, tx, fdy in idle_params:
         frames.append(render_slime_frame(cx, by, ty, hw, tilt_x=tx, face_dy=fdy))
 
     # 4..9 walk (compressao -> impulso -> salto em arco -> descida -> pouso -> rebote)
     walk_params = [
-        (39.0, 76.0, 50.0, 25.0, -1.5, 1.0, ((15.5, 73.5, 2.8, 1.8),), ()),
-        (40.0, 68.0, 32.0, 17.5, 2.5, -1.0, (), ((24.0, 72.0, 2.0, 1.5), (34.0, 74.0, 2.4, 1.4))),
-        (41.0, 60.0, 28.0, 19.5, 3.0, -1.5, (), ((22.0, 66.0, 2.0, 1.4), (32.0, 69.0, 1.8, 1.3))),
-        (41.0, 69.0, 36.0, 18.5, 2.0, 0.5, (), ((26.0, 73.0, 1.8, 1.2),)),
-        (40.0, 76.0, 52.0, 26.5, 1.0, 1.5, ((13.5, 73.5, 2.6, 1.6), (65.0, 73.5, 2.2, 1.5)), ()),
-        (40.0, 76.0, 42.0, 21.0, 0.0, -0.5, ((18.0, 73.5, 2.5, 1.8),), ()),
+        (39.5, 76.0, 63.0, 12.5, -1.0, 0.6, ((26.5, 74.5, 1.5, 1.0),), ()),
+        (40.0, 71.0, 54.0, 9.0, 1.5, -0.6, (), ((31.0, 74.0, 1.3, 0.9), (36.0, 75.0, 1.4, 0.9))),
+        (40.5, 67.0, 51.0, 10.0, 1.8, -0.8, (), ((30.0, 71.0, 1.2, 0.9), (35.0, 73.0, 1.1, 0.8))),
+        (40.5, 72.0, 56.0, 9.5, 1.2, 0.4, (), ((32.0, 74.5, 1.1, 0.8),)),
+        (40.0, 76.0, 64.0, 13.5, 0.6, 0.8, ((25.5, 74.5, 1.4, 1.0), (53.5, 74.5, 1.3, 0.9)), ()),
+        (40.0, 76.0, 59.5, 10.5, 0.0, -0.3, ((28.5, 74.5, 1.4, 1.0),), ()),
     ]
     for cx, by, ty, hw, tx, fdy, dr, tr in walk_params:
         frames.append(render_slime_frame(cx, by, ty, hw, tilt_x=tx, face_dy=fdy, droplets=dr, trail_drops=tr))
 
     # 10..15 attack (encolhe atras -> projecao frontal em golpe gelatinoso)
     attack_params = [
-        (35.0, 76.0, 47.0, 21.0, -3.5, 1.0, "angry", "frown", ((14.0, 73.5, 2.6, 1.8),), ()),
-        (32.0, 76.0, 50.0, 23.0, -5.0, 1.5, "angry", "frown", ((11.0, 73.5, 2.6, 1.8),), ()),
-        (47.0, 73.0, 40.0, 23.5, 7.0, -0.5, "angry", "open", (), ((21.0, 72.0, 2.5, 1.5), (27.0, 74.0, 2.0, 1.2))),
-        (52.0, 75.0, 42.0, 24.5, 8.5, 0.0, "angry", "open", ((69.0, 72.5, 2.4, 1.6),), ((24.0, 74.0, 2.8, 1.5),)),
-        (45.0, 76.0, 47.0, 23.5, 3.0, 0.5, "normal", "frown", ((19.0, 73.5, 2.6, 1.8),), ()),
-        (41.0, 76.0, 44.0, 22.0, 0.5, 0.0, "normal", "frown", ((17.5, 73.5, 2.8, 2.0),), ()),
+        (37.0, 76.0, 62.0, 10.5, -2.0, 0.5, "angry", "frown", ((25.5, 74.5, 1.4, 1.0),), ()),
+        (35.0, 76.0, 63.5, 11.5, -3.0, 0.8, "angry", "frown", ((23.5, 74.5, 1.4, 1.0),), ()),
+        (44.5, 74.0, 58.0, 12.0, 4.0, -0.4, "angry", "open", (), ((30.0, 74.0, 1.4, 0.9), (34.0, 75.0, 1.2, 0.8))),
+        (47.0, 75.0, 59.0, 12.5, 4.8, 0.0, "angry", "open", ((56.5, 74.0, 1.3, 0.9),), ((32.0, 75.0, 1.5, 0.9),)),
+        (43.0, 76.0, 62.0, 11.8, 1.8, 0.4, "normal", "frown", ((29.0, 74.5, 1.4, 1.0),), ()),
+        (40.5, 76.0, 60.5, 11.0, 0.4, 0.0, "normal", "frown", ((28.0, 74.5, 1.5, 1.1),), ()),
     ]
     for cx, by, ty, hw, tx, fdy, em, mm, dr, tr in attack_params:
         frames.append(
             render_slime_frame(
-                cx, by, ty, hw, tilt_x=tx, face_dx=2.0, face_dy=fdy,
+                cx, by, ty, hw, tilt_x=tx, face_dx=1.0, face_dy=fdy,
                 eye_mode=em, mouth_mode=mm, droplets=dr, trail_drops=tr
             )
         )
 
     # 16..19 death (achatamento progressivo ate virar poca verde no chao)
     death_params = [
-        (40.0, 76.0, 50.0, 24.0, -2.0, "x", "open", ((15.0, 73.5, 2.8, 1.8),), 1.0),
-        (40.0, 76.0, 59.0, 28.0, 0.0, "x", "none", ((12.0, 73.5, 2.6, 1.6), (67.0, 73.5, 2.2, 1.5)), 1.0),
-        (40.0, 76.0, 67.0, 31.0, 0.0, "none", "none", ((9.0, 74.0, 2.4, 1.4), (70.0, 74.0, 2.0, 1.3)), 0.92),
-        (40.0, 76.0, 71.5, 33.0, 0.0, "none", "none", ((7.0, 74.5, 2.2, 1.2), (72.0, 74.5, 1.8, 1.1)), 0.85),
+        (40.0, 76.0, 63.0, 12.0, -1.0, "x", "open", ((26.5, 74.5, 1.4, 1.0),), 1.0),
+        (40.0, 76.0, 67.5, 14.0, 0.0, "x", "none", ((24.5, 74.5, 1.3, 0.9), (55.0, 74.5, 1.2, 0.9)), 1.0),
+        (40.0, 76.0, 71.0, 15.5, 0.0, "none", "none", ((23.0, 75.0, 1.2, 0.8), (56.5, 75.0, 1.1, 0.8)), 0.92),
+        (40.0, 76.0, 73.5, 16.5, 0.0, "none", "none", ((22.0, 75.2, 1.1, 0.7), (57.5, 75.2, 1.0, 0.7)), 0.85),
     ]
     for cx, by, ty, hw, tx, em, mm, dr, af in death_params:
         frames.append(
@@ -303,133 +292,129 @@ def render_bat_frame(
     dead_pose: bool = False,
 ) -> Canvas:
     wings = Canvas(FW, FH)
-    # Ombros das asas
-    ls = (cx - 6.0, cy - 1.0)
-    rs = (cx + 6.0, cy - 1.0)
+    # Ombros das asas (escala 50%, ~30x20px total)
+    ls = (cx - 3.0, cy - 0.5)
+    rs = (cx + 3.0, cy - 0.5)
 
     if dead_pose:
         # Asas fechadas/caidas sobre o chao
-        l_pts = [(cx - 5, cy - 2), (cx - 18, cy + 2), (cx - 22, cy + 8), (cx - 8, cy + 8)]
-        r_pts = [(cx + 5, cy - 2), (cx + 18, cy + 2), (cx + 22, cy + 8), (cx + 8, cy + 8)]
+        l_pts = [(cx - 3, cy - 1), (cx - 10, cy + 1), (cx - 12, cy + 5), (cx - 4, cy + 5)]
+        r_pts = [(cx + 3, cy - 1), (cx + 10, cy + 1), (cx + 12, cy + 5), (cx + 4, cy + 5)]
         draw_polygon_shaded(wings, l_pts, PAL_BAT_MEMB)
         draw_polygon_shaded(wings, r_pts, dim_palette(PAL_BAT_MEMB, 0.85))
-        draw_capsule(wings, (cx - 5, cy - 2), (cx - 18, cy + 2), 1.6, 1.1, PAL_BAT_BONE)
-        draw_capsule(wings, (cx + 5, cy - 2), (cx + 18, cy + 2), 1.6, 1.1, dim_palette(PAL_BAT_BONE, 0.88))
+        draw_capsule(wings, (cx - 3, cy - 1), (cx - 10, cy + 1), 1.0, 0.7, PAL_BAT_BONE)
+        draw_capsule(wings, (cx + 3, cy - 1), (cx + 10, cy + 1), 1.0, 0.7, dim_palette(PAL_BAT_BONE, 0.88))
     else:
         # Asa esquerda (frente 3/4)
         l_elbow = (
-            cx - (16.0 * wing_span - 5.0 * wing_fold),
-            cy - 12.0 + wing_tip_dy * 0.72,
+            cx - (8.0 * wing_span - 2.5 * wing_fold),
+            cy - 6.0 + wing_tip_dy * 0.72,
         )
         l_tip = (
-            cx - (29.0 * wing_span - 11.0 * wing_fold),
-            cy - 16.0 + wing_tip_dy,
+            cx - (15.0 * wing_span - 5.5 * wing_fold),
+            cy - 8.0 + wing_tip_dy,
         )
-        l_bot1 = (l_tip[0] + 4.0, l_tip[1] + 13.0 - wing_tip_dy * 0.15)
-        l_bot2 = (l_elbow[0] - 1.0, l_elbow[1] + 19.0 - wing_tip_dy * 0.15)
+        l_bot1 = (l_tip[0] + 2.0, l_tip[1] + 9.0 - wing_tip_dy * 0.15)
+        l_bot2 = (l_elbow[0] + 1.0, l_elbow[1] + 10.5 - wing_tip_dy * 0.15)
         l_pts = [
             ls, l_elbow, l_tip,
-            (l_tip[0] - 2.0, l_tip[1] + 8.0),
+            (l_tip[0], l_tip[1] + 4.5),
             l_bot1,
-            (l_bot1[0] + 5.0, l_bot1[1] - 4.0),
+            (l_bot1[0] + 3.0, l_bot1[1] - 2.0),
             l_bot2,
-            (l_bot2[0] + 5.0, l_bot2[1] - 4.0),
-            (ls[0], ls[1] + 9.0),
+            (l_bot2[0] + 3.0, l_bot2[1] - 2.0),
+            (ls[0] - 1.0, ls[1] + 3.5),
         ]
         draw_polygon_shaded(wings, l_pts, PAL_BAT_MEMB)
 
         # Asa direita (atras)
         r_elbow = (
-            cx + (15.5 * wing_span - 6.0 * wing_fold),
-            cy - 13.0 + wing_tip_dy * 0.72,
+            cx + (8.0 * wing_span - 2.5 * wing_fold),
+            cy - 6.0 + wing_tip_dy * 0.72,
         )
         r_tip = (
-            cx + (27.5 * wing_span - 12.0 * wing_fold),
-            cy - 16.0 + wing_tip_dy,
+            cx + (15.0 * wing_span - 5.5 * wing_fold),
+            cy - 8.0 + wing_tip_dy,
         )
-        r_bot1 = (r_tip[0] - 4.0, r_tip[1] + 13.0 - wing_tip_dy * 0.15)
-        r_bot2 = (r_elbow[0] + 1.0, r_elbow[1] + 19.0 - wing_tip_dy * 0.15)
+        r_bot1 = (r_tip[0] - 2.0, r_tip[1] + 9.0 - wing_tip_dy * 0.15)
+        r_bot2 = (r_elbow[0] - 1.0, r_elbow[1] + 10.5 - wing_tip_dy * 0.15)
         r_pts = [
             rs, r_elbow, r_tip,
-            (r_tip[0] + 2.0, r_tip[1] + 8.0),
+            (r_tip[0], r_tip[1] + 4.5),
             r_bot1,
-            (r_bot1[0] - 5.0, r_bot1[1] - 4.0),
+            (r_bot1[0] - 3.0, r_bot1[1] - 2.0),
             r_bot2,
-            (r_bot2[0] - 5.0, r_bot2[1] - 4.0),
-            (rs[0], rs[1] + 9.0),
+            (r_bot2[0] - 3.0, r_bot2[1] - 2.0),
+            (rs[0] + 1.0, rs[1] + 3.5),
         ]
         draw_polygon_shaded(wings, r_pts, dim_palette(PAL_BAT_MEMB, 0.85))
 
-        # Ossos das asas
-        draw_capsule(wings, ls, l_elbow, 1.9, 1.4, PAL_BAT_BONE)
-        draw_capsule(wings, l_elbow, l_tip, 1.4, 1.0, PAL_BAT_BONE)
-        draw_capsule(wings, l_elbow, l_bot1, 1.1, 0.75, PAL_BAT_BONE)
-        draw_capsule(wings, l_elbow, l_bot2, 1.1, 0.75, PAL_BAT_BONE)
+        # Ossos finos das asas
+        draw_capsule(wings, ls, l_elbow, 1.0, 0.8, PAL_BAT_BONE)
+        draw_capsule(wings, l_elbow, l_tip, 0.9, 0.6, PAL_BAT_BONE)
+        draw_line(wings, (int(round(l_elbow[0])), int(round(l_elbow[1]))), (int(round(l_bot1[0])), int(round(l_bot1[1] - 1))), rgba(PAL_BAT_BONE[2]))
+        draw_line(wings, (int(round(l_elbow[0])), int(round(l_elbow[1]))), (int(round(l_bot2[0])), int(round(l_bot2[1] - 1))), rgba(PAL_BAT_BONE[1]))
 
         bone_r = dim_palette(PAL_BAT_BONE, 0.88)
-        draw_capsule(wings, rs, r_elbow, 1.9, 1.4, bone_r)
-        draw_capsule(wings, r_elbow, r_tip, 1.4, 1.0, bone_r)
-        draw_capsule(wings, r_elbow, r_bot1, 1.1, 0.75, bone_r)
-        draw_capsule(wings, r_elbow, r_bot2, 1.1, 0.75, bone_r)
+        draw_capsule(wings, rs, r_elbow, 1.0, 0.8, bone_r)
+        draw_capsule(wings, r_elbow, r_tip, 0.9, 0.6, bone_r)
+        draw_line(wings, (int(round(r_elbow[0])), int(round(r_elbow[1]))), (int(round(r_bot1[0])), int(round(r_bot1[1] - 1))), rgba(bone_r[2]))
+        draw_line(wings, (int(round(r_elbow[0])), int(round(r_elbow[1]))), (int(round(r_bot2[0])), int(round(r_bot2[1] - 1))), rgba(bone_r[1]))
 
         claw = (218, 212, 198, 255)
-        wings.put(int(round(l_elbow[0])), int(round(l_elbow[1] - 2)), claw)
-        wings.put(int(round(r_elbow[0])), int(round(r_elbow[1] - 2)), claw)
+        wings.put(int(round(l_elbow[0])), int(round(l_elbow[1] - 1)), claw)
+        wings.put(int(round(r_elbow[0])), int(round(r_elbow[1] - 1)), claw)
 
     wings_out = add_outline(wings, OUTLINE)
 
     body = Canvas(FW, FH)
     bx = cx
-    by = cy + 4.0
-    hx = cx + 0.5 + body_tilt * 3.5
-    hy = cy - 7.0 + abs(body_tilt) * 1.5
+    by = cy + 2.5
+    hx = cx + body_tilt * 2.0
+    hy = cy - 3.5 + abs(body_tilt) * 0.8
 
-    # Garras inferiores
+    # Pes/garras inferiores
     if not dead_pose:
-        draw_capsule(body, (bx - 3, by + 7), (bx - 5, by + 13), 1.3, 1.0, PAL_BAT_BONE)
-        draw_capsule(body, (bx + 3, by + 7), (bx + 5, by + 13), 1.3, 1.0, PAL_BAT_BONE)
+        draw_line(body, (int(round(bx - 2)), int(round(by + 3.5))), (int(round(bx - 3)), int(round(by + 6.5))), rgba(PAL_BAT_BONE[2]))
+        draw_line(body, (int(round(bx + 2)), int(round(by + 3.5))), (int(round(bx + 3)), int(round(by + 6.5))), rgba(PAL_BAT_BONE[2]))
 
     # Tronco peludo
-    draw_ellipse(body, bx, by, 7.6, 8.4, PAL_BAT_FUR)
-    draw_ellipse(body, bx + 0.5, by - 2.0, 4.5, 4.0, (PAL_BAT_FUR[1], PAL_BAT_FUR[2], PAL_BAT_FUR[3], (148, 124, 186)))
+    draw_ellipse(body, bx, by, 4.0, 4.3, PAL_BAT_FUR)
 
-    # Orelhas
-    draw_polygon_shaded(body, [(hx - 7, hy - 1), (hx - 11, hy - 15), (hx - 2, hy - 8)], PAL_BAT_FUR)
-    draw_polygon_shaded(body, [(hx - 6, hy - 3), (hx - 9, hy - 12), (hx - 3, hy - 7)], PAL_BAT_EAR)
-    draw_polygon_shaded(body, [(hx + 3, hy - 8), (hx + 11, hy - 15), (hx + 7, hy - 1)], PAL_BAT_FUR)
-    draw_polygon_shaded(body, [(hx + 4, hy - 7), (hx + 9, hy - 12), (hx + 6, hy - 3)], PAL_BAT_EAR)
+    # Orelhas pontudas
+    draw_polygon_shaded(body, [(hx - 4, hy - 0.5), (hx - 6, hy - 7.5), (hx - 1, hy - 3.5)], PAL_BAT_FUR)
+    draw_polygon_shaded(body, [(hx + 1, hy - 3.5), (hx + 6, hy - 7.5), (hx + 4, hy - 0.5)], PAL_BAT_FUR)
+    body.put(int(round(hx - 4)), int(round(hy - 3.5)), rgba(PAL_BAT_EAR[2]))
+    body.put(int(round(hx + 4)), int(round(hy - 3.5)), rgba(PAL_BAT_EAR[2]))
 
     # Cabeca
-    draw_ellipse(body, hx, hy, 7.4, 6.2, PAL_BAT_FUR)
+    draw_ellipse(body, hx, hy, 4.0, 3.2, PAL_BAT_FUR)
 
-    # Olhos
-    ex1, ex2 = int(round(hx - 3)), int(round(hx + 3))
-    ey = int(round(hy - 1))
+    # Olhos (2x1 cada)
+    ex1, ex2 = int(round(hx - 3)), int(round(hx + 2))
+    ey = int(round(hy - 0.5))
     if eye_mode == "x":
-        draw_x_eye(body, ex1, ey, (18, 12, 24, 255))
-        draw_x_eye(body, ex2, ey, (18, 12, 24, 255))
+        draw_x_eye(body, ex1 + 1, ey, (18, 12, 24, 255))
+        draw_x_eye(body, ex2 + 1, ey, (18, 12, 24, 255))
     else:
-        for ex in (ex1, ex2):
-            body.put(ex, ey, (215, 28, 28, 255))
-            body.put(ex + 1, ey, (255, 78, 36, 255))
-            body.put(ex, ey + 1, (255, 195, 70, 255))
-            body.put(ex + 1, ey + 1, (255, 235, 130, 255))
+        body.put(ex1, ey, (220, 30, 30, 255))
+        body.put(ex1 + 1, ey, (255, 200, 70, 255))
+        body.put(ex2, ey, (255, 200, 70, 255))
+        body.put(ex2 + 1, ey, (220, 30, 30, 255))
 
-    # Focinho e presas
+    # Focinho e presinhas
     fx = int(round(hx))
-    fy = int(round(hy + 3))
+    fy = int(round(hy + 1.5))
     body.put(fx, fy, (28, 18, 40, 255))
-    body.put(fx + 1, fy, (28, 18, 40, 255))
     if mouth_open:
-        for mx in range(fx - 2, fx + 4):
-            body.put(mx, fy + 2, (120, 22, 34, 255))
-            body.put(mx, fy + 3, (80, 14, 22, 255))
-        for px in (fx - 2, fx + 3):
-            body.put(px, fy + 2, (245, 242, 236, 255))
-            body.put(px, fy + 3, (245, 242, 236, 255))
+        for mx in range(fx - 1, fx + 2):
+            body.put(mx, fy + 1, (120, 22, 34, 255))
+            body.put(mx, fy + 2, (80, 14, 22, 255))
+        body.put(fx - 1, fy + 1, (245, 242, 236, 255))
+        body.put(fx + 1, fy + 1, (245, 242, 236, 255))
     else:
-        body.put(fx - 2, fy + 2, (245, 242, 236, 255))
-        body.put(fx + 3, fy + 2, (245, 242, 236, 255))
+        body.put(fx - 1, fy + 1, (245, 242, 236, 255))
+        body.put(fx + 1, fy + 1, (245, 242, 236, 255))
 
     body_out = add_outline(body, OUTLINE)
     res = Canvas(FW, FH)
@@ -440,45 +425,45 @@ def render_bat_frame(
 
 def build_cave_bat_frames() -> List[Canvas]:
     frames: List[Canvas] = []
-    # 0..3 idle (flutuacao suave)
+    # 0..3 idle (flutuacao suave na escala 50%)
     idle_params = [
-        (40.0, 43.0, 0.0, 1.0),
-        (40.0, 42.0, 6.0, 1.0),
-        (40.0, 41.0, 11.0, 0.96),
-        (40.0, 42.0, 5.0, 1.0),
+        (40.0, 44.0, 0.0, 1.0),
+        (40.0, 43.2, 3.2, 1.0),
+        (40.0, 42.5, 6.0, 0.96),
+        (40.0, 43.2, 2.8, 1.0),
     ]
     for cx, cy, wdy, ws in idle_params:
         frames.append(render_bat_frame(cx, cy, wdy, wing_span=ws))
 
     # 4..9 walk (ciclo completo de batida de asas cima -> meio -> baixo -> retorno)
     walk_params = [
-        (40.0, 45.0, -7.0, 0.95, 0.1),
-        (40.0, 43.0, 4.0, 1.06, 0.0),
-        (40.0, 39.0, 22.0, 0.92, 0.0),
-        (40.0, 41.0, 15.0, 0.96, 0.05),
-        (40.0, 43.0, 2.0, 1.02, 0.05),
-        (40.0, 45.0, -5.0, 0.96, 0.1),
+        (40.0, 45.0, -4.0, 0.95, 0.1),
+        (40.0, 44.0, 2.5, 1.06, 0.0),
+        (40.0, 41.5, 11.5, 0.92, 0.0),
+        (40.0, 42.5, 8.0, 0.96, 0.05),
+        (40.0, 44.0, 1.5, 1.02, 0.05),
+        (40.0, 45.0, -3.0, 0.96, 0.1),
     ]
     for cx, cy, wdy, ws, wf in walk_params:
         frames.append(render_bat_frame(cx, cy, wdy, wing_span=ws, wing_fold=wf))
 
     # 10..15 attack (fecha asas atras e mergulha em rasante com presas)
     attack_params = [
-        (35.0, 40.0, -4.0, 0.85, 0.45, -0.3, False),
-        (32.0, 38.0, 2.0, 0.72, 0.75, -0.4, True),
-        (48.0, 45.0, 8.0, 0.90, 0.40, 0.9, True),
-        (53.0, 47.0, 12.0, 0.95, 0.25, 1.0, True),
-        (46.0, 44.0, 6.0, 1.0, 0.10, 0.4, False),
-        (41.0, 43.0, 1.0, 1.0, 0.0, 0.1, False),
+        (37.0, 42.0, -2.5, 0.85, 0.45, -0.3, False),
+        (35.0, 41.0, 1.5, 0.72, 0.75, -0.4, True),
+        (45.0, 45.0, 4.5, 0.90, 0.40, 0.9, True),
+        (48.0, 46.5, 6.5, 0.95, 0.25, 1.0, True),
+        (43.5, 44.5, 3.5, 1.0, 0.10, 0.4, False),
+        (40.5, 44.0, 0.5, 1.0, 0.0, 0.1, False),
     ]
     for cx, cy, wdy, ws, wf, bt, mo in attack_params:
         frames.append(render_bat_frame(cx, cy, wdy, wing_span=ws, wing_fold=wf, body_tilt=bt, mouth_open=mo))
 
     # 16..19 death (desequilibrio, queda e asas fechadas no chao y=76)
-    frames.append(render_bat_frame(38.0, 45.0, -3.0, wing_span=0.88, wing_fold=0.35, body_tilt=-0.4, eye_mode="x"))
-    frames.append(render_bat_frame(39.0, 56.0, 8.0, wing_span=0.75, wing_fold=0.60, body_tilt=-0.2, eye_mode="x"))
-    frames.append(render_bat_frame(40.0, 66.0, 14.0, wing_span=0.65, wing_fold=0.80, body_tilt=0.1, eye_mode="x"))
-    frames.append(render_bat_frame(40.0, 67.0, 0.0, eye_mode="x", dead_pose=True))
+    frames.append(render_bat_frame(39.0, 46.0, -2.0, wing_span=0.88, wing_fold=0.35, body_tilt=-0.4, eye_mode="x"))
+    frames.append(render_bat_frame(39.5, 55.0, 4.5, wing_span=0.75, wing_fold=0.60, body_tilt=-0.2, eye_mode="x"))
+    frames.append(render_bat_frame(40.0, 64.0, 7.5, wing_span=0.65, wing_fold=0.80, body_tilt=0.1, eye_mode="x"))
+    frames.append(render_bat_frame(40.0, 70.0, 0.0, eye_mode="x", dead_pose=True))
     return frames
 
 
@@ -676,6 +661,195 @@ def build_wolf_frames() -> List[Canvas]:
     frames.append(render_wolf_frame(dx=-1.0, dy=7.0, body_pitch=0.1, head_dy=5.0, fl=(-0.45, 0.85), fr=(-0.50, 0.90), bl=(0.55, -0.55), br=(0.50, -0.50), eye_mode="x"))
     frames.append(render_wolf_frame(dx=0.0, dy=11.5, body_pitch=0.25, head_dy=7.0, fl=(-0.75, 1.15), fr=(-0.80, 1.20), bl=(0.80, -0.80), br=(0.75, -0.75), eye_mode="x"))
     frames.append(render_wolf_frame(dead_pose=True))
+    return frames
+
+
+# ---------------------------------------------------------------------------
+# 3B. WOLF ALPHA (20 frames, 80x80, Boss maior marrom/vermelho com juba e cicatriz)
+# ---------------------------------------------------------------------------
+
+PAL_ALPHA_FUR: Pal4 = ((48, 18, 16), (86, 30, 24), (132, 50, 34), (176, 80, 50))
+PAL_ALPHA_BACK: Pal4 = dim_palette(PAL_ALPHA_FUR, 0.70)
+PAL_ALPHA_MANE: Pal4 = ((72, 24, 20), (120, 44, 30), (168, 72, 46), (212, 114, 72))
+PAL_ALPHA_CLAW: Pal4 = ((90, 82, 78), (135, 126, 120), (185, 176, 168), (226, 218, 210))
+
+
+def _draw_alpha_leg(
+    cv: Canvas,
+    hip: Tuple[float, float],
+    upper_ang: float,
+    lower_ang: float,
+    pal_leg: Pal4,
+    pal_paw: Pal4,
+    upper_len: float = 13.0,
+    lower_len: float = 12.0,
+    r_top: float = 4.4,
+    r_knee: float = 2.7,
+    r_ankle: float = 2.1,
+    has_claw: bool = True,
+) -> None:
+    knee = rot_pt(hip, (0.0, upper_len), upper_ang)
+    ankle = rot_pt(knee, (0.0, lower_len), lower_ang)
+    if ankle[1] > FOOT_Y - 1.5:
+        ankle = (ankle[0], FOOT_Y - 1.5)
+    draw_capsule(cv, hip, knee, r_top, r_knee, pal_leg)
+    draw_capsule(cv, knee, ankle, r_knee, r_ankle, pal_leg)
+    paw_y = min(FOOT_Y - 1.5, ankle[1] + 0.5)
+    draw_ellipse(cv, ankle[0] + 1.5, paw_y, 3.3, 1.9, pal_paw)
+    if has_claw:
+        draw_ellipse(cv, ankle[0] + 4.0, paw_y + 0.5, 1.2, 0.9, PAL_ALPHA_CLAW)
+
+
+def render_wolf_alpha_frame(
+    dx: float = 0.0,
+    dy: float = 0.0,
+    body_pitch: float = 0.0,
+    head_dx: float = 0.0,
+    head_dy: float = 0.0,
+    tail_ang: float = 0.0,
+    fl: Tuple[float, float] = (-0.18, 0.14),
+    fr: Tuple[float, float] = (-0.25, 0.16),
+    bl: Tuple[float, float] = (0.36, -0.20),
+    br: Tuple[float, float] = (0.28, -0.22),
+    jaw_open: float = 0.0,
+    eye_mode: str = "normal",
+    dead_pose: bool = False,
+) -> Canvas:
+    if dead_pose:
+        back = Canvas(FW, FH)
+        draw_capsule(back, (16, 70), (6, 66), 3.6, 2.2, PAL_ALPHA_BACK)
+        draw_capsule(back, (24, 73), (36, 74), 2.8, 2.0, PAL_ALPHA_BACK)
+        draw_capsule(back, (50, 73), (62, 74), 2.6, 1.9, PAL_ALPHA_BACK)
+        back_out = add_outline(back, OUTLINE)
+
+        front = Canvas(FW, FH)
+        draw_capsule(front, (19, 67), (48, 67), 7.4, 8.4, PAL_ALPHA_FUR)
+        draw_ellipse(front, 49.0, 67.5, 7.0, 6.5, PAL_ALPHA_MANE)
+        draw_capsule(front, (21, 71), (33, 74), 3.0, 2.1, PAL_ALPHA_FUR)
+        draw_capsule(front, (47, 71), (59, 74), 2.8, 2.1, PAL_ALPHA_FUR)
+        draw_ellipse(front, 58.0, 68.0, 7.4, 6.0, PAL_ALPHA_FUR)
+        draw_polygon_shaded(front, [(51, 63), (47, 56), (55, 61)], PAL_ALPHA_FUR)
+        draw_capsule(front, (61, 68), (71, 70), 3.5, 2.2, PAL_ALPHA_MANE)
+        front.put(72, 70, (16, 12, 14, 255))
+        draw_x_eye(front, 59, 65, (24, 18, 22, 255))
+        front_out = add_outline(front, OUTLINE)
+        res = Canvas(FW, FH)
+        res.composite(back_out)
+        res.composite(front_out)
+        return remove_isolated_pixels(res)
+
+    hip = (21.0 + dx, 48.0 + dy - body_pitch * 3.5)
+    shoulder = (48.0 + dx, 44.0 + dy + body_pitch * 3.5)
+
+    back = Canvas(FW, FH)
+    t_mid = rot_pt((hip[0] - 3.0, hip[1] - 3.0), (-8.0, -11.0), tail_ang)
+    t_tip = rot_pt(t_mid, (-4.0, -11.0), tail_ang * 1.3)
+    draw_capsule(back, (hip[0] - 3.0, hip[1] - 3.0), t_mid, 4.6, 3.6, PAL_ALPHA_FUR)
+    draw_capsule(back, t_mid, t_tip, 3.6, 1.8, PAL_ALPHA_MANE)
+
+    _draw_alpha_leg(back, (hip[0] + 4.0, hip[1] + 2.0), br[0], br[1], PAL_ALPHA_BACK, PAL_ALPHA_BACK, 12.5, 12.0, 4.0, 2.6, 2.0, has_claw=False)
+    _draw_alpha_leg(back, (shoulder[0] + 4.0, shoulder[1] + 5.0), fr[0], fr[1], PAL_ALPHA_BACK, PAL_ALPHA_BACK, 12.0, 11.5, 3.6, 2.4, 1.9, has_claw=False)
+    back_out = add_outline(back, OUTLINE)
+
+    front = Canvas(FW, FH)
+    # Torso robusto
+    draw_capsule(front, (hip[0], hip[1] - 2.0), (shoulder[0], shoulder[1] - 2.0), 8.6, 10.2, PAL_ALPHA_FUR)
+    # Peito e juba ericada
+    draw_ellipse(front, shoulder[0] + 1.0, shoulder[1] - 1.0, 8.2, 8.6, PAL_ALPHA_MANE)
+    draw_polygon_shaded(front, [(shoulder[0] - 16, shoulder[1] - 5), (shoulder[0] - 10, shoulder[1] - 16), (shoulder[0] - 1, shoulder[1] - 10), (shoulder[0] - 8, shoulder[1] - 1)], PAL_ALPHA_FUR)
+    draw_polygon_shaded(front, [(shoulder[0] - 11, shoulder[1] - 7), (shoulder[0] - 5, shoulder[1] - 20), (shoulder[0] + 6, shoulder[1] - 13), (shoulder[0] - 1, shoulder[1] - 2)], PAL_ALPHA_FUR)
+    draw_polygon_shaded(front, [(shoulder[0] - 7, shoulder[1] - 6), (shoulder[0], shoulder[1] - 18), (shoulder[0] + 9, shoulder[1] - 10), (shoulder[0] + 1, shoulder[1])], PAL_ALPHA_MANE)
+    draw_polygon_shaded(front, [(shoulder[0] - 4, shoulder[1] + 2), (shoulder[0] + 5, shoulder[1] + 8), (shoulder[0] + 9, shoulder[1] - 2)], PAL_ALPHA_MANE)
+
+    # Patas frontais
+    _draw_alpha_leg(front, (hip[0] - 2.0, hip[1] + 1.0), bl[0], bl[1], PAL_ALPHA_FUR, PAL_ALPHA_MANE, 13.0, 12.2, 4.5, 2.8, 2.2)
+    _draw_alpha_leg(front, (shoulder[0] - 2.0, shoulder[1] + 5.0), fl[0], fl[1], PAL_ALPHA_FUR, PAL_ALPHA_MANE, 12.5, 11.8, 4.0, 2.6, 2.0)
+
+    # Cabeca grande 3/4 para a direita
+    hx = shoulder[0] + 8.5 + head_dx
+    hy = shoulder[1] - 15.0 + head_dy
+    draw_ellipse(front, hx, hy, 8.2, 7.0, PAL_ALPHA_FUR)
+    draw_polygon_shaded(front, [(hx - 7.5, hy - 4), (hx - 10.5, hy - 15), (hx - 2.5, hy - 8)], PAL_ALPHA_FUR)
+    draw_polygon_shaded(front, [(hx - 0.5, hy - 6), (hx + 1.5, hy - 16), (hx + 5.5, hy - 6)], PAL_ALPHA_FUR)
+    front.put(int(round(hx - 7.5)), int(round(hy - 10)), (180, 96, 86, 255))
+    front.put(int(round(hx + 1.5)), int(round(hy - 11)), (180, 96, 86, 255))
+
+    # Focinho + mandibula
+    draw_capsule(front, (hx + 2.5, hy), (hx + 15.5, hy + 1.0), 4.0, 2.4, PAL_ALPHA_MANE)
+    draw_capsule(front, (hx + 2.5, hy + 4.5 + jaw_open * 1.6), (hx + 13.5, hy + 5.8 + jaw_open * 3.2), 2.3, 1.6, PAL_ALPHA_MANE)
+    nx = int(round(hx + 16.5))
+    ny = int(round(hy + 0.5))
+    for ox, oy in ((0, 0), (0, 1), (-1, 0)):
+        front.put(nx + ox, ny + oy, (16, 12, 14, 255))
+
+    # Boca e presas maiores
+    mx0 = int(round(hx + 5.5))
+    my0 = int(round(hy + 3.0 + jaw_open * 0.9))
+    for mx in range(mx0, mx0 + 9):
+        front.put(mx, my0, (130, 22, 28, 255))
+        if jaw_open > 0.3:
+            front.put(mx, my0 + 1, (95, 16, 22, 255))
+    for fx in (mx0 + 2, mx0 + 5, mx0 + 8):
+        front.put(fx, my0 - 1, (248, 244, 236, 255))
+        front.put(fx, my0, (248, 244, 236, 255))
+
+    ex = int(round(hx + 1.5))
+    ey = int(round(hy - 3.0))
+    if eye_mode == "x":
+        draw_x_eye(front, ex, ey, (20, 14, 18, 255))
+    else:
+        front.put(ex, ey, (220, 36, 24, 255))
+        front.put(ex + 1, ey, (255, 190, 50, 255))
+        front.put(ex, ey + 1, (255, 95, 30, 255))
+        front.put(ex + 1, ey + 1, (255, 240, 140, 255))
+
+    # Cicatriz de batalha
+    scar_col = (232, 168, 152, 255)
+    front.put(int(round(hx - 0.5)), int(round(hy - 6.0)), scar_col)
+    front.put(int(round(hx + 0.5)), int(round(hy - 5.0)), scar_col)
+    front.put(int(round(hx + 4.5)), int(round(hy)), scar_col)
+    front.put(int(round(hx + 5.5)), int(round(hy + 1.0)), scar_col)
+
+    front_out = add_outline(front, OUTLINE)
+    res = Canvas(FW, FH)
+    res.composite(back_out)
+    res.composite(front_out)
+    return remove_isolated_pixels(res)
+
+
+def build_wolf_alpha_frames() -> List[Canvas]:
+    frames: List[Canvas] = []
+    # 0..3 idle
+    frames.append(render_wolf_alpha_frame(dy=0.0, tail_ang=0.0, jaw_open=0.0))
+    frames.append(render_wolf_alpha_frame(dy=0.8, head_dy=0.8, tail_ang=0.12, jaw_open=0.2))
+    frames.append(render_wolf_alpha_frame(dy=1.4, head_dy=1.2, tail_ang=0.20, jaw_open=0.4))
+    frames.append(render_wolf_alpha_frame(dy=0.7, head_dy=0.6, tail_ang=0.10, jaw_open=0.2))
+
+    # 4..9 walk
+    walk_cfg = [
+        (-1.0, 0.12, (-0.52, 0.25), (0.38, -0.10), (0.55, -0.25), (-0.35, 0.20), -0.20),
+        (0.5, 0.05, (-0.22, 0.12), (0.15, 0.15), (0.20, -0.15), (-0.10, 0.25), -0.05),
+        (-2.2, -0.08, (0.20, 0.45), (-0.18, 0.35), (-0.25, 0.30), (0.25, 0.10), 0.15),
+        (-1.0, -0.12, (0.38, -0.10), (-0.52, 0.25), (-0.35, 0.20), (0.55, -0.25), 0.22),
+        (0.5, -0.05, (0.15, 0.15), (-0.22, 0.12), (-0.10, 0.25), (0.20, -0.15), 0.08),
+        (-2.0, 0.06, (-0.18, 0.35), (0.20, 0.45), (0.25, 0.10), (-0.25, 0.30), -0.10),
+    ]
+    for dy, bp, fl, fr, bl, br, tang in walk_cfg:
+        frames.append(render_wolf_alpha_frame(dy=dy, body_pitch=bp, fl=fl, fr=fr, bl=bl, br=br, tail_ang=tang, jaw_open=0.2))
+
+    # 10..15 attack
+    frames.append(render_wolf_alpha_frame(dx=-3.5, dy=3.5, body_pitch=0.3, head_dx=-1.0, head_dy=2.0, fl=(-0.45, 0.55), fr=(-0.50, 0.60), bl=(0.60, -0.45), br=(0.55, -0.40), tail_ang=0.35, jaw_open=0.4))
+    frames.append(render_wolf_alpha_frame(dx=-6.0, dy=5.5, body_pitch=0.4, head_dx=-1.5, head_dy=3.0, fl=(-0.60, 0.80), fr=(-0.65, 0.85), bl=(0.75, -0.60), br=(0.70, -0.55), tail_ang=0.45, jaw_open=0.7))
+    frames.append(render_wolf_alpha_frame(dx=5.5, dy=-4.5, body_pitch=-0.35, head_dx=2.0, head_dy=-1.0, fl=(-0.85, -0.20), fr=(-0.75, -0.15), bl=(0.85, 0.25), br=(0.78, 0.20), tail_ang=0.55, jaw_open=1.2))
+    frames.append(render_wolf_alpha_frame(dx=7.0, dy=-2.0, body_pitch=-0.20, head_dx=2.0, head_dy=0.5, fl=(-0.70, 0.10), fr=(-0.62, 0.12), bl=(0.72, 0.10), br=(0.65, 0.08), tail_ang=0.40, jaw_open=1.3))
+    frames.append(render_wolf_alpha_frame(dx=3.5, dy=1.5, body_pitch=0.10, head_dx=1.0, head_dy=1.0, fl=(-0.35, 0.25), fr=(-0.30, 0.22), bl=(0.40, -0.20), br=(0.35, -0.18), tail_ang=0.15, jaw_open=0.5))
+    frames.append(render_wolf_alpha_frame(dx=1.0, dy=0.5, body_pitch=0.0, fl=(-0.20, 0.16), fr=(-0.25, 0.16), bl=(0.36, -0.20), br=(0.28, -0.22), tail_ang=0.0, jaw_open=0.1))
+
+    # 16..19 death
+    frames.append(render_wolf_alpha_frame(dx=-2.0, dy=2.5, body_pitch=-0.3, head_dy=2.5, fl=(-0.10, 0.30), fr=(-0.15, 0.35), bl=(0.25, -0.10), br=(0.20, -0.10), eye_mode="x"))
+    frames.append(render_wolf_alpha_frame(dx=-1.0, dy=7.0, body_pitch=0.1, head_dy=5.0, fl=(-0.45, 0.85), fr=(-0.50, 0.90), bl=(0.55, -0.55), br=(0.50, -0.50), eye_mode="x"))
+    frames.append(render_wolf_alpha_frame(dx=0.0, dy=11.5, body_pitch=0.25, head_dy=7.0, fl=(-0.75, 1.15), fr=(-0.80, 1.20), bl=(0.80, -0.80), br=(0.75, -0.75), eye_mode="x"))
+    frames.append(render_wolf_alpha_frame(dead_pose=True))
     return frames
 
 
@@ -1061,17 +1235,301 @@ def build_skeleton_archer_frames() -> List[Canvas]:
 
 
 # ---------------------------------------------------------------------------
+# 6. KARNAK (20 frames, 96x96, Boss Demonio com machado duplo)
+# ---------------------------------------------------------------------------
+
+KARNAK_W = 96
+KARNAK_H = 96
+KARNAK_FOOT_Y = 92
+KARNAK_BASE_PATH = ROOT / "assets" / "sprites_src" / "monsters" / "karnak_base.png"
+
+
+def _load_karnak_base() -> Canvas:
+    if KARNAK_BASE_PATH.exists():
+        return base.read_png(KARNAK_BASE_PATH)
+    return base.build_karnak_base()
+
+
+def _rotate_canvas_nn(
+    src: Canvas,
+    pivot_x: float,
+    pivot_y: float,
+    angle_rad: float,
+    dst_x: float,
+    dst_y: float,
+    out_w: int = KARNAK_W,
+    out_h: int = KARNAK_H,
+) -> Canvas:
+    dst = Canvas(out_w, out_h)
+    ca = math.cos(-angle_rad)
+    sa = math.sin(-angle_rad)
+    for y in range(out_h):
+        dy = y - dst_y
+        for x in range(out_w):
+            dx = x - dst_x
+            sx = int(round(pivot_x + dx * ca - dy * sa))
+            sy = int(round(pivot_y + dx * sa + dy * ca))
+            if 0 <= sx < src.w and 0 <= sy < src.h:
+                col = src.get(sx, sy)
+                if col[3] > 0:
+                    dst.put(x, y, col)
+    return dst
+
+
+def _boost_karnak_glow(cv: Canvas, boost: float, dim_eyes: bool = False) -> None:
+    if boost == 0.0 and not dim_eyes:
+        return
+    for y in range(cv.h):
+        for x in range(cv.w):
+            r, g, b, a = cv.get(x, y)
+            if a == 0:
+                continue
+            is_eye = (48 <= x <= 62 and 20 <= y <= 28 and r > 150 and g > 60)
+            if dim_eyes and is_eye:
+                cv.put(x, y, (65, 18, 18, a))
+                continue
+            # Runas/brasas no machado (esquerda) ou olhos
+            if (x <= 34 or is_eye) and r >= 130 and r > g + 35 and r > b + 45:
+                nr = int(clamp(r + 55 * boost, 0, 255))
+                ng = int(clamp(g + 70 * boost, 0, 255))
+                nb = int(clamp(b + 25 * boost, 0, 255))
+                cv.put(x, y, (nr, ng, nb, a))
+
+
+def _draw_crimson_slash(cv: Canvas, phase: float) -> None:
+    """Desenha rastro de corte vermelho carmesim amplo na frente do Karnak (esquerda)."""
+    cx, cy = 42.0, 52.0
+    radius = 33.0
+    # Sentido anti-horario: cima (-1.85) -> esquerda (-pi) -> baixo (-4.45)
+    start_a = -1.85 - phase * 0.35
+    end_a = -4.25 - phase * 0.25
+    steps = 100
+    for i in range(steps + 1):
+        t = i / steps
+        ang = start_a + (end_a - start_a) * t
+        thickness = 4.0 * math.sin(t * math.pi) + 0.8
+        px = cx + math.cos(ang) * radius
+        py = cy + math.sin(ang) * radius
+        for oy in range(-5, 6):
+            for ox in range(-5, 6):
+                d = math.hypot(ox, oy)
+                if d <= thickness:
+                    ix = int(round(px + ox))
+                    iy = int(round(py + oy))
+                    if 1 <= ix < KARNAK_W - 1 and 1 <= iy < KARNAK_H - 1:
+                        if d <= thickness * 0.35 and t > 0.25:
+                            col = (255, 220, 130, 255)
+                        elif d <= thickness * 0.7:
+                            col = (245, 72, 42, 255)
+                        else:
+                            col = (165, 20, 30, 255)
+                        cv.put(ix, iy, col)
+
+
+def _draw_raised_axe(cv: Canvas, base_cv: Canvas, dst_x: float, dst_y: float, angle_rad: float) -> None:
+    """Recorta o machado duplo original do Karnak e o rotaciona erguido sobre o ombro."""
+    axe_src = Canvas(KARNAK_W, KARNAK_H)
+    for y in range(36, 70):
+        for x in range(0, 42):
+            col = base_cv.get(x, y)
+            if col[3] > 0:
+                axe_src.put(x, y, col)
+    # Rotaciona em torno do punho do machado (x=32, y=54)
+    rot_axe = _rotate_canvas_nn(axe_src, 32.0, 54.0, angle_rad, dst_x, dst_y)
+    # Adiciona brilho nas runas da lamina erguida
+    _boost_karnak_glow(rot_axe, 0.8)
+    cv.composite(rot_axe)
+
+
+def _render_karnak_posed(
+    base_cv: Canvas,
+    upper_dx: int = 0,
+    upper_dy: int = 0,
+    leg_l_dx: int = 0,
+    leg_l_dy: int = 0,
+    leg_r_dx: int = 0,
+    leg_r_dy: int = 0,
+    cape_dx: int = 0,
+    cape_dy: int = 0,
+    axe_dx: int = 0,
+    axe_dy: int = 0,
+    hide_front_axe: bool = False,
+    rune_boost: float = 0.0,
+) -> Canvas:
+    out = Canvas(KARNAK_W, KARNAK_H)
+
+    # 1. Capa esfarrapada (fundo direito: x >= 66, y >= 45)
+    for y in range(45, 88):
+        for x in range(66, KARNAK_W):
+            col = base_cv.get(x, y)
+            if col[3] == 0:
+                continue
+            nx = clamp(x + cape_dx + upper_dx, 0, KARNAK_W - 1)
+            ny = clamp(y + cape_dy + upper_dy, 0, KARNAK_FOOT_Y - 1)
+            out.put(nx, ny, col)
+
+    # 2. Pernas abaixo da cintura (y >= 62), com cascos limitados a y <= 91
+    for y in range(62, KARNAK_H):
+        for x in range(KARNAK_W):
+            if x >= 68 and y < 86:
+                continue  # ja desenhado na capa
+            if x < 35 and y < 68:
+                continue  # lamina do machado
+            col = base_cv.get(x, y)
+            if col[3] == 0:
+                continue
+            if x < 52:
+                nx = clamp(x + leg_l_dx, 0, KARNAK_W - 1)
+                ny = min(KARNAK_FOOT_Y - 1, max(0, y + leg_l_dy))
+            else:
+                nx = clamp(x + leg_r_dx, 0, KARNAK_W - 1)
+                ny = min(KARNAK_FOOT_Y - 1, max(0, y + leg_r_dy))
+            out.put(nx, ny, col)
+
+    # 3. Tronco, ombros, bracos e cabeca (y < 66)
+    for y in range(0, 66):
+        for x in range(KARNAK_W):
+            if x >= 68 and y >= 45:
+                continue  # capa
+            is_axe_head = (x <= 34 and y >= 36)
+            if is_axe_head:
+                continue
+            col = base_cv.get(x, y)
+            if col[3] == 0:
+                continue
+            nx = clamp(x + upper_dx, 0, KARNAK_W - 1)
+            ny = clamp(y + upper_dy, 0, KARNAK_FOOT_Y - 1)
+            out.put(nx, ny, col)
+
+    # Preenche eventual fenda de 1-2px na cintura quando o tronco sobe
+    if upper_dy < 0:
+        for y in range(61 + upper_dy, 64):
+            for x in range(40, 66):
+                if out.get(x, y)[3] == 0 and out.get(x, y - 1)[3] > 0 and out.get(x, y + 2)[3] > 0:
+                    out.put(x, y, (34, 30, 34, 255))
+
+    # 4. Cabeca do machado duplo (x <= 34, y >= 36)
+    if not hide_front_axe:
+        for y in range(36, 70):
+            for x in range(0, 36):
+                col = base_cv.get(x, y)
+                if col[3] == 0:
+                    continue
+                nx = clamp(x + upper_dx + axe_dx, 0, KARNAK_W - 1)
+                ny = clamp(y + upper_dy + axe_dy, 0, KARNAK_FOOT_Y - 1)
+                out.put(nx, ny, col)
+
+    _boost_karnak_glow(out, rune_boost)
+    return remove_isolated_pixels(out)
+
+
+def build_karnak_frames() -> List[Canvas]:
+    base_cv = _load_karnak_base()
+    frames: List[Canvas] = []
+
+    # 0..3 idle (respiracao imponente, pulsar de runas e leve ondulacao da capa)
+    idle_cfg = [
+        (0, 0, 0, 0.0),
+        (1, 1, 0, 0.45),
+        (1, 1, 1, 0.90),
+        (0, 0, 1, 0.40),
+    ]
+    for udy, cdy, cdx, glow in idle_cfg:
+        frames.append(_render_karnak_posed(base_cv, upper_dy=udy, cape_dx=cdx, cape_dy=cdy, rune_boost=glow))
+
+    # 4..9 walk (passos pesados alternando pernas/cascos, bounce vertical e balanco de machado/capa)
+    walk_cfg = [
+        # (udy, l_dx, l_dy, r_dx, r_dy, cdx, cdy, ady)
+        (-1, -2, -3, 1, 0, 1, -1, -1),
+        (0, -1, -1, 2, -1, 1, 0, 0),
+        (-1, 1, 0, 0, -2, 0, -1, 1),
+        (-1, 2, 0, -2, -3, -1, -1, 0),
+        (0, 1, -1, -1, -1, 0, 0, -1),
+        (0, 0, -2, 0, 0, 1, 0, 0),
+    ]
+    for udy, ldx, ldy, rdx, rdy, cdx, cdy, ady in walk_cfg:
+        frames.append(
+            _render_karnak_posed(
+                base_cv,
+                upper_dy=udy,
+                leg_l_dx=ldx,
+                leg_l_dy=ldy,
+                leg_r_dx=rdx,
+                leg_r_dy=rdy,
+                cape_dx=cdx,
+                cape_dy=cdy,
+                axe_dy=ady,
+                rune_boost=0.25,
+            )
+        )
+
+    # 10..15 attack (antecipacao erguendo machado -> golpe descendente com rastro carmesim -> retorno)
+    # 10: inicio da antecipacao
+    f10 = _render_karnak_posed(base_cv, upper_dx=3, upper_dy=-1, leg_l_dx=2, leg_r_dx=3, cape_dx=2, hide_front_axe=True, rune_boost=0.7)
+    _draw_raised_axe(f10, base_cv, 58.0, 32.0, 1.35)
+    frames.append(remove_isolated_pixels(f10))
+
+    # 11: pico da antecipacao (machado erguido atras)
+    f11 = _render_karnak_posed(base_cv, upper_dx=5, upper_dy=-2, leg_l_dx=3, leg_r_dx=4, cape_dx=3, cape_dy=-1, hide_front_axe=True, rune_boost=1.0)
+    _draw_raised_axe(f11, base_cv, 62.0, 26.0, 1.85)
+    frames.append(remove_isolated_pixels(f11))
+
+    # 12: golpe amplo descendente com rastro vermelho carmesim
+    f12 = _render_karnak_posed(base_cv, upper_dx=-4, upper_dy=1, leg_l_dx=-4, leg_r_dx=-2, cape_dx=-2, axe_dx=-2, axe_dy=5, rune_boost=1.0)
+    _draw_crimson_slash(f12, phase=0.0)
+    frames.append(remove_isolated_pixels(f12))
+
+    # 13: impacto baixo do golpe com rastro carmesim estendido
+    f13 = _render_karnak_posed(base_cv, upper_dx=-6, upper_dy=2, leg_l_dx=-5, leg_r_dx=-3, cape_dx=-3, axe_dx=-3, axe_dy=9, rune_boost=1.0)
+    _draw_crimson_slash(f13, phase=0.65)
+    frames.append(remove_isolated_pixels(f13))
+
+    # 14: follow-through
+    frames.append(_render_karnak_posed(base_cv, upper_dx=-3, upper_dy=1, leg_l_dx=-2, leg_r_dx=-1, axe_dx=-1, axe_dy=4, rune_boost=0.5))
+
+    # 15: retorno a guarda
+    frames.append(_render_karnak_posed(base_cv, upper_dx=-1, upper_dy=0, leg_l_dx=-1, rune_boost=0.2))
+
+    # 16..19 death (recuo -> joelhos cedendo -> tombando -> caido no chao com machado)
+    # 16: recuo
+    f16 = _render_karnak_posed(base_cv, upper_dx=3, upper_dy=2, leg_l_dx=1, leg_r_dx=2, cape_dx=2)
+    _boost_karnak_glow(f16, 0.0, dim_eyes=True)
+    frames.append(f16)
+
+    # 17: joelhos cedendo
+    f17 = _render_karnak_posed(base_cv, upper_dx=4, upper_dy=10, leg_l_dx=-1, leg_l_dy=8, leg_r_dx=3, leg_r_dy=8, axe_dy=12, cape_dy=8)
+    _boost_karnak_glow(f17, 0.0, dim_eyes=True)
+    frames.append(f17)
+
+    # 18: tombando para tras
+    f18 = _rotate_canvas_nn(base_cv, 52.0, 70.0, 0.80, 44.0, 74.0)
+    _boost_karnak_glow(f18, 0.0, dim_eyes=True)
+    frames.append(remove_isolated_pixels(f18))
+
+    # 19: caido no chao (100% dentro de 96x96, ate y=91)
+    f19 = _rotate_canvas_nn(base_cv, 52.0, 56.0, 1.48, 36.0, 70.0)
+    _boost_karnak_glow(f19, 0.0, dim_eyes=True)
+    frames.append(remove_isolated_pixels(f19))
+
+    return frames
+
+
+# ---------------------------------------------------------------------------
 # Montagem dos Spritesheets, Preview 20f e Manifest
 # ---------------------------------------------------------------------------
 
-def assemble_strip(frames: Sequence[Canvas]) -> Canvas:
-    sheet = Canvas(FW * len(frames), FH)
+def assemble_strip(frames: Sequence[Canvas], fw: int = FW, fh: int = FH) -> Canvas:
+    sheet = Canvas(fw * len(frames), fh)
     for i, fr in enumerate(frames):
-        sheet.composite(fr, dx=i * FW, dy=0)
+        sheet.composite(fr, dx=i * fw, dy=0)
     return sheet
 
 
-def build_preview_grid(all_monsters: Sequence[Tuple[str, Sequence[Canvas]]], scale: int = 2) -> Canvas:
+def build_preview_grid(
+    all_monsters: Sequence[Tuple[str, Sequence[Canvas], int, int, int]],
+    scale: int = 2,
+    title: str = "SUBMUNDO BOSSES AND RESIZE 20F",
+) -> Canvas:
     base.FONT_3X5.update({
         "0": ("111", "101", "101", "101", "111"),
         "1": ("010", "110", "010", "010", "111"),
@@ -1085,53 +1543,52 @@ def build_preview_grid(all_monsters: Sequence[Tuple[str, Sequence[Canvas]]], sca
         "-": ("000", "000", "111", "000", "000"),
     })
     cols = NUM_FRAMES
-    rows = len(all_monsters)
-    cell_w = FW * scale
-    cell_h = FH * scale
+    max_fw = max(fw for _, _, fw, _, _ in all_monsters)
+    cell_w = max_fw * scale
     label_w = 180
     pad_x = 12
     pad_y = 26
     header_h = 44
 
     total_w = label_w + cols * cell_w + pad_x * 2
-    total_h = header_h + rows * (cell_h + pad_y) + 16
+    total_h = header_h + sum(fh * scale + pad_y for _, _, _, fh, _ in all_monsters) + 16
     grid = Canvas(total_w, total_h, (20, 22, 30, 255))
 
-    draw_text(grid, pad_x, 10, "SUBMUNDO 5 MONSTERS 20F", (235, 225, 195, 255), scale=2)
+    draw_text(grid, pad_x, 10, title, (235, 225, 195, 255), scale=2)
     sections = [
         (0, "IDLE 0-3", (120, 210, 240, 255)),
         (4, "WALK 4-9", (140, 230, 150, 255)),
         (10, "ATTACK 10-15", (245, 165, 95, 255)),
         (16, "DEATH 16-19", (230, 110, 120, 255)),
     ]
-    for fidx, title, col in sections:
-        draw_text(grid, label_w + fidx * cell_w + 4, 28, title, col, scale=2)
+    for fidx, sec_title, col in sections:
+        draw_text(grid, label_w + fidx * cell_w + 4, 28, sec_title, col, scale=2)
 
-    for r, (name, frames) in enumerate(all_monsters):
-        y0 = header_h + r * (cell_h + pad_y)
-        draw_text(grid, pad_x, y0 + cell_h // 2 - 6, name.upper(), (220, 230, 245, 255), scale=2)
+    y_cursor = header_h
+    for name, frames, fw, fh, foot_y in all_monsters:
+        row_cell_w = fw * scale
+        row_cell_h = fh * scale
+        draw_text(grid, pad_x, y_cursor + row_cell_h // 2 - 6, name.upper(), (220, 230, 245, 255), scale=2)
 
         for c, fr in enumerate(frames):
             bx0 = label_w + c * cell_w
-            by0 = y0
-            for py in range(cell_h):
-                for px in range(cell_w):
+            by0 = y_cursor
+            for py in range(row_cell_h):
+                for px in range(row_cell_w):
                     checker = ((px // (8 * scale)) + (py // (8 * scale))) % 2 == 0
                     bg = (50, 54, 64, 255) if checker else (40, 44, 54, 255)
                     grid.put(bx0 + px, by0 + py, bg)
 
-            # Linha guia do chao (y = 76)
-            gy = by0 + FOOT_Y * scale
-            for px in range(cell_w):
+            gy = by0 + foot_y * scale
+            for px in range(row_cell_w):
                 grid.put(bx0 + px, gy, (95, 155, 105, 255))
 
-            # Separador de grupo
             if c in (4, 10, 16):
-                for py in range(cell_h):
+                for py in range(row_cell_h):
                     grid.put(bx0, by0 + py, (200, 180, 120, 255))
 
-            for sy in range(FH):
-                for sx in range(FW):
+            for sy in range(fh):
+                for sx in range(fw):
                     col = fr.get(sx, sy)
                     if col[3] == 0:
                         continue
@@ -1139,51 +1596,57 @@ def build_preview_grid(all_monsters: Sequence[Tuple[str, Sequence[Canvas]]], sca
                         for dx in range(scale):
                             grid.blend_pixel(bx0 + sx * scale + dx, by0 + sy * scale + dy, col)
 
+        y_cursor += row_cell_h + pad_y
+
     return grid
 
 
-def update_manifest(keys: Sequence[str]) -> None:
+def update_manifest(entries: Sequence[Tuple[str, int, int]]) -> None:
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     sprites = manifest.setdefault("sprites", {})
-    for key in keys:
+    for key, fw, fh in entries:
         sprites[key] = {
             "key": key,
             "file": f"{key}.png",
-            "width": FW * NUM_FRAMES,
-            "height": FH,
-            "frameWidth": FW,
-            "frameHeight": FH,
+            "width": fw * NUM_FRAMES,
+            "height": fh,
+            "frameWidth": fw,
+            "frameHeight": fh,
             "frames": list(FRAME_NAMES),
         }
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
 
+PREVIEW_BOSSES_PATH = ROOT / "assets" / "mockups" / "preview_bosses_20f.png"
+
+
 def main() -> None:
     OUT_SPRITES_DIR.mkdir(parents=True, exist_ok=True)
     builders = [
-        ("slime", build_slime_frames),
-        ("cave_bat", build_cave_bat_frames),
-        ("wolf", build_wolf_frames),
-        ("skeleton", build_skeleton_frames),
-        ("skeleton_archer", build_skeleton_archer_frames),
+        ("slime", build_slime_frames, FW, FH, FOOT_Y),
+        ("cave_bat", build_cave_bat_frames, FW, FH, FOOT_Y),
+        ("wolf_alpha", build_wolf_alpha_frames, FW, FH, FOOT_Y),
+        ("karnak", build_karnak_frames, KARNAK_W, KARNAK_H, KARNAK_FOOT_Y),
     ]
 
-    all_monsters: List[Tuple[str, List[Canvas]]] = []
-    for key, fn in builders:
+    preview_rows: List[Tuple[str, List[Canvas], int, int, int]] = []
+    manifest_entries: List[Tuple[str, int, int]] = []
+    for key, fn, fw, fh, foot_y in builders:
         frames = fn()
         assert len(frames) == NUM_FRAMES, f"{key}: esperado {NUM_FRAMES} frames, obteve {len(frames)}"
-        sheet = assemble_strip(frames)
+        sheet = assemble_strip(frames, fw=fw, fh=fh)
         out_path = OUT_SPRITES_DIR / f"{key}.png"
         write_png(out_path, sheet)
-        print(f"Gerado: {out_path} ({sheet.w}x{sheet.h}, {len(frames)} frames)")
-        all_monsters.append((key, frames))
+        print(f"Gerado: {out_path} ({sheet.w}x{sheet.h}, {len(frames)} frames {fw}x{fh})")
+        preview_rows.append((key, frames, fw, fh, foot_y))
+        manifest_entries.append((key, fw, fh))
 
-    update_manifest([k for k, _ in builders])
+    update_manifest(manifest_entries)
     print(f"Atualizado: {MANIFEST_PATH}")
 
-    preview = build_preview_grid(all_monsters, scale=2)
-    write_png(PREVIEW_PATH, preview)
-    print(f"Preview: {PREVIEW_PATH} ({preview.w}x{preview.h})")
+    preview = build_preview_grid(preview_rows, scale=2, title="SUBMUNDO BOSSES AND RESIZE 20F")
+    write_png(PREVIEW_BOSSES_PATH, preview)
+    print(f"Preview: {PREVIEW_BOSSES_PATH} ({preview.w}x{preview.h})")
 
 
 if __name__ == "__main__":

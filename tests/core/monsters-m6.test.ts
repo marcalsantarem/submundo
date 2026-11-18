@@ -78,6 +78,29 @@ describe('M6 Common Monsters Catalog & Ranged Combat (T-093a)', () => {
     expect(skeletonArcher.defense).toBeLessThanOrEqual(2);
   });
 
+  it('contains M6 bosses wolf_alpha and karnak with expected boss stats (T-098a)', () => {
+    const wolf = getMonsterDef('wolf');
+    const wolfAlpha = getMonsterDef('wolf_alpha');
+    const karnak = getMonsterDef('karnak');
+
+    expect(wolfAlpha.name).toBe('Chefe da Matilha');
+    expect(wolfAlpha.type).toBe('boss');
+    expect(wolfAlpha.attackType).toBe('melee');
+    expect(wolfAlpha.spriteKey).toBe('wolf_alpha');
+    expect(wolfAlpha.maxHp).toBeGreaterThan(wolf.maxHp);
+    expect(wolfAlpha.attack).toBeGreaterThan(wolf.attack);
+    expect(wolfAlpha.defense).toBeGreaterThan(wolf.defense);
+    expect(wolfAlpha.soulReward).toBe(60);
+
+    expect(karnak.name).toBe('Karnak');
+    expect(karnak.type).toBe('boss');
+    expect(karnak.attackType).toBe('melee');
+    expect(karnak.spriteKey).toBe('karnak');
+    expect(karnak.maxHp).toBeGreaterThanOrEqual(9999);
+    expect(karnak.defense).toBeGreaterThanOrEqual(999);
+    expect(karnak.soulReward).toBe(0);
+  });
+
   it('propagates attackType on spawnMonster with melee fallback', () => {
     const archer = spawnMonster(getMonsterDef('skeleton_archer'), 'archer_1', { x: 0, y: 0 });
     expect(archer.attackType).toBe('ranged');

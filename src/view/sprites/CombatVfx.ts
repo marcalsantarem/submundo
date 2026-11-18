@@ -122,12 +122,14 @@ const ANIMATION_SPECS: readonly AnimationSpec[] = [
     frameRate: 14,
     repeat: 0,
   },
-  // Monsters (20 frames of 80x80: idle 0-3, walk 4-9, attack 10-15, death 16-19)
+  // Monsters (20 frames: idle 0-3, walk 4-9, attack 10-15, death 16-19)
   ...createMonsterAnimSpecs('slime', 6, 10),
   ...createMonsterAnimSpecs('cave_bat', 8, 12),
   ...createMonsterAnimSpecs('wolf', 6, 12),
   ...createMonsterAnimSpecs('skeleton', 6, 10),
   ...createMonsterAnimSpecs('skeleton_archer', 6, 10),
+  ...createMonsterAnimSpecs('wolf_alpha', 6, 12),
+  ...createMonsterAnimSpecs('karnak', 6, 9),
   // Legacy fallback specs if wraith_warrior or legacy monster textures exist
   {
     key: 'wraith_idle',
@@ -237,6 +239,8 @@ const ANIMATED_MONSTER_KEYS = new Set<string>([
   'wolf',
   'skeleton',
   'skeleton_archer',
+  'wolf_alpha',
+  'karnak',
 ]);
 
 const LEGACY_MONSTER_ANIM_FALLBACKS: Record<string, string> = {

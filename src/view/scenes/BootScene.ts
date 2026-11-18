@@ -157,6 +157,20 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
     frameHeight: 48,
     fallbackColor: 0x94a3b8,
   },
+  {
+    key: 'wolf_alpha',
+    file: 'assets/sprites/wolf_alpha.png',
+    frameWidth: 80,
+    frameHeight: 80,
+    fallbackColor: 0x9a3412,
+  },
+  {
+    key: 'karnak',
+    file: 'assets/sprites/karnak.png',
+    frameWidth: 96,
+    frameHeight: 96,
+    fallbackColor: 0x991b1b,
+  },
 ];
 
 export class BootScene extends Phaser.Scene {

@@ -168,5 +168,7 @@
 | `wolf` | **Lobo** | Lobo cinzento de olhos atentos e presas afiadas. | Corpo-a-corpo ágil; mais rápido e resistente que o Slime. | Fera selvagem das matas e túneis do mundo real, levada à fúria pela corrupção crescente. |
 | `skeleton` | **Esqueleto** | Humanoide esquelético armado com espada e escudo. | Corpo-a-corpo padrão; levemente resistente. | Restos de antigos vigias reanimados por runas profanas para guardar galerias esquecidas. |
 | `skeleton_archer` | **Esqueleto Arqueiro** | Humanoide esquelético portando arco de madeira. | Ataque à distância; frágil em combate próximo. | Atirador descarnado que mantém distância e dispara flechas silenciosas da penumbra. |
+| `wolf_alpha` | **Chefe da Matilha** (`boss`) | Lobo alfa de grande porte, pelagem marrom/vermelha. | Mini-boss agressivo corpo-a-corpo; lidera a matilha na mina. | Fera dominante que tomou as galerias da mina da cidade (Missão 2), guiada pelo cheiro de sangue e enxofre. |
+| `karnak` | **Karnak** (`boss`) | Demônio escuro e vermelho empunhando um machado duplo. | Boss invencível (Missão 3); golpes pesados e implacáveis. | Vanguarda infernal que emerge no fundo da mina (Missão 3) e retorna como miniboss/boss no Ato 1. |
 
 

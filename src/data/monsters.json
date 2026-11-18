@@ -124,5 +124,33 @@
     "attackCooldownMs": 1600,
     "soulReward": 14,
     "spriteKey": "skeleton_archer"
+  },
+  {
+    "id": "wolf_alpha",
+    "name": "Chefe da Matilha",
+    "type": "boss",
+    "attackType": "melee",
+    "maxHp": 190,
+    "attack": 15,
+    "defense": 4,
+    "moveSpeed": 126,
+    "attackRange": 46,
+    "attackCooldownMs": 1050,
+    "soulReward": 60,
+    "spriteKey": "wolf_alpha"
+  },
+  {
+    "id": "karnak",
+    "name": "Karnak",
+    "type": "boss",
+    "attackType": "melee",
+    "maxHp": 9999,
+    "attack": 18,
+    "defense": 999,
+    "moveSpeed": 98,
+    "attackRange": 62,
+    "attackCooldownMs": 1350,
+    "soulReward": 0,
+    "spriteKey": "karnak"
   }
 ]

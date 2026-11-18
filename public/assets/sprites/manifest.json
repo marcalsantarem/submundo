@@ -653,6 +653,66 @@
         "death2",
         "death3"
       ]
+    },
+    "wolf_alpha": {
+      "key": "wolf_alpha",
+      "file": "wolf_alpha.png",
+      "width": 1600,
+      "height": 80,
+      "frameWidth": 80,
+      "frameHeight": 80,
+      "frames": [
+        "idle0",
+        "idle1",
+        "idle2",
+        "idle3",
+        "walk0",
+        "walk1",
+        "walk2",
+        "walk3",
+        "walk4",
+        "walk5",
+        "attack0",
+        "attack1",
+        "attack2",
+        "attack3",
+        "attack4",
+        "attack5",
+        "death0",
+        "death1",
+        "death2",
+        "death3"
+      ]
+    },
+    "karnak": {
+      "key": "karnak",
+      "file": "karnak.png",
+      "width": 1920,
+      "height": 96,
+      "frameWidth": 96,
+      "frameHeight": 96,
+      "frames": [
+        "idle0",
+        "idle1",
+        "idle2",
+        "idle3",
+        "walk0",
+        "walk1",
+        "walk2",
+        "walk3",
+        "walk4",
+        "walk5",
+        "attack0",
+        "attack1",
+        "attack2",
+        "attack3",
+        "attack4",
+        "attack5",
+        "death0",
+        "death1",
+        "death2",
+        "death3"
+      ]
     }
   }
 }

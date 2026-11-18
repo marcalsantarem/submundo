@@ -86,20 +86,24 @@ interface MonsterVisual {
   deathFinished?: boolean;
 }
 
-const ANIMATED_80X80_MONSTERS = new Set<string>([
+const ANIMATED_SPRITESHEET_MONSTERS = new Set<string>([
   'slime',
   'cave_bat',
   'wolf',
   'skeleton',
   'skeleton_archer',
+  'wolf_alpha',
+  'karnak',
 ]);
 
 const TEST_ARENA_SPAWNS: ReadonlyArray<{ id: string; dx: number; dy: number }> = [
-  { id: 'slime', dx: -135, dy: -95 },
-  { id: 'cave_bat', dx: 135, dy: -95 },
-  { id: 'wolf', dx: -150, dy: 55 },
-  { id: 'skeleton', dx: 150, dy: 55 },
-  { id: 'skeleton_archer', dx: 0, dy: 135 },
+  { id: 'slime', dx: -160, dy: -110 },
+  { id: 'cave_bat', dx: 160, dy: -110 },
+  { id: 'wolf', dx: -185, dy: 20 },
+  { id: 'skeleton', dx: 185, dy: 20 },
+  { id: 'skeleton_archer', dx: -120, dy: 135 },
+  { id: 'wolf_alpha', dx: 120, dy: 135 },
+  { id: 'karnak', dx: 0, dy: -155 },
 ];
 
 interface GroundDrop {
@@ -724,8 +728,10 @@ export class DungeonScene extends Phaser.Scene {
 
   private createMonsterVisual(monster: MonsterInstance): void {
     const isAbyssHerald = monster.defId === 'abyss_herald';
-    const isAnimated80 = ANIMATED_80X80_MONSTERS.has(monster.spriteKey);
-    const scale = isAnimated80 ? 0.88 : isAbyssHerald ? 1.75 : 1.5;
+    const isAnimatedSpritesheet = ANIMATED_SPRITESHEET_MONSTERS.has(
+      monster.spriteKey
+    );
+    const scale = isAnimatedSpritesheet ? 0.88 : isAbyssHerald ? 1.75 : 1.5;
 
     const sprite = this.add
       .sprite(monster.position.x, monster.position.y, monster.spriteKey, 0)
@@ -1427,10 +1433,21 @@ export class DungeonScene extends Phaser.Scene {
       }
 
       const isBoss = monster.type === 'boss';
-      const isAnimated80 = ANIMATED_80X80_MONSTERS.has(monster.spriteKey);
+      const isAnimatedSpritesheet = ANIMATED_SPRITESHEET_MONSTERS.has(
+        monster.spriteKey
+      );
       const barWidth = isBoss ? 56 : 34;
       const barHeight = isBoss ? 6 : 4;
-      const offsetY = isBoss ? 44 : isAnimated80 ? 34 : 26;
+      const offsetY =
+        monster.spriteKey === 'karnak'
+          ? 46
+          : monster.spriteKey === 'wolf_alpha'
+            ? 40
+            : isBoss
+              ? 44
+              : isAnimatedSpritesheet
+                ? 34
+                : 26;
       const barX = monster.position.x - barWidth / 2;
       const barY = monster.position.y - offsetY;
       const ratio =
@@ -1962,23 +1979,28 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private ensureCampaignFallbackTextures(): void {
-    const fallbackColors: Record<string, number> = {
-      slime: 0x22c55e,
-      cave_bat: 0x7c3aed,
-      wolf: 0x64748b,
-      skeleton: 0xe2e8f0,
-      skeleton_archer: 0xcbd5e1,
+    const fallbackSpecs: Record<string, { color: number; size: number }> = {
+      slime: { color: 0x22c55e, size: 80 },
+      cave_bat: { color: 0x7c3aed, size: 80 },
+      wolf: { color: 0x64748b, size: 80 },
+      skeleton: { color: 0xe2e8f0, size: 80 },
+      skeleton_archer: { color: 0xcbd5e1, size: 80 },
+      wolf_alpha: { color: 0x94a3b8, size: 80 },
+      karnak: { color: 0xef4444, size: 96 },
     };
 
-    for (const [key, color] of Object.entries(fallbackColors)) {
+    for (const [key, spec] of Object.entries(fallbackSpecs)) {
       if (!this.textures.exists(key)) {
+        const cx = spec.size / 2;
+        const cy = spec.size / 2 + 4;
+        const radius = spec.size >= 96 ? 22 : 18;
         const gfx = this.make.graphics({ x: 0, y: 0 });
-        gfx.fillStyle(color, 1);
-        gfx.fillCircle(40, 44, 18);
+        gfx.fillStyle(spec.color, 1);
+        gfx.fillCircle(cx, cy, radius);
         gfx.fillStyle(0xfef08a, 1);
-        gfx.fillRect(34, 38, 3, 3);
-        gfx.fillRect(43, 38, 3, 3);
-        gfx.generateTexture(key, 80, 80);
+        gfx.fillRect(cx - 6, cy - 6, 3, 3);
+        gfx.fillRect(cx + 3, cy - 6, 3, 3);
+        gfx.generateTexture(key, spec.size, spec.size);
         gfx.destroy();
       }
     }

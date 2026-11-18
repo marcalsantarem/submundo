@@ -66,6 +66,8 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 | `wolf` | `wolf.png` | `1600x80` px | `80x80` px | 20 | `0..3: idle0..3`, `4..9: walk0..5`, `10..15: attack0..5`, `16..19: death0..3` |
 | `skeleton` | `skeleton.png` | `1600x80` px | `80x80` px | 20 | `0..3: idle0..3`, `4..9: walk0..5`, `10..15: attack0..5`, `16..19: death0..3` |
 | `skeleton_archer` | `skeleton_archer.png` | `1600x80` px | `80x80` px | 20 | `0..3: idle0..3`, `4..9: walk0..5`, `10..15: attack0..5`, `16..19: death0..3` |
+| `wolf_alpha` | `wolf_alpha.png` | `1600x80` px | `80x80` px | 20 | `0..3: idle0..3`, `4..9: walk0..5`, `10..15: attack0..5`, `16..19: death0..3` |
+| `karnak` | `karnak.png` | `1920x96` px | `96x96` px | 20 | `0..3: idle0..3`, `4..9: walk0..5`, `10..15: attack0..5`, `16..19: death0..3` |
 
 ### 3.1. Animações 24f do Herói (`hero_living` e `hero_wraith`)
 
@@ -93,7 +95,7 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 - Os spritesheets seguem grid horizontal estrito (`width = frameWidth * frames.length`, `height = frameHeight`).
 - Para regenerar os spritesheets procedurais base: `node scripts/art/generateSprites.mjs`.
 - Para regenerar `hero_living.png` (`1920x80`, 24f), `hero_wraith.png` (`1920x80`, 24f), as prévias em `assets/mockups/preview_hero_*.png` e atualizar `manifest.json` a partir dos sprites base em `assets/sprites_src/` (sem dependências externas): `python scripts/art/buildHeroAndWeapons.py`.
-- Para regenerar os 5 spritesheets animados dos monstros (`slime.png`, `cave_bat.png`, `wolf.png`, `skeleton.png`, `skeleton_archer.png`, todos `1600x80`, 20f), a prévia `assets/mockups/preview_monsters_5_20f.png` e atualizar `manifest.json` (sem dependências externas): `python scripts/art/buildMonstersSheets.py`.
+- Para regenerar os spritesheets animados 20f de monstros/bosses (`slime.png` 50%, `cave_bat.png` 50%, `wolf_alpha.png` `1600x80`, `karnak.png` `1920x96`), a prévia `assets/mockups/preview_bosses_20f.png` e atualizar `manifest.json` (sem dependências externas): `python scripts/art/buildMonstersSheets.py`.
 - Qualquer arquivo `.png` em `public/assets/sprites/` pode ser editado ou substituído no LibreSprite/Pixelorama mantendo a mesma chave, dimensão de frame e ordem de índices em `manifest.json`.
 
 ---
