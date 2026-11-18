@@ -45,8 +45,8 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 
 | Key | Arquivo | Dimensões Totais | Frame (`LxA`) | Qtd. Frames | Convenção de Frames (Índice: Nome) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `hero_living` | `hero_living.png` | `1280x80` px | `80x80` px | 16 | `0..3: idle0..3`, `4..7: walk0..3`, `8..11: attack0..3`, `12..13: dash0..1`, `14..15: hit0..1` |
-| `hero_wraith` | `hero_wraith.png` | `1280x80` px | `80x80` px | 16 | `0..3: idle0..3`, `4..7: walk0..3`, `8..11: attack0..3`, `12..13: dash0..1`, `14..15: hit0..1` |
+| `hero_living` | `hero_living.png` | `1920x80` px | `80x80` px | 24 | `0..3: idle0..3`, `4..9: walk0..5`, `10..15: attack0..5`, `16..19: dash0..3`, `20..23: hit0..3` |
+| `hero_wraith` | `hero_wraith.png` | `1920x80` px | `80x80` px | 24 | `0..3: idle0..3`, `4..9: walk0..5`, `10..15: attack0..5`, `16..19: dash0..3`, `20..23: hit0..3` |
 | `weapons` | `weapons.png` | `192x48` px | `48x48` px | 4 | `0: iron_sword`, `1: cyan_runeblade`, `2: inferno_axe`, `3: crimson_dagger` |
 | `wraith_warrior` | `wraith_warrior.png` | `128x32` px | `32x32` px | 4 | `0: idle0`, `1: idle1`, `2: attack`, `3: dash` |
 | `abyssal_slime` | `abyssal_slime.png` | `64x32` px | `32x32` px | 2 | `0: idle0`, `1: idle1` |
@@ -63,7 +63,19 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 | `village_npcs` | `village_npcs.png` | `128x32` px | `32x32` px | 4 | `0: weapon_master`, `1: village_blacksmith`, `2: potion_stall`, `3: village_gate` |
 | `cave_bat` | `cave_bat.png` | `64x32` px | `32x32` px | 2 | `0: flap0`, `1: flap1` |
 
-### 3.1. VFX das 3 Forças e Drops (`src/view/sprites/CombatVfx.ts`)
+### 3.1. Animações 24f do Herói (`hero_living` e `hero_wraith`)
+
+- **Especificação:** `1920x80` px (`24` frames `80x80`), fundo transparente, contorno preto `#09090b` de `1px`, pés alinhados em `y = 76` e centro do corpo em `x = 40`.
+- **Ciclos:**
+  - `0..3` (`idle0..idle3`): respiração orgânica com pés firmes no chão e oscilação suave de tronco, braços, faixa/capa e túnica.
+  - `4..9` (`walk0..walk5`): ciclo completo de passos com alternância explícita direita/esquerda (contato D, apoio baixo D `+2px`, passagem E `-2px`, contato E invertido, apoio baixo E `+2px`, passagem D `-2px`), dobra real de joelho/bota, contra-fase de braços e ondulação contínua da capa/túnica.
+  - `10..15` (`attack0..attack5`): antecipação recuada com braço alto, início do corte com lunge, pico de extensão frontal, follow-through baixo e duas etapas de recuperação.
+  - `16..19` (`dash0..dash3`): agachamento de impulso, arranque aerodinâmico com rastro, pico de velocidade com afterimages espectrais e frenagem/pouso.
+  - `20..23` (`hit0..hit3`): impacto com recuo e flash preservando contorno/olhos ciano, recuo máximo, passo atrás recuperando equilíbrio e retomada de guarda.
+- **Ancoragem de Arma (`handAnchors`):** Cada entrada `hero_living` e `hero_wraith` em `public/assets/sprites/manifest.json` expõe um array de `24` objetos `{ dx, dy, rot }` relativo ao centro `(40, 40)` do frame para sincronizar o `HeroWeaponRig`.
+- **Sprites Base (Idempotência):** Os frames-base originais ficam preservados em `assets/sprites_src/hero_living_base.png` e `assets/sprites_src/hero_wraith_base.png`; prévias ampliadas em grade são geradas em `assets/mockups/preview_hero_*`.
+
+### 3.2. VFX das 3 Forças e Drops (`src/view/sprites/CombatVfx.ts`)
 
 - **Inferno (`showEmberExplosion`):** Anel e centelhas ígneas em `#f97316` / `#ef4444` / `#facc15`.
 - **Empíreo (`showLightningChain`):** Raios angulares em cadeia com halo `#facc15` e núcleo `#e0fbfc`.
@@ -76,7 +88,7 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 
 - Os spritesheets seguem grid horizontal estrito (`width = frameWidth * frames.length`, `height = frameHeight`).
 - Para regenerar os spritesheets procedurais base: `node scripts/art/generateSprites.mjs`.
-- Para regenerar `hero_living.png` (`80x80`), `hero_wraith.png` (`80x80`) e `weapons.png` (`48x48`) a partir das artes conceituais em `assets/sprites_src/`: `python3 scripts/art/buildHeroAndWeapons.py`.
+- Para regenerar `hero_living.png` (`1920x80`, 24f), `hero_wraith.png` (`1920x80`, 24f), as prévias em `assets/mockups/preview_hero_*.png` e atualizar `manifest.json` a partir dos sprites base em `assets/sprites_src/` (sem dependências externas): `python scripts/art/buildHeroAndWeapons.py`.
 - Qualquer arquivo `.png` em `public/assets/sprites/` pode ser editado ou substituído no LibreSprite/Pixelorama mantendo a mesma chave, dimensão de frame e ordem de índices em `manifest.json`.
 
 ---
