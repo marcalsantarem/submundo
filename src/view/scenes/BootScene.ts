@@ -53,6 +53,13 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
     fallbackColor: 0xdc2626,
   },
   {
+    key: 'skeleton_chief',
+    file: 'assets/sprites/skeleton_chief.png',
+    frameWidth: 80,
+    frameHeight: 80,
+    fallbackColor: 0xdc2626,
+  },
+  {
     key: 'dungeon_tiles',
     file: 'assets/sprites/dungeon_tiles.png',
     frameWidth: 16,

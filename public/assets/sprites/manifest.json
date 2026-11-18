@@ -713,6 +713,36 @@
         "death2",
         "death3"
       ]
+    },
+    "skeleton_chief": {
+      "key": "skeleton_chief",
+      "file": "skeleton_chief.png",
+      "width": 1600,
+      "height": 80,
+      "frameWidth": 80,
+      "frameHeight": 80,
+      "frames": [
+        "idle0",
+        "idle1",
+        "idle2",
+        "idle3",
+        "walk0",
+        "walk1",
+        "walk2",
+        "walk3",
+        "walk4",
+        "walk5",
+        "attack0",
+        "attack1",
+        "attack2",
+        "attack3",
+        "attack4",
+        "attack5",
+        "death0",
+        "death1",
+        "death2",
+        "death3"
+      ]
     }
   }
 }

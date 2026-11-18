@@ -102,4 +102,7 @@
 | T-098 | Salvar dados e narrativa de `wolf_alpha` (*Chefe da Matilha*) e `karnak` (*Karnak*) em `src/data/monsters.json`, `docs/narrativa.md` e `tests/core/monsters-m6.test.ts` (tam. P) | M6 | AG04 (Sistemas/Meta) + AG06 (Narrativa) | feita |
 | T-099 | Registrar `wolf_alpha` e `karnak` em `CombatVfx.ts`, pré-carregar em `BootScene.ts` e aplicar os novos monstros/bosses na `testArena` (`DungeonScene.ts`) para teste ingame (tam. M) | M6 | AG07 (Arquiteto) + AG01 (Gameplay) | feita |
 | T-100 | Separar a `testArena` em 2 ondas: Onda 1 com os monstros normais (`slime`, `cave_bat`, `wolf`, `skeleton`, `skeleton_archer`) e Onda 2 disparada após todos morrerem com os 2 bosses (`wolf_alpha` e `karnak`) (tam. P) | M6 | AG01 (Gameplay) | feita |
+| T-101 | Extrair pose 3/4 de `skeleton_chief_turnaround.png` e gerar spritesheet 20f `public/assets/sprites/skeleton_chief.png` (`1600×80`) + `manifest.json`, `docs/guia_visual.md` e `preview_skeleton_chief_20f.png` (tam. P) | M6 | AG08 (Arte) | feita |
+| T-102 | Salvar dados e narrativa de `skeleton_chief` (*Esqueleto Chefe*, melee) em `src/data/monsters.json`, `docs/narrativa.md` e `tests/core/monsters-m6.test.ts` (tam. P) | M6 | AG04 (Sistemas/Meta) + AG06 (Narrativa) | feita |
+| T-103 | Registrar `skeleton_chief` em `CombatVfx.ts`, pré-carregar em `BootScene.ts` e aplicá-lo na Onda 2 da `testArena` junto com os bosses (`DungeonScene.ts`) (tam. P) | M6 | AG07 (Arquiteto) + AG01 (Gameplay) | feita |
 

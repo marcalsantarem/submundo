@@ -101,6 +101,22 @@ describe('M6 Common Monsters Catalog & Ranged Combat (T-093a)', () => {
     expect(karnak.soulReward).toBe(0);
   });
 
+  it('contains M6 boss skeleton_chief with expected stats (T-102a)', () => {
+    const skeletonChief = getMonsterDef('skeleton_chief');
+
+    expect(skeletonChief.name).toBe('Esqueleto Chefe');
+    expect(skeletonChief.type).toBe('boss');
+    expect(skeletonChief.attackType).toBe('melee');
+    expect(skeletonChief.spriteKey).toBe('skeleton_chief');
+    expect(skeletonChief.maxHp).toBe(175);
+    expect(skeletonChief.attack).toBe(14);
+    expect(skeletonChief.defense).toBe(5);
+    expect(skeletonChief.moveSpeed).toBe(105);
+    expect(skeletonChief.attackRange).toBe(46);
+    expect(skeletonChief.attackCooldownMs).toBe(1100);
+    expect(skeletonChief.soulReward).toBe(55);
+  });
+
   it('propagates attackType on spawnMonster with melee fallback', () => {
     const archer = spawnMonster(getMonsterDef('skeleton_archer'), 'archer_1', { x: 0, y: 0 });
     expect(archer.attackType).toBe('ranged');

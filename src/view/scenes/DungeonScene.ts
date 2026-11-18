@@ -92,6 +92,7 @@ const ANIMATED_SPRITESHEET_MONSTERS = new Set<string>([
   'wolf',
   'skeleton',
   'skeleton_archer',
+  'skeleton_chief',
   'wolf_alpha',
   'karnak',
 ]);
@@ -107,6 +108,7 @@ const TEST_ARENA_WAVE_1: ReadonlyArray<{ id: string; dx: number; dy: number }> =
 const TEST_ARENA_WAVE_2: ReadonlyArray<{ id: string; dx: number; dy: number }> = [
   { id: 'wolf_alpha', dx: -120, dy: -60 },
   { id: 'karnak', dx: 120, dy: -60 },
+  { id: 'skeleton_chief', dx: 0, dy: 95 },
 ];
 
 interface GroundDrop {
@@ -1184,7 +1186,7 @@ export class DungeonScene extends Phaser.Scene {
           this.testArenaWave = 2;
           this.testArenaWave2TriggerAtMs = undefined;
           this.spawnTestArenaWave(TEST_ARENA_WAVE_2, 2);
-          this.showTimedBanner('Onda 2: Chefe da Matilha & Karnak!', 2500);
+          this.showTimedBanner('Onda 2: Bosses & Esqueleto Chefe!', 2500);
         }
       }
       return;
@@ -1477,11 +1479,13 @@ export class DungeonScene extends Phaser.Scene {
           ? 46
           : monster.spriteKey === 'wolf_alpha'
             ? 40
-            : isBoss
-              ? 44
-              : isAnimatedSpritesheet
-                ? 34
-                : 26;
+            : monster.spriteKey === 'skeleton_chief'
+              ? 38
+              : isBoss
+                ? 44
+                : isAnimatedSpritesheet
+                  ? 34
+                  : 26;
       const barX = monster.position.x - barWidth / 2;
       const barY = monster.position.y - offsetY;
       const ratio =
@@ -2019,6 +2023,7 @@ export class DungeonScene extends Phaser.Scene {
       wolf: { color: 0x64748b, size: 80 },
       skeleton: { color: 0xe2e8f0, size: 80 },
       skeleton_archer: { color: 0xcbd5e1, size: 80 },
+      skeleton_chief: { color: 0xf59e0b, size: 80 },
       wolf_alpha: { color: 0x94a3b8, size: 80 },
       karnak: { color: 0xef4444, size: 96 },
     };

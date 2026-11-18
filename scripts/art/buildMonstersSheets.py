@@ -1515,6 +1515,349 @@ def build_karnak_frames() -> List[Canvas]:
 
 
 # ---------------------------------------------------------------------------
+# 7. SKELETON CHIEF (20 frames, 80x80, Boss Esqueleto Chefe)
+# ---------------------------------------------------------------------------
+
+CHIEF_W = FW  # 80
+CHIEF_H = FH  # 80
+CHIEF_FOOT_Y = FOOT_Y  # 76
+SKELETON_CHIEF_TURNAROUND_PATH = ROOT / "assets" / "sprites_src" / "monsters" / "skeleton_chief_turnaround.png"
+SKELETON_CHIEF_BASE_PATH = ROOT / "assets" / "sprites_src" / "monsters" / "skeleton_chief_base.png"
+PREVIEW_SKELETON_CHIEF_PATH = ROOT / "assets" / "mockups" / "preview_skeleton_chief_20f.png"
+
+
+def _ensure_skeleton_chief_base() -> Canvas:
+    """Extrai a pose 1 (3/4 direita) do turnaround e escala com NEAREST para 80x80."""
+    if SKELETON_CHIEF_BASE_PATH.exists():
+        return base.read_png(SKELETON_CHIEF_BASE_PATH)
+    src = base.read_png(SKELETON_CHIEF_TURNAROUND_PATH)
+    pose = Canvas(64, 64)
+    for y in range(64):
+        for x in range(64):
+            pose.put(x, y, src.get(64 + x, y))
+    xs = [x for y in range(64) for x in range(64) if pose.get(x, y)[3] > 0]
+    ys = [y for y in range(64) for x in range(64) if pose.get(x, y)[3] > 0]
+    min_x, max_x, min_y, max_y = min(xs), max(xs), min(ys), max(ys)
+    sw, sh = max_x - min_x + 1, max_y - min_y + 1
+    target_h = 72
+    scale = target_h / sh
+    target_w = int(round(sw * scale))
+    dst_x0 = 40 - target_w // 2
+    dst_y0 = CHIEF_FOOT_Y - target_h + 1
+    out = Canvas(CHIEF_W, CHIEF_H)
+    for dy in range(target_h):
+        sy = min_y + int(dy / scale)
+        for dx in range(target_w):
+            sx = min_x + int(dx / scale)
+            col = pose.get(sx, sy)
+            if col[3] > 0:
+                out.put(dst_x0 + dx, dst_y0 + dy, col)
+    write_png(SKELETON_CHIEF_BASE_PATH, out)
+    return out
+
+
+def _boost_chief_eyes(cv: Canvas, boost: float, dim_eyes: bool = False) -> None:
+    if boost == 0.0 and not dim_eyes:
+        return
+    for y in range(14, 30):
+        for x in range(32, 52):
+            r, g, b, a = cv.get(x, y)
+            if a == 0:
+                continue
+            if r >= 140 and r > g + 40 and r > b + 40:
+                if dim_eyes:
+                    cv.put(x, y, (65, 16, 16, a))
+                else:
+                    nr = int(clamp(r + 50 * boost, 0, 255))
+                    ng = int(clamp(g + 60 * boost, 0, 255))
+                    nb = int(clamp(b + 20 * boost, 0, 255))
+                    cv.put(x, y, (nr, ng, nb, a))
+
+
+def _is_chief_sword_region(x: int, y: int) -> bool:
+    """Regiao da mao direita + espada dentada (frente-esquerda no frame base 80x80)."""
+    if 15 <= x <= 29 and 42 <= y <= 55:
+        return True
+    if 16 <= x <= 28 and 56 <= y <= 73:
+        # Evita pegar a perna direita (x >= 28 nessa altura)
+        return x <= 27 or y <= 63
+    return False
+
+
+def _is_chief_shield_region(x: int, y: int) -> bool:
+    """Regiao do braco esquerdo + escudo redondo (direita no frame base 80x80)."""
+    return x >= 47 and 28 <= y <= 55
+
+
+def _render_chief_posed(
+    base_cv: Canvas,
+    upper_dx: int = 0,
+    upper_dy: int = 0,
+    leg_l_dx: int = 0,
+    leg_l_dy: int = 0,
+    leg_r_dx: int = 0,
+    leg_r_dy: int = 0,
+    sword_dx: int = 0,
+    sword_dy: int = 0,
+    shield_dx: int = 0,
+    shield_dy: int = 0,
+    hide_sword: bool = False,
+    eye_boost: float = 0.0,
+    dim_eyes: bool = False,
+) -> Canvas:
+    out = Canvas(CHIEF_W, CHIEF_H)
+
+    # 1. Escudo redondo ao fundo (atras do tronco)
+    for y in range(28, 56):
+        for x in range(47, CHIEF_W):
+            col = base_cv.get(x, y)
+            if col[3] == 0:
+                continue
+            nx = clamp(x + upper_dx + shield_dx, 0, CHIEF_W - 1)
+            ny = clamp(y + upper_dy + shield_dy, 0, CHIEF_FOOT_Y)
+            out.put(nx, ny, col)
+
+    # 2. Pernas abaixo da cintura (y >= 54), pes limitados a y <= 76
+    for y in range(54, CHIEF_H):
+        for x in range(CHIEF_W):
+            if _is_chief_sword_region(x, y):
+                continue
+            if _is_chief_shield_region(x, y):
+                continue
+            col = base_cv.get(x, y)
+            if col[3] == 0:
+                continue
+            if x < 37:
+                nx = clamp(x + leg_l_dx, 0, CHIEF_W - 1)
+                ny = min(CHIEF_FOOT_Y, max(0, y + leg_l_dy))
+            else:
+                nx = clamp(x + leg_r_dx, 0, CHIEF_W - 1)
+                ny = min(CHIEF_FOOT_Y, max(0, y + leg_r_dy))
+            out.put(nx, ny, col)
+
+    # 3. Tronco, saiote, costelas e cabeca/elmo (y < 58)
+    for y in range(0, 58):
+        for x in range(CHIEF_W):
+            if _is_chief_shield_region(x, y):
+                continue
+            if _is_chief_sword_region(x, y):
+                continue
+            col = base_cv.get(x, y)
+            if col[3] == 0:
+                continue
+            nx = clamp(x + upper_dx, 0, CHIEF_W - 1)
+            ny = clamp(y + upper_dy, 0, CHIEF_FOOT_Y)
+            out.put(nx, ny, col)
+
+    # Preenche eventual fenda de 1-2px na cintura quando o tronco sobe
+    if upper_dy < 0:
+        for y in range(52 + upper_dy, 57):
+            for x in range(25, 48):
+                if (
+                    0 < y < CHIEF_H - 2
+                    and out.get(x, y)[3] == 0
+                    and out.get(x, y - 1)[3] > 0
+                    and out.get(x, y + 2)[3] > 0
+                ):
+                    out.put(x, y, (98, 28, 22, 255))
+
+    # 4. Mao direita + espada dentada (camada frontal)
+    if not hide_sword:
+        for y in range(42, 74):
+            for x in range(15, 30):
+                if not _is_chief_sword_region(x, y):
+                    continue
+                col = base_cv.get(x, y)
+                if col[3] == 0:
+                    continue
+                nx = clamp(x + upper_dx + sword_dx, 0, CHIEF_W - 1)
+                ny = clamp(y + upper_dy + sword_dy, 0, CHIEF_FOOT_Y)
+                out.put(nx, ny, col)
+
+    _boost_chief_eyes(out, eye_boost, dim_eyes=dim_eyes)
+    return remove_isolated_pixels(out)
+
+
+def _draw_chief_sword_rotated(
+    cv: Canvas,
+    base_cv: Canvas,
+    dst_x: float,
+    dst_y: float,
+    angle_rad: float,
+) -> None:
+    """Recorta a espada dentada do base_cv e rotaciona em torno do punho (x=22, y=49)."""
+    sword_src = Canvas(CHIEF_W, CHIEF_H)
+    for y in range(42, 74):
+        for x in range(15, 30):
+            if _is_chief_sword_region(x, y):
+                col = base_cv.get(x, y)
+                if col[3] > 0:
+                    sword_src.put(x, y, col)
+    rot_sw = _rotate_canvas_nn(sword_src, 22.0, 49.0, angle_rad, dst_x, dst_y, CHIEF_W, CHIEF_H)
+    cv.composite(rot_sw)
+
+
+def _draw_chief_slash_arc(cv: Canvas, phase: float) -> None:
+    """Desenha rastro amplo de corte da lamina para frente-direita (x=44, y=46)."""
+    cx, cy = 42.0, 46.0
+    radius = 27.0
+    # Sentido horario: cima (-1.25) -> frente-direita (0.0) -> baixo (1.05)
+    start_a = -1.25 + phase * 0.35
+    end_a = 1.05 + phase * 0.25
+    steps = 80
+    for i in range(steps + 1):
+        t = i / steps
+        ang = start_a + (end_a - start_a) * t
+        thickness = 3.2 * math.sin(t * math.pi) + 0.6
+        px = cx + math.cos(ang) * radius
+        py = cy + math.sin(ang) * radius
+        for oy in range(-4, 5):
+            for ox in range(-4, 5):
+                d = math.hypot(ox, oy)
+                if d <= thickness:
+                    ix = int(round(px + ox))
+                    iy = int(round(py + oy))
+                    if 1 <= ix < CHIEF_W - 1 and 1 <= iy < CHIEF_H - 1:
+                        if d <= thickness * 0.35 and t > 0.25:
+                            col = (245, 250, 255, 255)
+                        elif d <= thickness * 0.72:
+                            col = (195, 220, 240, 255)
+                        else:
+                            col = (110, 140, 175, 255)
+                        cv.put(ix, iy, col)
+
+
+def build_skeleton_chief_frames() -> List[Canvas]:
+    base_cv = _ensure_skeleton_chief_base()
+    frames: List[Canvas] = []
+
+    # 0..3 idle (guarda firme com respiracao e pulso nos olhos)
+    idle_cfg = [
+        (0, 0, 0, 0.0),
+        (1, 1, 0, 0.35),
+        (1, 1, 1, 0.75),
+        (0, 0, 1, 0.35),
+    ]
+    for udy, sw_dy, sh_dy, boost in idle_cfg:
+        frames.append(
+            _render_chief_posed(
+                base_cv,
+                upper_dy=udy,
+                sword_dy=sw_dy,
+                shield_dy=sh_dy,
+                eye_boost=boost,
+            )
+        )
+
+    # 4..9 walk (ciclo de passos com oscilacao vertical e balanco de espada/escudo)
+    walk_cfg = [
+        # (udx, udy, l_dx, l_dy, r_dx, r_dy, sw_dx, sw_dy, sh_dx, sh_dy)
+        (1, -1, 2, -2, -1, 0, -1, -1, 1, 0),
+        (0, 0, 1, -1, -2, -1, 0, 0, 1, 1),
+        (0, -1, -1, 0, 1, -2, 1, -1, 0, 0),
+        (1, -1, -2, 0, 2, -2, 2, -1, -1, 0),
+        (0, 0, -1, -1, 1, -1, 1, 0, 0, 1),
+        (0, -1, 0, -2, 0, 0, 0, -1, 1, 0),
+    ]
+    for udx, udy, ldx, ldy, rdx, rdy, swdx, swdy, shdx, shdy in walk_cfg:
+        frames.append(
+            _render_chief_posed(
+                base_cv,
+                upper_dx=udx,
+                upper_dy=udy,
+                leg_l_dx=ldx,
+                leg_l_dy=ldy,
+                leg_r_dx=rdx,
+                leg_r_dy=rdy,
+                sword_dx=swdx,
+                sword_dy=swdy,
+                shield_dx=shdx,
+                shield_dy=shdy,
+                eye_boost=0.25,
+            )
+        )
+
+    # 10..15 attack (antecipacao erguendo espada -> corte amplo para frente -> retorno)
+    # 10: inicio da antecipacao
+    f10 = _render_chief_posed(
+        base_cv, upper_dx=-2, upper_dy=-1, leg_l_dx=-1, leg_r_dx=-2, shield_dx=1, hide_sword=True, eye_boost=0.6
+    )
+    _draw_chief_sword_rotated(f10, base_cv, 17.0, 38.0, -2.15)
+    frames.append(remove_isolated_pixels(f10))
+
+    # 11: pico da antecipacao (espada erguida acima do ombro, sem cobrir o rosto)
+    f11 = _render_chief_posed(
+        base_cv, upper_dx=-3, upper_dy=-2, leg_l_dx=-2, leg_r_dx=-3, shield_dx=2, shield_dy=-1, hide_sword=True, eye_boost=1.0
+    )
+    _draw_chief_sword_rotated(f11, base_cv, 16.0, 29.0, -2.75)
+    frames.append(remove_isolated_pixels(f11))
+
+    # 12: corte amplo para frente com rastro de lamina
+    f12 = _render_chief_posed(
+        base_cv, upper_dx=4, upper_dy=1, leg_l_dx=3, leg_r_dx=2, shield_dx=-2, hide_sword=True, eye_boost=1.0
+    )
+    _draw_chief_sword_rotated(f12, base_cv, 44.0, 43.0, -1.25)
+    _draw_chief_slash_arc(f12, phase=0.0)
+    frames.append(remove_isolated_pixels(f12))
+
+    # 13: extensao maxima do corte
+    f13 = _render_chief_posed(
+        base_cv, upper_dx=5, upper_dy=2, leg_l_dx=4, leg_r_dx=2, shield_dx=-3, hide_sword=True, eye_boost=0.85
+    )
+    _draw_chief_sword_rotated(f13, base_cv, 45.0, 50.0, -0.75)
+    _draw_chief_slash_arc(f13, phase=0.55)
+    frames.append(remove_isolated_pixels(f13))
+
+    # 14: follow-through
+    f14 = _render_chief_posed(
+        base_cv, upper_dx=3, upper_dy=1, leg_l_dx=2, leg_r_dx=1, shield_dx=-1, sword_dx=3, sword_dy=1, eye_boost=0.45
+    )
+    frames.append(f14)
+
+    # 15: retorno a guarda
+    f15 = _render_chief_posed(
+        base_cv, upper_dx=1, upper_dy=0, leg_l_dx=1, sword_dx=1, eye_boost=0.2
+    )
+    frames.append(f15)
+
+    # 16..19 death (recuo -> joelhos cedendo -> tombando -> desabado no chao)
+    # 16: recuo
+    frames.append(
+        _render_chief_posed(
+            base_cv, upper_dx=-2, upper_dy=2, leg_l_dx=-1, leg_r_dx=-1, shield_dx=-1, dim_eyes=True
+        )
+    )
+
+    # 17: joelhos cedendo (espada e escudo descem junto com upper_dy=8)
+    frames.append(
+        _render_chief_posed(
+            base_cv,
+            upper_dx=-2,
+            upper_dy=8,
+            leg_l_dx=-2,
+            leg_l_dy=5,
+            leg_r_dx=2,
+            leg_r_dy=5,
+            sword_dy=0,
+            shield_dy=0,
+            dim_eyes=True,
+        )
+    )
+
+    # 18: tombando para tras
+    f18 = _rotate_canvas_nn(base_cv, 40.0, 60.0, -0.78, 36.0, 58.0, CHIEF_W, CHIEF_H)
+    _boost_chief_eyes(f18, 0.0, dim_eyes=True)
+    frames.append(remove_isolated_pixels(f18))
+
+    # 19: desabado no chao (100% dentro de 80x80, ate y=76)
+    f19 = _rotate_canvas_nn(base_cv, 40.0, 50.0, -1.48, 38.0, 60.0, CHIEF_W, CHIEF_H)
+    _boost_chief_eyes(f19, 0.0, dim_eyes=True)
+    frames.append(remove_isolated_pixels(f19))
+
+    return frames
+
+
+# ---------------------------------------------------------------------------
 # Montagem dos Spritesheets, Preview 20f e Manifest
 # ---------------------------------------------------------------------------
 
@@ -1627,10 +1970,12 @@ def main() -> None:
         ("cave_bat", build_cave_bat_frames, FW, FH, FOOT_Y),
         ("wolf_alpha", build_wolf_alpha_frames, FW, FH, FOOT_Y),
         ("karnak", build_karnak_frames, KARNAK_W, KARNAK_H, KARNAK_FOOT_Y),
+        ("skeleton_chief", build_skeleton_chief_frames, CHIEF_W, CHIEF_H, CHIEF_FOOT_Y),
     ]
 
     preview_rows: List[Tuple[str, List[Canvas], int, int, int]] = []
     manifest_entries: List[Tuple[str, int, int]] = []
+    chief_row: List[Tuple[str, List[Canvas], int, int, int]] = []
     for key, fn, fw, fh, foot_y in builders:
         frames = fn()
         assert len(frames) == NUM_FRAMES, f"{key}: esperado {NUM_FRAMES} frames, obteve {len(frames)}"
@@ -1638,7 +1983,11 @@ def main() -> None:
         out_path = OUT_SPRITES_DIR / f"{key}.png"
         write_png(out_path, sheet)
         print(f"Gerado: {out_path} ({sheet.w}x{sheet.h}, {len(frames)} frames {fw}x{fh})")
-        preview_rows.append((key, frames, fw, fh, foot_y))
+        row = (key, frames, fw, fh, foot_y)
+        if key == "skeleton_chief":
+            chief_row.append(row)
+        else:
+            preview_rows.append(row)
         manifest_entries.append((key, fw, fh))
 
     update_manifest(manifest_entries)
@@ -1647,6 +1996,11 @@ def main() -> None:
     preview = build_preview_grid(preview_rows, scale=2, title="SUBMUNDO BOSSES AND RESIZE 20F")
     write_png(PREVIEW_BOSSES_PATH, preview)
     print(f"Preview: {PREVIEW_BOSSES_PATH} ({preview.w}x{preview.h})")
+
+    if chief_row:
+        chief_preview = build_preview_grid(chief_row, scale=2, title="SKELETON CHIEF 20F")
+        write_png(PREVIEW_SKELETON_CHIEF_PATH, chief_preview)
+        print(f"Preview: {PREVIEW_SKELETON_CHIEF_PATH} ({chief_preview.w}x{chief_preview.h})")
 
 
 if __name__ == "__main__":

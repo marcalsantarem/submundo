@@ -128,6 +128,7 @@ const ANIMATION_SPECS: readonly AnimationSpec[] = [
   ...createMonsterAnimSpecs('wolf', 6, 12),
   ...createMonsterAnimSpecs('skeleton', 6, 10),
   ...createMonsterAnimSpecs('skeleton_archer', 6, 10),
+  ...createMonsterAnimSpecs('skeleton_chief', 6, 10),
   ...createMonsterAnimSpecs('wolf_alpha', 6, 12),
   ...createMonsterAnimSpecs('karnak', 6, 9),
   // Legacy fallback specs if wraith_warrior or legacy monster textures exist
@@ -239,6 +240,7 @@ const ANIMATED_MONSTER_KEYS = new Set<string>([
   'wolf',
   'skeleton',
   'skeleton_archer',
+  'skeleton_chief',
   'wolf_alpha',
   'karnak',
 ]);

@@ -152,5 +152,19 @@
     "attackCooldownMs": 1350,
     "soulReward": 0,
     "spriteKey": "karnak"
+  },
+  {
+    "id": "skeleton_chief",
+    "name": "Esqueleto Chefe",
+    "type": "boss",
+    "attackType": "melee",
+    "maxHp": 175,
+    "attack": 14,
+    "defense": 5,
+    "moveSpeed": 105,
+    "attackRange": 46,
+    "attackCooldownMs": 1100,
+    "soulReward": 55,
+    "spriteKey": "skeleton_chief"
   }
 ]
