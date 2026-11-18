@@ -46,6 +46,7 @@ export interface HubHudCallbacks {
   onInteract?: () => void;
   onCycleStage?: () => void;
   onToggleMute?: () => void;
+  onResetSave?: () => void;
 }
 
 export class HubHud {
@@ -74,6 +75,10 @@ export class HubHud {
   private readonly interactBtn: ActionButtonView;
   private readonly stageBtn: ActionButtonView;
   private readonly muteBtn: ActionButtonView;
+  private readonly resetBtn: ActionButtonView;
+
+  private resetArmed = false;
+  private resetArmTimer?: ReturnType<typeof setTimeout>;
 
   private lastSnapshot: HubHudSnapshot = {
     souls: 0,
@@ -213,6 +218,14 @@ export class HubHud {
       0x38bdf8,
       '#e0f2fe',
       () => this.callbacks.onToggleMute?.()
+    );
+
+    this.resetBtn = this.createActionButton(
+      'Resetar',
+      0x1f1215,
+      0x7f1d1d,
+      '#fca5a5',
+      () => this.handleResetClick()
     );
 
     // Movement Keys (WASD + Arrows)
@@ -364,6 +377,7 @@ export class HubHud {
       this.soulsText.setFontSize(11).setPosition(12, 27);
       this.essencesText.setFontSize(11).setPosition(112, 27);
       this.gearText.setOrigin(0, 0).setFontSize(10).setPosition(12, 45);
+      this.layoutButton(this.resetBtn, w - 107, 18, 72, 22, 10);
       this.layoutButton(this.muteBtn, w - 38, 18, 54, 22, 10);
 
       this.bannerContainer.setPosition(w / 2, 88);
@@ -380,7 +394,8 @@ export class HubHud {
       this.locationText.setFontSize(12).setPosition(16, 16);
       this.soulsText.setFontSize(12).setPosition(236, 17);
       this.essencesText.setFontSize(12).setPosition(340, 17);
-      this.gearText.setOrigin(1, 0).setFontSize(11).setPosition(w - 82, 18);
+      this.gearText.setOrigin(1, 0).setFontSize(11).setPosition(w - 160, 18);
+      this.layoutButton(this.resetBtn, w - 114, 26, 74, 26, 10);
       this.layoutButton(this.muteBtn, w - 42, 26, 58, 26, 10);
 
       this.bannerContainer.setPosition(w / 2, 78);
@@ -399,6 +414,12 @@ export class HubHud {
   }
 
   public destroy(): void {
+    if (this.resetArmTimer !== undefined) {
+      clearTimeout(this.resetArmTimer);
+      this.resetArmTimer = undefined;
+    }
+    this.resetArmed = false;
+
     this.scene.input.keyboard?.off('keydown', this.keydownHandler);
     this.joystick.destroy();
 
@@ -416,6 +437,36 @@ export class HubHud {
     this.interactBtn.container.destroy();
     this.stageBtn.container.destroy();
     this.muteBtn.container.destroy();
+    this.resetBtn.container.destroy();
+  }
+
+  private handleResetClick(): void {
+    if (!this.resetArmed) {
+      this.resetArmed = true;
+      this.resetBtn.label.setText('Confirmar?').setColor('#ffffff');
+      this.redrawButtonGraphics(this.resetBtn, 0x7f1d1d, 0xef4444);
+
+      if (this.resetArmTimer !== undefined) {
+        clearTimeout(this.resetArmTimer);
+      }
+      this.resetArmTimer = setTimeout(() => {
+        this.disarmReset();
+      }, 3500);
+      return;
+    }
+
+    this.disarmReset();
+    this.callbacks.onResetSave?.();
+  }
+
+  private disarmReset(): void {
+    if (this.resetArmTimer !== undefined) {
+      clearTimeout(this.resetArmTimer);
+      this.resetArmTimer = undefined;
+    }
+    this.resetArmed = false;
+    this.resetBtn.label.setText('Resetar').setColor('#fca5a5');
+    this.redrawButtonGraphics(this.resetBtn, 0x1f1215, 0x7f1d1d);
   }
 
   private createActionButton(

@@ -35,15 +35,22 @@ import {
   unequipProfileSlot,
   upgradeItemWithBlacksmith,
 } from '../../core/progression/ProfileManager';
+import { clearProfileStorage } from '../../core/progression/StorageAdapter';
 import dialoguesData from '../../data/dialogues.json';
 import { soundManager } from '../audio/SoundManager';
-import { registerGameAnimations } from '../sprites/CombatVfx';
+import {
+  HERO_WALK_FOOTSTEP_FRAMES,
+  registerGameAnimations,
+  spawnFootstepDust,
+} from '../sprites/CombatVfx';
+import { HeroWeaponRig } from '../sprites/HeroWeaponRig';
 import { AltarModal, type AltarModalSnapshot } from '../ui/AltarModal';
 import {
   BlacksmithModal,
   type BlacksmithModalSnapshot,
 } from '../ui/BlacksmithModal';
 import { DialogueBox } from '../ui/DialogueBox';
+import { SceneCameraRig } from '../ui/CameraRig';
 import { HubHud, type HubHudSnapshot } from '../ui/HubHud';
 import {
   InventoryModal,
@@ -181,11 +188,15 @@ export class HubScene extends Phaser.Scene {
   private blacksmithModal!: BlacksmithModal;
   private inventoryModal!: InventoryModal;
   private dialogueBox!: DialogueBox;
+  private cameraRig?: SceneCameraRig;
 
   private arenaLayer!: Phaser.GameObjects.Container;
   private lightingGraphics!: Phaser.GameObjects.Graphics;
   private heroAura!: Phaser.GameObjects.Graphics;
   private heroSprite!: Phaser.GameObjects.Sprite;
+  private heroSpriteKey: 'hero_living' | 'hero_wraith' = 'hero_living';
+  private weaponRig?: HeroWeaponRig;
+  private lastFootstepFrame = -1;
 
   private stations: HubStationView[] = [];
   private nearbyStationId: HubStationId | null = null;
@@ -210,6 +221,7 @@ export class HubScene extends Phaser.Scene {
     this.elapsedTimeMs = 0;
     this.nearbyStationId = null;
     this.emissaryDialogueIndex = 0;
+    this.lastFootstepFrame = -1;
 
     const width = this.scale.width || 800;
     const height = this.scale.height || 600;
@@ -257,13 +269,22 @@ export class HubScene extends Phaser.Scene {
     this.buildArenaTilesAndLighting(this.viewport);
     this.createStations(this.viewport);
 
+    const heroKey =
+      campaign.phase === 'prologue' ? 'hero_living' : 'hero_wraith';
+    this.heroSpriteKey = heroKey;
     this.heroSprite = this.add
-      .sprite(this.hero.position.x, this.hero.position.y, 'wraith_warrior', 0)
-      .setScale(1.5)
+      .sprite(this.hero.position.x, this.hero.position.y, this.heroSpriteKey, 0)
+      .setScale(0.88)
       .setDepth(20);
-    if (this.anims.exists('wraith_idle')) {
-      this.heroSprite.play('wraith_idle', true);
+    if (this.anims.exists(`${this.heroSpriteKey}_idle`)) {
+      this.heroSprite.play(`${this.heroSpriteKey}_idle`, true);
     }
+    this.weaponRig = new HeroWeaponRig(
+      this,
+      this.heroSprite,
+      this.profile.equipped.weapon,
+      this.heroSpriteKey === 'hero_wraith'
+    );
 
     this.hud = new HubHud(this, {
       onOpenAltar: () => this.openAltar(),
@@ -284,6 +305,7 @@ export class HubScene extends Phaser.Scene {
         }
         this.updateHud();
       },
+      onResetSave: () => this.resetSaveAndRestart(),
     });
 
     this.altarModal = new AltarModal(this, {
@@ -405,6 +427,16 @@ export class HubScene extends Phaser.Scene {
 
     this.dialogueBox = new DialogueBox(this);
 
+    this.cameraRig = new SceneCameraRig(this, {
+      width: this.viewport.width,
+      height: this.viewport.height,
+      worldZoom: this.getWorldZoom(this.viewport.mode),
+      boundsWidth: this.viewport.width,
+      boundsHeight: this.viewport.height,
+    });
+    this.cameraRig.follow(this.heroSprite);
+    this.cameraRig.syncLayers();
+
     this.resizeHandler = (gameSize: Phaser.Structs.Size) => {
       this.handleViewportResize(gameSize.width, gameSize.height);
     };
@@ -436,10 +468,12 @@ export class HubScene extends Phaser.Scene {
     this.triggerAutomaticEntryDialogues(transitionExt);
     this.updateProximityState();
     this.syncVisuals();
+    this.weaponRig?.sync(false, this.time?.now ?? this.elapsedTimeMs);
+    this.cameraRig?.syncLayers();
     this.updateHud();
   }
 
-  public update(_time: number, delta: number): void {
+  public update(time: number, delta: number): void {
     if (!this.hero || !this.hud || this.enteringDungeon) {
       return;
     }
@@ -451,9 +485,16 @@ export class HubScene extends Phaser.Scene {
       this.bannerText = undefined;
     }
 
-    if (!this.isAnyModalOpen()) {
-      const moveDir = this.hud.getMoveVector();
+    const canMove = !this.isAnyModalOpen();
+    let moveDir: Vector2D = { x: 0, y: 0 };
+    let dx = 0;
+    let dy = 0;
+
+    if (canMove) {
+      moveDir = this.hud.getMoveVector();
       const bounds = this.getMovementBounds(this.viewport);
+      const prevX = this.hero.position.x;
+      const prevY = this.hero.position.y;
       moveHero(this.hero, moveDir, clampedDelta, {
         width: this.viewport.width,
         height: this.viewport.height,
@@ -467,10 +508,53 @@ export class HubScene extends Phaser.Scene {
         bounds.minY,
         Math.min(bounds.maxY, this.hero.position.y)
       );
+      dx = this.hero.position.x - prevX;
+      dy = this.hero.position.y - prevY;
       this.updateProximityState();
     }
 
+    if (canMove && Math.abs(moveDir.x) > 0.05) {
+      this.heroSprite.setFlipX(moveDir.x < 0);
+    } else if (Math.abs(dx) > 0.05) {
+      this.heroSprite.setFlipX(dx < 0);
+    }
+
+    const hasMoveIntent =
+      canMove && (Math.abs(moveDir.x) > 0.05 || Math.abs(moveDir.y) > 0.05);
+    const isMoving = hasMoveIntent && Math.hypot(dx, dy) > 0.05;
+
+    const walkKey = `${this.heroSpriteKey}_walk`;
+    const idleKey = `${this.heroSpriteKey}_idle`;
+    const desiredKey =
+      isMoving && this.anims.exists(walkKey) ? walkKey : idleKey;
+    if (
+      this.anims.exists(desiredKey) &&
+      this.heroSprite.anims.currentAnim?.key !== desiredKey
+    ) {
+      this.heroSprite.play(desiredKey, true);
+    }
+
     this.syncVisuals();
+
+    if (isMoving && this.heroSprite.anims.currentAnim?.key === walkKey) {
+      const frameIdx = Number(this.heroSprite.frame?.name);
+      if (Number.isFinite(frameIdx) && frameIdx !== this.lastFootstepFrame) {
+        this.lastFootstepFrame = frameIdx;
+        if (HERO_WALK_FOOTSTEP_FRAMES.includes(frameIdx)) {
+          spawnFootstepDust(
+            this,
+            this.heroSprite.x,
+            this.heroSprite.y + 31 * this.heroSprite.scaleY,
+            this.heroSpriteKey === 'hero_wraith'
+          );
+        }
+      }
+    } else {
+      this.lastFootstepFrame = -1;
+    }
+
+    this.weaponRig?.sync(isMoving, time);
+    this.cameraRig?.syncLayers();
     this.updateHud();
   }
 
@@ -633,6 +717,14 @@ export class HubScene extends Phaser.Scene {
     }
   }
 
+  private resetSaveAndRestart(): void {
+    this.closeAllModalsExcept(null);
+    soundManager.unlock();
+    soundManager.play('ui_click');
+    clearProfileStorage();
+    this.scene.restart({});
+  }
+
   private isAnyModalOpen(): boolean {
     return (
       Boolean(this.altarModal?.isOpen()) ||
@@ -647,6 +739,10 @@ export class HubScene extends Phaser.Scene {
     const facing = this.hero ? { ...this.hero.facing } : { x: 1, y: 0 };
     this.hero = buildHeroFromProfile(this.profile, pos);
     this.hero.facing = facing;
+    this.weaponRig?.setEquippedWeapon(
+      this.profile.equipped.weapon,
+      this.heroSpriteKey === 'hero_wraith'
+    );
   }
 
   private buildAltarSnapshot(): AltarModalSnapshot {
@@ -791,6 +887,18 @@ export class HubScene extends Phaser.Scene {
 
   private rebuildPhaseScenario(): void {
     const phase = this.getCampaignPhase();
+    this.heroSpriteKey = phase === 'prologue' ? 'hero_living' : 'hero_wraith';
+    this.lastFootstepFrame = -1;
+    if (this.heroSprite) {
+      this.heroSprite.setTexture(this.heroSpriteKey, 0).setScale(0.88);
+      if (this.anims.exists(`${this.heroSpriteKey}_idle`)) {
+        this.heroSprite.play(`${this.heroSpriteKey}_idle`, true);
+      }
+    }
+    this.weaponRig?.setEquippedWeapon(
+      this.profile.equipped.weapon,
+      this.heroSpriteKey === 'hero_wraith'
+    );
     this.cameras.main.setBackgroundColor(
       phase === 'prologue' ? '#121a14' : '#090b12'
     );
@@ -798,6 +906,8 @@ export class HubScene extends Phaser.Scene {
     this.createStations(this.viewport);
     this.updateProximityState();
     this.syncVisuals();
+    this.weaponRig?.sync(false, this.time?.now ?? this.elapsedTimeMs);
+    this.cameraRig?.syncLayers();
     this.updateHud();
   }
 
@@ -861,14 +971,20 @@ export class HubScene extends Phaser.Scene {
     }
 
     this.heroSprite.setPosition(this.hero.position.x, this.hero.position.y);
-    this.heroSprite.setFlipX(this.hero.facing.x < 0);
 
     const isPrologue = this.getCampaignPhase() === 'prologue';
     const auraColor = isPrologue ? 0xfbbf24 : 0x38bdf8;
-    const pulse = 0.14 + Math.sin(this.elapsedTimeMs * 0.005) * 0.04;
+    const pulse = isPrologue
+      ? 0.06 + Math.sin(this.elapsedTimeMs * 0.004) * 0.02
+      : 0.14 + Math.sin(this.elapsedTimeMs * 0.005) * 0.04;
+    const auraRadius = isPrologue ? 16 : 19;
     this.heroAura.clear();
     this.heroAura.fillStyle(auraColor, pulse);
-    this.heroAura.fillCircle(this.hero.position.x, this.hero.position.y + 4, 19);
+    this.heroAura.fillCircle(
+      this.hero.position.x,
+      this.hero.position.y + 6,
+      auraRadius
+    );
 
     const highlightPulse = 0.28 + Math.sin(this.elapsedTimeMs * 0.007) * 0.08;
     for (const station of this.stations) {
@@ -1183,6 +1299,10 @@ export class HubScene extends Phaser.Scene {
     };
   }
 
+  private getWorldZoom(mode: ViewportConfig['mode']): number {
+    return mode === 'mobile_portrait' ? 1.45 : 1.65;
+  }
+
   private handleViewportResize(width: number, height: number): void {
     if (!this.hero || !this.hud) {
       return;
@@ -1202,6 +1322,14 @@ export class HubScene extends Phaser.Scene {
       Math.min(bounds.maxY, this.hero.position.y)
     );
 
+    this.cameraRig?.resize(
+      this.viewport.width,
+      this.viewport.height,
+      this.getWorldZoom(this.viewport.mode),
+      this.viewport.width,
+      this.viewport.height
+    );
+
     this.hud.resize(this.viewport);
     this.altarModal?.resize(this.viewport);
     this.blacksmithModal?.resize(this.viewport);
@@ -1210,6 +1338,8 @@ export class HubScene extends Phaser.Scene {
 
     this.updateProximityState();
     this.syncVisuals();
+    this.weaponRig?.sync(false, this.time?.now ?? this.elapsedTimeMs);
+    this.cameraRig?.syncLayers();
     this.updateHud();
   }
 
@@ -1226,18 +1356,37 @@ export class HubScene extends Phaser.Scene {
   }
 
   private ensureRequiredFallbackTextures(): void {
-    if (!this.textures.exists('wraith_warrior')) {
+    if (!this.textures.exists('hero_living')) {
+      const gfx = this.make.graphics({ x: 0, y: 0 });
+      gfx.fillStyle(0xd97706, 1);
+      gfx.fillRect(14, 10, 52, 60);
+      gfx.lineStyle(2, 0xfef3c7, 1);
+      gfx.strokeRect(14, 10, 52, 60);
+      gfx.generateTexture('hero_living', 80, 80);
+      gfx.destroy();
+    }
+    if (!this.textures.exists('hero_wraith')) {
       const gfx = this.make.graphics({ x: 0, y: 0 });
       gfx.fillStyle(0x38bdf8, 1);
-      gfx.fillRect(0, 0, 32, 32);
+      gfx.fillRect(14, 10, 52, 60);
       gfx.lineStyle(2, 0x09090b, 1);
-      gfx.strokeRect(0, 0, 32, 32);
-      gfx.generateTexture('wraith_warrior', 32, 32);
+      gfx.strokeRect(14, 10, 52, 60);
+      gfx.generateTexture('hero_wraith', 80, 80);
+      gfx.destroy();
+    }
+    if (!this.textures.exists('weapons')) {
+      const gfx = this.make.graphics({ x: 0, y: 0 });
+      gfx.fillStyle(0xe2e8f0, 1);
+      gfx.fillRect(20, 6, 8, 36);
+      gfx.fillStyle(0xfbbf24, 1);
+      gfx.fillRect(14, 30, 20, 5);
+      gfx.generateTexture('weapons', 48, 48);
       gfx.destroy();
     }
   }
 
   private cleanupScene(): void {
+    this.lastFootstepFrame = -1;
     if (this.resizeHandler) {
       this.scale.off('resize', this.resizeHandler);
       this.resizeHandler = undefined;
@@ -1251,10 +1400,15 @@ export class HubScene extends Phaser.Scene {
       this.keydownHandler = undefined;
     }
 
+    this.cameraRig?.destroy();
+    this.cameraRig = undefined;
+
     this.destroyStations();
     this.arenaLayer?.destroy();
     this.lightingGraphics?.destroy();
     this.heroAura?.destroy();
+    this.weaponRig?.destroy();
+    this.weaponRig = undefined;
     this.heroSprite?.destroy();
 
     this.dialogueBox?.destroy();

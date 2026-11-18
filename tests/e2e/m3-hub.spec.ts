@@ -54,8 +54,8 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
       };
     }, SAVE_STORAGE_KEY);
 
-    expect(GAME_VERSION).toBe('0.4.0');
-    expect(bootCheck.title).toBe('SUBMUNDO v0.4.0');
+    expect(GAME_VERSION).toBe('0.5.0');
+    expect(bootCheck.title).toBe('SUBMUNDO v0.5.0');
     expect(bootCheck.hasCanvas).toBe(true);
     expect(bootCheck.canvasWidth).toBe(800);
     expect(bootCheck.canvasHeight).toBe(600);

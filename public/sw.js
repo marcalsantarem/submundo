@@ -1,4 +1,4 @@
-const CACHE_NAME = 'submundo-static-v1';
+const CACHE_NAME = 'submundo-static-v0.5.0-r2';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting());
@@ -89,6 +89,11 @@ self.addEventListener('fetch', (event) => {
     url.pathname.endsWith('/index.html')
   ) {
     event.respondWith(networkFirst(request, true));
+    return;
+  }
+
+  if (url.pathname.includes('/assets/')) {
+    event.respondWith(networkFirst(request, true, { cache: 'no-cache' }));
     return;
   }
 

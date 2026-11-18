@@ -192,6 +192,35 @@ class PixelCanvas {
     }
   }
 
+  blit(srcCanvas, destX, destY) {
+    for (let y = 0; y < srcCanvas.height; y++) {
+      for (let x = 0; x < srcCanvas.width; x++) {
+        const sIdx = (y * srcCanvas.width + x) * 4;
+        const sa = srcCanvas.data[sIdx + 3];
+        if (sa === 0) continue;
+        const dx = destX + x;
+        const dy = destY + y;
+        if (dx < 0 || dx >= this.width || dy < 0 || dy >= this.height) continue;
+        const dIdx = (dy * this.width + dx) * 4;
+        if (sa === 255) {
+          this.data[dIdx] = srcCanvas.data[sIdx];
+          this.data[dIdx + 1] = srcCanvas.data[sIdx + 1];
+          this.data[dIdx + 2] = srcCanvas.data[sIdx + 2];
+          this.data[dIdx + 3] = 255;
+        } else {
+          const a = sa / 255;
+          const da = this.data[dIdx + 3] / 255;
+          const outA = a + da * (1 - a);
+          if (outA <= 0) continue;
+          this.data[dIdx] = Math.round((srcCanvas.data[sIdx] * a + this.data[dIdx] * da * (1 - a)) / outA);
+          this.data[dIdx + 1] = Math.round((srcCanvas.data[sIdx + 1] * a + this.data[dIdx + 1] * da * (1 - a)) / outA);
+          this.data[dIdx + 2] = Math.round((srcCanvas.data[sIdx + 2] * a + this.data[dIdx + 2] * da * (1 - a)) / outA);
+          this.data[dIdx + 3] = Math.round(outA * 255);
+        }
+      }
+    }
+  }
+
   save(filePath) {
     fs.writeFileSync(filePath, encodePNG(this.width, this.height, this.data));
   }
@@ -1580,10 +1609,524 @@ function generatePortraits() {
   return c;
 }
 
+// --- 15. Hero 48x48 Spritesheets (768x48, 16 frames 48x48: idle0-3, walk0-3, attack0-3, dash0-1, hit0-1) ---
+function applyPixelOutline(srcCanvas, outlineHex) {
+  const out = new PixelCanvas(srcCanvas.width, srcCanvas.height);
+  const w = srcCanvas.width;
+  const h = srcCanvas.height;
+  const isOpaque = (x, y) => {
+    if (x < 0 || x >= w || y < 0 || y >= h) return false;
+    return srcCanvas.data[(y * w + x) * 4 + 3] > 128;
+  };
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (isOpaque(x, y)) {
+        const idx = (y * w + x) * 4;
+        out.setRGBA(
+          x,
+          y,
+          srcCanvas.data[idx],
+          srcCanvas.data[idx + 1],
+          srcCanvas.data[idx + 2],
+          srcCanvas.data[idx + 3]
+        );
+      } else if (
+        isOpaque(x - 1, y) ||
+        isOpaque(x + 1, y) ||
+        isOpaque(x, y - 1) ||
+        isOpaque(x, y + 1)
+      ) {
+        out.setPixel(x, y, outlineHex, 255);
+      }
+    }
+  }
+  return out;
+}
+
+function drawThickBlade(c, x0, y0, x1, y1, pal, highlightEdge = true) {
+  // Draw blade core + bright edge along vector (x0,y0) -> (x1,y1)
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len = Math.max(1, Math.hypot(dx, dy));
+  const steps = Math.ceil(len * 2);
+  // Perpendicular unit vector (pointing "up/left" for bright edge)
+  const px = -dy / len;
+  const py = dx / len;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const x = x0 + dx * t;
+    const y = y0 + dy * t;
+    // Taper tip
+    if (t < 0.88) {
+      c.setPixel(Math.round(x - px * 0.8), Math.round(y - py * 0.8), pal.bladeShadow);
+      c.setPixel(Math.round(x), Math.round(y), pal.bladeMid);
+      if (highlightEdge) {
+        c.setPixel(Math.round(x + px * 0.8), Math.round(y + py * 0.8), pal.bladeLight);
+      }
+    } else {
+      c.setPixel(Math.round(x), Math.round(y), pal.bladeLight);
+    }
+  }
+}
+
+function generateHero48(variant) {
+  const isWraith = variant === 'wraith';
+  const sheet = new PixelCanvas(768, 48);
+
+  const pal = isWraith
+    ? {
+        outline: '#09090b',
+        armorDeep: '#111827',
+        armorShadow: '#1e293b',
+        armorMid: '#334155',
+        armorLight: '#64748b',
+        armorRim: '#38bdf8',
+        capeDeep: '#0f172a',
+        capeMid: '#1e1b4b',
+        capeLight: '#312e81',
+        capeTip: '#0284c7',
+        capeGlow: '#38bdf8',
+        belt: '#1e293b',
+        buckle: '#38bdf8',
+        hilt: '#475569',
+        guard: '#7dd3fc',
+        bladeShadow: '#0284c7',
+        bladeMid: '#38bdf8',
+        bladeLight: '#e0f2fe',
+        slashOuter: '#0284c7',
+        slashMid: '#38bdf8',
+        slashCore: '#e0f2fe',
+        shadowFloor: '#0284c7',
+      }
+    : {
+        outline: '#12131a',
+        armorDeep: '#3b4252',
+        armorShadow: '#64748b',
+        armorMid: '#cbd5e1',
+        armorLight: '#f8fafc',
+        armorRim: '#f8fafc',
+        capeDeep: '#7f1d1d',
+        capeMid: '#b91c1c',
+        capeLight: '#ef4444',
+        capeTip: '#991b1b',
+        capeGlow: '#fca5a5',
+        belt: '#451a03',
+        buckle: '#fbbf24',
+        hilt: '#78350f',
+        guard: '#f59e0b',
+        bladeShadow: '#64748b',
+        bladeMid: '#bae6fd',
+        bladeLight: '#f8fafc',
+        slashOuter: '#38bdf8',
+        slashMid: '#bae6fd',
+        slashCore: '#f8fafc',
+        shadowFloor: '#09090b',
+      };
+
+  const frames = [
+    // 0..3: idle0..idle3
+    { state: 'idle', sub: 0, bobY: 0, leanX: 0, capeWave: 0, stride: 0 },
+    { state: 'idle', sub: 1, bobY: 0, leanX: 0, capeWave: 1, stride: 0 },
+    { state: 'idle', sub: 2, bobY: 1, leanX: 0, capeWave: 2, stride: 0 },
+    { state: 'idle', sub: 3, bobY: 1, leanX: 0, capeWave: 1, stride: 0 },
+    // 4..7: walk0..walk3
+    { state: 'walk', sub: 0, bobY: 0, leanX: 1, capeWave: 2, stride: -3 },
+    { state: 'walk', sub: 1, bobY: -1, leanX: 1, capeWave: 3, stride: 0 },
+    { state: 'walk', sub: 2, bobY: 0, leanX: 1, capeWave: 2, stride: 3 },
+    { state: 'walk', sub: 3, bobY: -1, leanX: 1, capeWave: 1, stride: 0 },
+    // 8..11: attack0..attack3
+    { state: 'attack', sub: 0, bobY: 0, leanX: -1, capeWave: -1, stride: -1 },
+    { state: 'attack', sub: 1, bobY: 1, leanX: 3, capeWave: 4, stride: 3 },
+    { state: 'attack', sub: 2, bobY: 1, leanX: 2, capeWave: 3, stride: 2 },
+    { state: 'attack', sub: 3, bobY: 0, leanX: 1, capeWave: 1, stride: 1 },
+    // 12..13: dash0..dash1
+    { state: 'dash', sub: 0, bobY: 2, leanX: 4, capeWave: 5, stride: 3 },
+    { state: 'dash', sub: 1, bobY: 2, leanX: 3, capeWave: 6, stride: 2 },
+    // 14..15: hit0..hit1
+    { state: 'hit', sub: 0, bobY: -1, leanX: -2, capeWave: -2, stride: -2 },
+    { state: 'hit', sub: 1, bobY: 0, leanX: -1, capeWave: -1, stride: -1 },
+  ];
+
+  for (let fi = 0; fi < frames.length; fi++) {
+    const f = frames[fi];
+    const frameCanvas = new PixelCanvas(48, 48);
+    const body = new PixelCanvas(48, 48);
+
+    const cx = 23 + f.leanX;
+    const baseY = 40;
+    const ty = f.bobY; // torso/head vertical offset
+
+    // 1. Ground shadow / spectral aura on frameCanvas
+    if (isWraith) {
+      frameCanvas.fillRect(cx - 8, 40, 16, 3, '#09090b', 160);
+      frameCanvas.fillRect(cx - 6, 41, 12, 2, pal.shadowFloor, 130);
+      frameCanvas.fillRect(cx - 4, 41, 8, 1, '#38bdf8', 180);
+    } else {
+      frameCanvas.fillRect(cx - 7, 40, 14, 3, '#09090b', 150);
+      frameCanvas.fillRect(cx - 5, 41, 10, 1, '#1e293b', 140);
+    }
+
+    // 2. Flowing Cape (behind body, extending left)
+    if (f.state === 'dash') {
+      // Aerodynamic horizontal cape stretched left
+      for (let row = 0; row < 10; row++) {
+        const y = 21 + ty + row;
+        const leftX = Math.max(4, cx - 16 - (row % 3) + (f.sub === 1 ? 1 : 0));
+        const rightX = cx - 2;
+        const w = Math.max(2, rightX - leftX);
+        body.fillRect(leftX, y, w, 1, row < 3 ? pal.capeLight : row < 7 ? pal.capeMid : pal.capeDeep);
+        if (isWraith && row % 3 === 0) {
+          body.setPixel(leftX, y, pal.capeGlow);
+        }
+      }
+    } else {
+      const capeHeight = 16;
+      for (let row = 0; row < capeHeight; row++) {
+        const y = 21 + ty + row;
+        const flare = Math.floor(row * 0.45) + Math.max(0, f.capeWave);
+        const sway = Math.round(Math.sin((row * 0.35) + f.capeWave * 0.8) * 1.2);
+        const leftX = Math.max(5, cx - 6 - flare + sway);
+        const rightX = cx + 2 - Math.floor(row * 0.12);
+        const w = Math.max(3, rightX - leftX);
+        body.fillRect(leftX, y, w, 1, pal.capeDeep);
+        if (w > 3) {
+          body.fillRect(leftX + 1, y, w - 2, 1, row < 10 ? pal.capeMid : pal.capeDeep);
+          body.fillRect(leftX + 1, y, Math.max(1, Math.floor(w * 0.45)), 1, pal.capeLight);
+        }
+        // Highlight fold on upper-left edge
+        if (row < 8) {
+          body.setPixel(leftX + 1, y, pal.capeGlow);
+        }
+      }
+      // Cape bottom hem wisps
+      const hemY = 21 + ty + capeHeight;
+      if (isWraith) {
+        body.setPixel(cx - 10 - Math.max(0, f.capeWave), hemY, pal.capeTip);
+        body.setPixel(cx - 7, hemY, pal.capeGlow);
+        body.setPixel(cx - 4, hemY, pal.capeTip);
+      } else {
+        body.fillRect(cx - 9 - Math.max(0, f.capeWave), hemY, 3, 1, pal.capeDeep);
+        body.fillRect(cx - 5, hemY, 3, 1, pal.capeMid);
+      }
+    }
+
+    // 3. Legs & Boots (articulated greaves)
+    const drawLeg = (hipX, footX, hipY, footY, isFront) => {
+      const steps = 8;
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const lx = Math.round(lerp(hipX, footX, t));
+        const ly = Math.round(lerp(hipY, footY, t));
+        const colMain = isFront ? pal.armorMid : pal.armorShadow;
+        const colShade = isFront ? pal.armorShadow : pal.armorDeep;
+        body.fillRect(lx - 1, ly, 3, 2, colShade);
+        if (isFront) {
+          body.setPixel(lx, ly, pal.armorLight);
+        } else {
+          body.setPixel(lx, ly, colMain);
+        }
+      }
+      // Knee guard
+      const kx = Math.round((hipX + footX) * 0.5);
+      const ky = Math.round((hipY + footY) * 0.5);
+      body.fillRect(kx - 1, ky - 1, 3, 2, isFront ? pal.armorLight : pal.armorMid);
+      // Boot
+      body.fillRect(footX - 1, footY - 1, 4, 2, isFront ? pal.armorShadow : pal.armorDeep);
+      body.fillRect(footX, footY - 1, 3, 1, isFront ? pal.armorMid : pal.armorShadow);
+    };
+
+    if (f.state === 'dash') {
+      drawLeg(cx - 2, cx - 7, 30 + ty, 38 + ty, false);
+      drawLeg(cx + 2, cx + 5, 30 + ty, 39 + ty, true);
+    } else if (f.state === 'attack' && (f.sub === 1 || f.sub === 2)) {
+      // Wide combat lunge
+      drawLeg(cx - 3, cx - 7, 30 + ty, baseY, false);
+      drawLeg(cx + 2, cx + 6, 30 + ty, baseY, true);
+    } else {
+      const backFootX = cx - 3 - f.stride;
+      const frontFootX = cx + 3 + f.stride;
+      const backLift = f.state === 'walk' && f.sub === 1 ? -2 : 0;
+      const frontLift = f.state === 'walk' && f.sub === 3 ? -2 : 0;
+      drawLeg(cx - 2, backFootX, 30 + ty, baseY + backLift, false);
+      drawLeg(cx + 2, frontFootX, 30 + ty, baseY + frontLift, true);
+    }
+
+    // 4. Torso / Cuirass + Belt + Tassets
+    body.fillRect(cx - 4, 21 + ty, 9, 9, pal.armorDeep);
+    body.fillRect(cx - 3, 21 + ty, 8, 8, pal.armorShadow);
+    body.fillRect(cx - 2, 21 + ty, 6, 6, pal.armorMid);
+    body.fillRect(cx - 1, 22 + ty, 4, 3, pal.armorLight);
+    if (isWraith) {
+      // Celestial rune core on chestplate
+      body.fillRect(cx, 23 + ty, 2, 3, '#0284c7');
+      body.setPixel(cx + 1, 23 + ty, '#38bdf8');
+      body.setPixel(cx + 1, 24 + ty, '#e0f2fe');
+      // Rim light on right chest edge
+      body.drawLine(cx + 4, 21 + ty, cx + 4, 27 + ty, pal.armorRim);
+    }
+    // Belt & buckle
+    body.fillRect(cx - 4, 28 + ty, 9, 2, pal.belt);
+    body.fillRect(cx, 28 + ty, 2, 2, pal.buckle);
+    // Tassets (hip armor plates)
+    body.fillRect(cx - 4, 30 + ty, 3, 2, pal.armorShadow);
+    body.fillRect(cx + 2, 30 + ty, 3, 2, pal.armorMid);
+
+    // 5. Back Arm & Pauldron (left/back side)
+    body.fillRect(cx - 6, 20 + ty, 4, 4, pal.armorShadow);
+    body.fillRect(cx - 5, 20 + ty, 3, 2, pal.armorMid);
+    if (isWraith) body.setPixel(cx - 5, 20 + ty, pal.armorRim);
+    body.fillRect(cx - 5, 24 + ty, 2, 3, pal.armorDeep);
+
+    // 6. Head: Knight Helmet (living) vs Hooded Wraith Helm (wraith)
+    if (isWraith) {
+      // Pointed dark hood with cyan rim light
+      const hoodRows = [
+        [-2, 3],
+        [-3, 5],
+        [-4, 7],
+        [-4, 8],
+        [-5, 9],
+        [-5, 9],
+        [-5, 9],
+        [-4, 8],
+        [-4, 8],
+      ];
+      for (let r = 0; r < hoodRows.length; r++) {
+        const [ox, ow] = hoodRows[r];
+        const hy = 11 + ty + r;
+        body.fillRect(cx + ox, hy, ow, 1, pal.capeDeep);
+        if (ow > 3) {
+          body.fillRect(cx + ox + 1, hy, ow - 2, 1, pal.capeMid);
+        }
+        if (r < 4) {
+          body.setPixel(cx + ox + ow - 1, hy, pal.armorRim);
+        }
+      }
+      // Dark face void + glowing cyan eyes
+      body.fillRect(cx - 2, 15 + ty, 6, 4, '#09090b');
+      body.fillRect(cx - 1, 16 + ty, 2, 2, '#0284c7');
+      body.setPixel(cx - 1, 16 + ty, '#38bdf8');
+      body.setPixel(cx, 16 + ty, '#e0f2fe');
+      body.fillRect(cx + 2, 16 + ty, 2, 2, '#0284c7');
+      body.setPixel(cx + 2, 16 + ty, '#38bdf8');
+      body.setPixel(cx + 3, 16 + ty, '#e0f2fe');
+    } else {
+      // Red Knight Plume / Crest flowing back from helmet top
+      const crestOffset = f.state === 'walk' ? (f.sub % 2) : 0;
+      body.fillRect(cx - 5, 8 + ty + crestOffset, 5, 3, pal.capeDeep);
+      body.fillRect(cx - 4, 7 + ty + crestOffset, 5, 3, pal.capeMid);
+      body.fillRect(cx - 2, 7 + ty, 4, 3, pal.capeLight);
+      body.setPixel(cx - 1, 7 + ty, pal.capeGlow);
+
+      // Silver Steel Knight Helmet
+      body.fillRect(cx - 4, 11 + ty, 8, 9, pal.armorShadow);
+      body.fillRect(cx - 3, 10 + ty, 7, 9, pal.armorMid);
+      body.fillRect(cx - 2, 11 + ty, 5, 3, pal.armorLight);
+      // Dark T-visor slit
+      body.fillRect(cx - 2, 15 + ty, 6, 1, '#12131a');
+      body.fillRect(cx + 1, 15 + ty, 1, 3, '#12131a');
+      // Chin & brow highlight
+      body.fillRect(cx - 2, 14 + ty, 5, 1, pal.armorLight);
+      body.fillRect(cx - 2, 18 + ty, 5, 1, pal.armorMid);
+    }
+
+    // 7. Front Pauldron, Arm & Sword
+    let handX = cx + 5;
+    let handY = 25 + ty;
+    let tipX = cx + 15;
+    let tipY = 12 + ty;
+
+    if (f.state === 'idle') {
+      handY += f.sub >= 2 ? 1 : 0;
+      tipY += f.sub >= 2 ? 1 : 0;
+    } else if (f.state === 'walk') {
+      handX += f.sub === 0 ? 1 : f.sub === 2 ? -1 : 0;
+      tipX = handX + 10;
+      tipY = 14 + ty + (f.sub % 2);
+    } else if (f.state === 'attack') {
+      if (f.sub === 0) {
+        // Windup: sword raised back
+        handX = cx + 2;
+        handY = 20 + ty;
+        tipX = cx - 9;
+        tipY = 8 + ty;
+      } else if (f.sub === 1) {
+        // Wide slash forward
+        handX = cx + 6;
+        handY = 25 + ty;
+        tipX = cx + 18;
+        tipY = 24 + ty;
+      } else if (f.sub === 2) {
+        // Follow-through low
+        handX = cx + 5;
+        handY = 27 + ty;
+        tipX = cx + 16;
+        tipY = 34 + ty;
+      } else {
+        // Recovery
+        handX = cx + 5;
+        handY = 26 + ty;
+        tipX = cx + 15;
+        tipY = 17 + ty;
+      }
+    } else if (f.state === 'dash') {
+      handX = cx + 4;
+      handY = 26 + ty;
+      tipX = cx - 10;
+      tipY = 26 + ty;
+    } else if (f.state === 'hit') {
+      handX = cx + 4;
+      handY = 23 + ty;
+      tipX = cx + 9;
+      tipY = 10 + ty;
+    }
+
+    // Front Pauldron
+    body.fillRect(cx + 2, 20 + ty, 5, 4, pal.armorDeep);
+    body.fillRect(cx + 2, 20 + ty, 4, 3, pal.armorMid);
+    body.fillRect(cx + 3, 20 + ty, 2, 2, pal.armorLight);
+    if (isWraith) body.drawLine(cx + 3, 20 + ty, cx + 6, 20 + ty, pal.armorRim);
+
+    // Front Arm to Hand
+    body.drawLine(cx + 4, 23 + ty, handX, handY, pal.armorShadow);
+    body.fillRect(handX - 1, handY - 1, 3, 3, pal.armorMid);
+    body.setPixel(handX, handY - 1, pal.armorLight);
+
+    // Sword Hilt & Crossguard
+    const sdx = tipX - handX;
+    const sdy = tipY - handY;
+    const slen = Math.max(1, Math.hypot(sdx, sdy));
+    const ux = sdx / slen;
+    const uy = sdy / slen;
+    const px = -uy;
+    const py = ux;
+
+    // Pommel
+    body.setPixel(Math.round(handX - ux * 2), Math.round(handY - uy * 2), pal.guard);
+    // Guard perpendicular to blade
+    const gx0 = Math.round(handX + ux * 2 - px * 2.5);
+    const gy0 = Math.round(handY + uy * 2 - py * 2.5);
+    const gx1 = Math.round(handX + ux * 2 + px * 2.5);
+    const gy1 = Math.round(handY + uy * 2 + py * 2.5);
+    body.drawLine(gx0, gy0, gx1, gy1, pal.guard);
+
+    // Blade
+    drawThickBlade(
+      body,
+      handX + ux * 3,
+      handY + uy * 3,
+      tipX,
+      tipY,
+      pal,
+      true
+    );
+
+    // 8. Apply crisp 1px dark outline around the opaque body
+    const outlinedBody = applyPixelOutline(body, pal.outline);
+    frameCanvas.blit(outlinedBody, 0, 0);
+
+    // 9. Additive/Semi-transparent VFX overlays (after outline so they glow cleanly!)
+    if (f.state === 'idle' && (f.sub === 1 || f.sub === 3)) {
+      // Subtle blade glint
+      frameCanvas.setPixel(Math.round(tipX - ux * 2), Math.round(tipY - uy * 2), '#ffffff', 220);
+    }
+
+    if (f.state === 'attack' && f.sub === 1) {
+      // Sweeping luminous crescent slash arc (inspired by mockup_pixel_art.jpg)
+      const arcCx = cx + 4;
+      const arcCy = 24 + ty;
+      const rOuter = 17;
+      for (let a = -1.15; a <= 1.05; a += 0.04) {
+        const ax = Math.round(arcCx + Math.cos(a) * rOuter);
+        const ay = Math.round(arcCy + Math.sin(a) * (rOuter * 0.82));
+        if (ax >= 1 && ax < 47 && ay >= 1 && ay < 47) {
+          frameCanvas.blendPixel(ax, ay, pal.slashOuter, 190);
+          frameCanvas.blendPixel(ax - 1, ay, pal.slashMid, 220);
+          if (a > -0.7 && a < 0.7) {
+            frameCanvas.blendPixel(ax - 2, ay, pal.slashCore, 240);
+          }
+        }
+      }
+    } else if (f.state === 'attack' && f.sub === 2) {
+      // Fading follow-through slash trail
+      const arcCx = cx + 4;
+      const arcCy = 25 + ty;
+      const rOuter = 16;
+      for (let a = 0.0; a <= 1.15; a += 0.05) {
+        const ax = Math.round(arcCx + Math.cos(a) * rOuter);
+        const ay = Math.round(arcCy + Math.sin(a) * (rOuter * 0.8));
+        if (ax >= 1 && ax < 47 && ay >= 1 && ay < 47) {
+          frameCanvas.blendPixel(ax, ay, pal.slashOuter, 130);
+          frameCanvas.blendPixel(ax - 1, ay, pal.slashMid, 150);
+        }
+      }
+    }
+
+    if (f.state === 'dash') {
+      // Speed streaks behind hero
+      const trailCol = isWraith ? '#38bdf8' : '#e2e8f0';
+      const trailCore = isWraith ? '#e0f2fe' : '#f8fafc';
+      const shift = f.sub === 1 ? 2 : 0;
+      frameCanvas.fillRect(3 + shift, 17 + ty, 10, 1, trailCol, 170);
+      frameCanvas.fillRect(2 + shift, 23 + ty, 12, 2, trailCol, 190);
+      frameCanvas.fillRect(5 + shift, 24 + ty, 8, 1, trailCore, 220);
+      frameCanvas.fillRect(4 + shift, 31 + ty, 9, 1, trailCol, 160);
+    }
+
+    if (f.state === 'hit') {
+      // Impact flash spark on chest
+      const sparkCol = f.sub === 0 ? '#fef08a' : '#fca5a5';
+      const sx = cx + 2;
+      const sy = 23 + ty;
+      frameCanvas.blendPixel(sx, sy, '#ffffff', f.sub === 0 ? 240 : 140);
+      frameCanvas.blendPixel(sx - 2, sy, sparkCol, f.sub === 0 ? 210 : 110);
+      frameCanvas.blendPixel(sx + 2, sy, sparkCol, f.sub === 0 ? 210 : 110);
+      frameCanvas.blendPixel(sx, sy - 2, sparkCol, f.sub === 0 ? 210 : 110);
+      frameCanvas.blendPixel(sx, sy + 2, sparkCol, f.sub === 0 ? 210 : 110);
+    }
+
+    sheet.blit(frameCanvas, fi * 48, 0);
+  }
+
+  return sheet;
+}
+
 function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
   const specs = [
+    {
+      key: 'hero_living',
+      file: 'hero_living.png',
+      width: 768,
+      height: 48,
+      frameWidth: 48,
+      frameHeight: 48,
+      frames: [
+        'idle0', 'idle1', 'idle2', 'idle3',
+        'walk0', 'walk1', 'walk2', 'walk3',
+        'attack0', 'attack1', 'attack2', 'attack3',
+        'dash0', 'dash1',
+        'hit0', 'hit1',
+      ],
+      build: () => generateHero48('living'),
+    },
+    {
+      key: 'hero_wraith',
+      file: 'hero_wraith.png',
+      width: 768,
+      height: 48,
+      frameWidth: 48,
+      frameHeight: 48,
+      frames: [
+        'idle0', 'idle1', 'idle2', 'idle3',
+        'walk0', 'walk1', 'walk2', 'walk3',
+        'attack0', 'attack1', 'attack2', 'attack3',
+        'dash0', 'dash1',
+        'hit0', 'hit1',
+      ],
+      build: () => generateHero48('wraith'),
+    },
     {
       key: 'wraith_warrior',
       file: 'wraith_warrior.png',

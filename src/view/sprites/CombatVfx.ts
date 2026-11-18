@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 
 export type SkillForceVfx = 'inferno' | 'submundo' | 'empireo' | 'none';
 
+export const HERO_WALK_FOOTSTEP_FRAMES: readonly number[] = [4, 7];
+
 interface AnimationSpec {
   key: string;
   texture: string;
@@ -11,6 +13,79 @@ interface AnimationSpec {
 }
 
 const ANIMATION_SPECS: readonly AnimationSpec[] = [
+  // Hero Living (Prologue) — 1920x80 (24 frames of 80x80)
+  {
+    key: 'hero_living_idle',
+    texture: 'hero_living',
+    frames: [0, 1, 2, 3],
+    frameRate: 6,
+    repeat: -1,
+  },
+  {
+    key: 'hero_living_walk',
+    texture: 'hero_living',
+    frames: [4, 5, 6, 7, 8, 9],
+    frameRate: 12,
+    repeat: -1,
+  },
+  {
+    key: 'hero_living_attack',
+    texture: 'hero_living',
+    frames: [10, 11, 12, 13, 14, 15],
+    frameRate: 18,
+    repeat: 0,
+  },
+  {
+    key: 'hero_living_dash',
+    texture: 'hero_living',
+    frames: [16, 17, 18, 19],
+    frameRate: 16,
+    repeat: 0,
+  },
+  {
+    key: 'hero_living_hit',
+    texture: 'hero_living',
+    frames: [20, 21, 22, 23],
+    frameRate: 14,
+    repeat: 0,
+  },
+  // Hero Wraith (Act 1+) — 1920x80 (24 frames of 80x80)
+  {
+    key: 'hero_wraith_idle',
+    texture: 'hero_wraith',
+    frames: [0, 1, 2, 3],
+    frameRate: 6,
+    repeat: -1,
+  },
+  {
+    key: 'hero_wraith_walk',
+    texture: 'hero_wraith',
+    frames: [4, 5, 6, 7, 8, 9],
+    frameRate: 12,
+    repeat: -1,
+  },
+  {
+    key: 'hero_wraith_attack',
+    texture: 'hero_wraith',
+    frames: [10, 11, 12, 13, 14, 15],
+    frameRate: 18,
+    repeat: 0,
+  },
+  {
+    key: 'hero_wraith_dash',
+    texture: 'hero_wraith',
+    frames: [16, 17, 18, 19],
+    frameRate: 16,
+    repeat: 0,
+  },
+  {
+    key: 'hero_wraith_hit',
+    texture: 'hero_wraith',
+    frames: [20, 21, 22, 23],
+    frameRate: 14,
+    repeat: 0,
+  },
+  // Legacy fallback specs if wraith_warrior exists
   {
     key: 'wraith_idle',
     texture: 'wraith_warrior',
@@ -114,6 +189,49 @@ export function registerGameAnimations(scene: Phaser.Scene): void {
       frames: animFrames,
       frameRate: spec.frameRate,
       repeat: spec.repeat,
+    });
+  }
+}
+
+/**
+ * Spawns lightweight footstep dust (Living) or spectral mist (Wraith) particles on walk contact frames.
+ */
+export function spawnFootstepDust(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  isWraith: boolean,
+): void {
+  const primaryColor = isWraith ? 0x38bdf8 : 0xd6c7a9;
+  const secondaryColor = isWraith ? 0x94a3b8 : 0xa89878;
+
+  const puffs = [
+    { offsetX: -5, offsetY: 0, driftX: -9, driftY: -5, radius: 2.6, duration: 230 },
+    { offsetX: 0, offsetY: 1, driftX: 0, driftY: -6, radius: 2.1, duration: 250 },
+    { offsetX: 5, offsetY: 0, driftX: 9, driftY: -4, radius: 2.4, duration: 240 },
+  ];
+
+  for (let i = 0; i < puffs.length; i++) {
+    const puff = puffs[i];
+    const dust = scene.add
+      .graphics({ x: x + puff.offsetX, y: y + puff.offsetY })
+      .setDepth(19);
+    const color = i % 2 === 0 ? primaryColor : secondaryColor;
+    dust.fillStyle(color, isWraith ? 0.55 : 0.65);
+    dust.fillCircle(0, 0, puff.radius);
+
+    scene.tweens.add({
+      targets: dust,
+      x: x + puff.offsetX + puff.driftX,
+      y: y + puff.offsetY + puff.driftY,
+      scaleX: 1.5,
+      scaleY: 1.3,
+      alpha: 0,
+      duration: puff.duration,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        dust.destroy();
+      },
     });
   }
 }
@@ -230,37 +348,75 @@ export class CombatVfxManager {
     fromY: number,
     toX: number,
     toY: number,
+    isWraith = true,
   ): void {
     const angle = Math.atan2(toY - fromY, toX - fromX);
     const midX = fromX + (toX - fromX) * 0.65;
     const midY = fromY + (toY - fromY) * 0.65;
 
+    const outerColor = isWraith ? 0x38bdf8 : 0xfacc15;
+    const innerColor = isWraith ? 0xe0f2fe : 0xe2e8f0;
+
     const slash = this.scene.add.graphics({ x: midX, y: midY }).setDepth(42);
     slash.setRotation(angle);
 
-    // Outer spectral glow arc (#38bdf8)
-    slash.lineStyle(4, 0x38bdf8, 0.9);
+    // Outer runic glow arc (traço externo)
+    slash.lineStyle(4, outerColor, 0.9);
     slash.beginPath();
-    slash.arc(0, 0, 16, -0.85, 0.85, false);
+    slash.arc(0, 0, 18, -0.9, 0.9, false);
     slash.strokePath();
 
-    // Inner bright blade core (#e0f2fe)
-    slash.lineStyle(2, 0xe0f2fe, 1);
+    // Secondary trailing arc (traço duplo)
+    slash.lineStyle(2.5, outerColor, 0.55);
     slash.beginPath();
-    slash.arc(2, 0, 15, -0.65, 0.65, false);
+    slash.arc(-3, 0, 14, -0.75, 0.75, false);
+    slash.strokePath();
+
+    // Inner bright blade core
+    slash.lineStyle(2, innerColor, 1);
+    slash.beginPath();
+    slash.arc(2, 0, 16, -0.68, 0.68, false);
     slash.strokePath();
 
     this.scene.tweens.add({
       targets: slash,
-      scaleX: 1.25,
-      scaleY: 1.25,
+      scaleX: 1.28,
+      scaleY: 1.28,
       alpha: 0,
-      duration: 160,
+      duration: 165,
       ease: 'Quad.easeOut',
       onComplete: () => {
         slash.destroy();
       },
     });
+
+    // Subtle spark particles along the slash arc
+    const sparkOffsets = [-0.65, -0.2, 0.25, 0.65];
+    for (let i = 0; i < sparkOffsets.length; i++) {
+      const sparkAngle = angle + sparkOffsets[i];
+      const startDist = 14;
+      const endDist = 26;
+      const sx = midX + Math.cos(sparkAngle) * startDist;
+      const sy = midY + Math.sin(sparkAngle) * startDist;
+
+      const spark = this.scene.add.graphics({ x: sx, y: sy }).setDepth(43);
+      spark.fillStyle(i % 2 === 0 ? innerColor : outerColor, 0.95);
+      spark.fillCircle(0, 0, 1.8);
+
+      this.scene.tweens.add({
+        targets: spark,
+        x: midX + Math.cos(sparkAngle) * endDist,
+        y: midY + Math.sin(sparkAngle) * endDist,
+        alpha: 0,
+        scaleX: 0.4,
+        scaleY: 0.4,
+        duration: 160,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          spark.destroy();
+        },
+      });
+    }
   }
 
   public showSkillAreaEffect(
