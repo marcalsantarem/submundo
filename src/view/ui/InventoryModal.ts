@@ -2,20 +2,29 @@ import Phaser from 'phaser';
 import {
   EquipSlot,
   EquippedGear,
-  ForceType,
   HeroStats,
   ItemInstance,
-  Rarity,
   ViewportConfig,
   resolveViewportConfig,
 } from '../../core/index';
 import {
-  FONT_BODY,
-  FONT_TITLE,
-  ItemTooltipCard,
-  SLOT_ICON_FRAME,
-  calculateItemPower,
-} from './ItemTooltipCard';
+  DF_EQUIP_SLOT_ORDER,
+  DF_FONTS,
+  DF_FORCE_THEME,
+  DF_PALETTE,
+  DF_RARITY_THEME,
+  DF_SLOT_META,
+  DF_UI_ICONS_KEY,
+  DF_UI_ICON_FRAMES,
+  drawOrnamentalDivider,
+  drawOrnateButton,
+  drawOrnatePanel,
+  drawRaritySlotFrame,
+  drawSkullCrest,
+  formatStatNumber,
+  hasUiTextureFrame,
+} from './DarkFantasyUiBuilder';
+import { ItemTooltipCard, calculateItemPower } from './ItemTooltipCard';
 
 export interface InventoryHudSnapshot {
   equipped: EquippedGear;
@@ -27,8 +36,6 @@ export interface InventoryHudSnapshot {
   activeForces: Record<'inferno' | 'submundo' | 'empireo', number>;
 }
 
-type MobileTab = 'equipment' | 'bag';
-
 interface EquipSlotCardView {
   slot: EquipSlot;
   container: Phaser.GameObjects.Container;
@@ -38,6 +45,7 @@ interface EquipSlotCardView {
   slotLabelText: Phaser.GameObjects.Text;
   itemNameText: Phaser.GameObjects.Text;
   hitZone: Phaser.GameObjects.Zone;
+  hovered: boolean;
 }
 
 interface BagCellView {
@@ -50,69 +58,14 @@ interface BagCellView {
   nameText: Phaser.GameObjects.Text;
   hitZone: Phaser.GameObjects.Zone;
   boundItem: ItemInstance | null;
+  hovered: boolean;
 }
 
-// Grade 2 colunas x 3 linhas conforme ref_diablo_equipment_panel.jpg:
+// Grade 2 colunas x 3 linhas:
 // Linha 1: ELMO | ARMA
 // Linha 2: ARMADURA | AMULETO
 // Linha 3: BOTA | ANEL
-export const EQUIP_SLOT_ORDER: EquipSlot[] = [
-  'helm',
-  'weapon',
-  'armor',
-  'amulet',
-  'boots',
-  'ring',
-];
-
-const SLOT_LABELS: Record<EquipSlot, string> = {
-  helm: 'ELMO',
-  weapon: 'ARMA',
-  armor: 'ARMADURA',
-  amulet: 'AMULETO',
-  boots: 'BOTA',
-  ring: 'ANEL',
-};
-
-const SLOT_SUBLABELS: Record<EquipSlot, string> = {
-  helm: 'Elmo',
-  weapon: 'Arma',
-  armor: 'Armadura',
-  amulet: 'Amuleto',
-  boots: 'Bota',
-  ring: 'Anel',
-};
-
-const RARITY_HEX: Record<Rarity, string> = {
-  common: '#94a3b8',
-  magic: '#60a5fa',
-  rare: '#facc15',
-  legendary: '#f97316',
-};
-
-const RARITY_NUM: Record<Rarity, number> = {
-  common: 0x94a3b8,
-  magic: 0x60a5fa,
-  rare: 0xfacc15,
-  legendary: 0xf97316,
-};
-
-const RARITY_FILL: Record<Rarity, number> = {
-  common: 0x1a202c,
-  magic: 0x14253d,
-  rare: 0x2f2811,
-  legendary: 0x3b1c0e,
-};
-
-const FORCE_NUM: Record<ForceType, number> = {
-  inferno: 0xf97316,
-  submundo: 0xfb7185,
-  empireo: 0xfde047,
-  none: 0x64748b,
-};
-
-const UI_ICONS_KEY = 'ui_icons';
-const BAG_ICON_FRAME = 6;
+export const EQUIP_SLOT_ORDER: EquipSlot[] = [...DF_EQUIP_SLOT_ORDER];
 
 const BAG_GRID_COLS = 4;
 const BAG_GRID_ROWS = 4;
@@ -128,7 +81,6 @@ export class InventoryModal {
 
   private viewport: ViewportConfig;
   private opened = false;
-  private mobileTab: MobileTab = 'equipment';
   private bagPage = 0;
   private lastSnapshot: InventoryHudSnapshot;
 
@@ -145,22 +97,16 @@ export class InventoryModal {
   private readonly closeBtnText: Phaser.GameObjects.Text;
   private readonly closeBtnZone: Phaser.GameObjects.Zone;
 
-  private readonly tabsContainer: Phaser.GameObjects.Container;
-  private readonly tabEquipBg: Phaser.GameObjects.Graphics;
-  private readonly tabEquipText: Phaser.GameObjects.Text;
-  private readonly tabEquipZone: Phaser.GameObjects.Zone;
-  private readonly tabBagBg: Phaser.GameObjects.Graphics;
-  private readonly tabBagText: Phaser.GameObjects.Text;
-  private readonly tabBagZone: Phaser.GameObjects.Zone;
-
   private readonly equipmentSection: Phaser.GameObjects.Container;
+  private readonly equipHeaderText: Phaser.GameObjects.Text;
   private readonly slotCards: EquipSlotCardView[] = [];
   private readonly statsPrimaryText: Phaser.GameObjects.Text;
-  private readonly statsForcesText: Phaser.GameObjects.Text;
+  private readonly statsSecondaryText: Phaser.GameObjects.Text;
 
   private readonly bagSection: Phaser.GameObjects.Container;
   private readonly bagHeaderIcon: Phaser.GameObjects.Image | null;
   private readonly bagHeaderText: Phaser.GameObjects.Text;
+  private readonly forcesLegendText: Phaser.GameObjects.Text;
   private readonly emptyBagText: Phaser.GameObjects.Text;
   private readonly bagCells: BagCellView[] = [];
 
@@ -177,11 +123,11 @@ export class InventoryModal {
   private readonly pageInfoText: Phaser.GameObjects.Text;
   private readonly keydownHandler: (event: KeyboardEvent) => void;
 
-  private equipBoxSize = 66;
-  private statsBoxWidth = 280;
-  private statsBoxHeight = 96;
-  private bagCellWidth = 80;
-  private bagCellHeight = 82;
+  private equipBoxSize = 70;
+  private statsBoxWidth = 332;
+  private statsBoxHeight = 82;
+  private bagCellWidth = 108;
+  private bagCellHeight = 80;
 
   constructor(
     scene: Phaser.Scene,
@@ -194,8 +140,8 @@ export class InventoryModal {
     this.scene = scene;
     this.callbacks = callbacks;
     this.viewport = resolveViewportConfig(
-      scene.scale.width || 800,
-      scene.scale.height || 600
+      scene.scale.width || 960,
+      scene.scale.height || 540
     );
     this.tooltipCard = new ItemTooltipCard(scene);
 
@@ -245,23 +191,23 @@ export class InventoryModal {
 
     this.panelGraphic = scene.add.graphics();
     this.titleText = scene.add
-      .text(0, 0, 'EQUIPAMENTO', {
-        fontFamily: FONT_TITLE,
+      .text(0, 0, 'INVENTÁRIO & EQUIPAMENTO', {
+        fontFamily: DF_FONTS.TITLE,
         fontSize: '18px',
-        color: '#f5d076',
+        color: DF_PALETTE.textGold,
         fontStyle: 'bold',
         letterSpacing: 2,
         resolution: 2,
       })
       .setOrigin(0.5, 0.5);
 
-    // Botão X vermelho no canto superior direito
+    // Botão X carmesim no canto superior direito
     this.closeBtnBg = scene.add.graphics();
     this.closeBtnText = scene.add
       .text(0, 0, 'X', {
-        fontFamily: FONT_BODY,
-        fontSize: '15px',
-        color: '#fecaca',
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '14px',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
         resolution: 2,
       })
@@ -270,6 +216,8 @@ export class InventoryModal {
       .zone(0, 0, 32, 32)
       .setOrigin(0.5, 0.5)
       .setInteractive({ useHandCursor: true });
+    this.closeBtnZone.on('pointerover', () => this.drawCloseButton(true));
+    this.closeBtnZone.on('pointerout', () => this.drawCloseButton(false));
     this.closeBtnZone.on(
       'pointerdown',
       (
@@ -292,113 +240,62 @@ export class InventoryModal {
       this.closeBtnZone,
     ]);
 
-    // Abas Mobile (EQUIPAMENTO | MOCHILA)
-    this.tabEquipBg = scene.add.graphics();
-    this.tabEquipText = scene.add
-      .text(0, 0, 'EQUIPAMENTO', {
-        fontFamily: FONT_TITLE,
-        fontSize: '12px',
-        color: '#f5d076',
-        fontStyle: 'bold',
-        resolution: 2,
-      })
-      .setOrigin(0.5);
-    this.tabEquipZone = scene.add
-      .zone(0, 0, 140, 32)
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-    this.tabEquipZone.on(
-      'pointerdown',
-      (
-        _pointer: Phaser.Input.Pointer,
-        _lx: number,
-        _ly: number,
-        event?: Phaser.Types.Input.EventData
-      ) => {
-        event?.stopPropagation?.();
-        this.mobileTab = 'equipment';
-        this.applySectionVisibility();
-        this.drawMobileTabs();
-      }
-    );
-
-    this.tabBagBg = scene.add.graphics();
-    this.tabBagText = scene.add
-      .text(0, 0, 'MOCHILA (0)', {
-        fontFamily: FONT_TITLE,
-        fontSize: '12px',
-        color: '#94a3b8',
-        fontStyle: 'bold',
-        resolution: 2,
-      })
-      .setOrigin(0.5);
-    this.tabBagZone = scene.add
-      .zone(0, 0, 140, 32)
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-    this.tabBagZone.on(
-      'pointerdown',
-      (
-        _pointer: Phaser.Input.Pointer,
-        _lx: number,
-        _ly: number,
-        event?: Phaser.Types.Input.EventData
-      ) => {
-        event?.stopPropagation?.();
-        this.mobileTab = 'bag';
-        this.applySectionVisibility();
-        this.drawMobileTabs();
-      }
-    );
-
-    this.tabsContainer = scene.add.container(0, 0, [
-      this.tabEquipBg,
-      this.tabEquipText,
-      this.tabEquipZone,
-      this.tabBagBg,
-      this.tabBagText,
-      this.tabBagZone,
-    ]);
-
-    // Seção Equipamento (6 slots 2x3 + Placa Ornamental de Atributos com crânio)
+    // Coluna Esquerda: Equipamento (6 slots 2x3 + Placa Ornamental de Atributos)
     this.equipmentSection = scene.add.container(0, 0);
-    for (const slot of EQUIP_SLOT_ORDER) {
+    this.equipHeaderText = scene.add
+      .text(0, 0, 'EQUIPAMENTO', {
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '13px',
+        color: DF_PALETTE.textGold,
+        fontStyle: 'bold',
+        resolution: 2,
+      })
+      .setOrigin(0.5, 0.5);
+    this.equipmentSection.add(this.equipHeaderText);
+
+    for (const slot of DF_EQUIP_SLOT_ORDER) {
+      const slotMeta = DF_SLOT_META[slot];
       const boxBg = scene.add.graphics();
-      const frame = SLOT_ICON_FRAME[slot];
-      const iconImage = this.hasTextureFrame(UI_ICONS_KEY, frame)
-        ? scene.add.image(0, 0, UI_ICONS_KEY, frame).setOrigin(0.5)
+      const iconImage = hasUiTextureFrame(
+        scene,
+        DF_UI_ICONS_KEY,
+        slotMeta.iconFrame
+      )
+        ? scene.add
+            .image(0, 0, DF_UI_ICONS_KEY, slotMeta.iconFrame)
+            .setOrigin(0.5)
         : null;
       const fallbackIconText = scene.add
-        .text(0, 0, SLOT_LABELS[slot][0] ?? '?', {
-          fontFamily: FONT_TITLE,
+        .text(0, 0, slotMeta.labelUpper[0] ?? '?', {
+          fontFamily: DF_FONTS.TITLE,
           fontSize: '20px',
-          color: '#64748b',
+          color: DF_PALETTE.textMuted,
           fontStyle: 'bold',
           resolution: 2,
         })
         .setOrigin(0.5);
 
       const slotLabelText = scene.add
-        .text(0, 0, SLOT_LABELS[slot], {
-          fontFamily: FONT_BODY,
+        .text(0, 0, slotMeta.labelUpper, {
+          fontFamily: DF_FONTS.BODY,
           fontSize: '11px',
-          color: '#94a3b8',
+          color: DF_PALETTE.textMuted,
           fontStyle: 'bold',
           resolution: 2,
         })
         .setOrigin(0.5);
 
       const itemNameText = scene.add
-        .text(0, 0, SLOT_SUBLABELS[slot], {
-          fontFamily: FONT_BODY,
-          fontSize: '11px',
-          color: '#94a3b8',
+        .text(0, 0, slotMeta.labelTitle, {
+          fontFamily: DF_FONTS.BODY,
+          fontSize: '10px',
+          color: DF_PALETTE.textMuted,
           resolution: 2,
         })
         .setOrigin(0.5);
 
       const hitZone = scene.add
-        .zone(0, 0, 74, 96)
+        .zone(0, 0, 82, 98)
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true });
 
@@ -409,9 +306,25 @@ export class InventoryModal {
       children.push(fallbackIconText, slotLabelText, itemNameText, hitZone);
 
       const cardContainer = scene.add.container(0, 0, children);
+      const cardView: EquipSlotCardView = {
+        slot,
+        container: cardContainer,
+        boxBg,
+        iconImage,
+        fallbackIconText,
+        slotLabelText,
+        itemNameText,
+        hitZone,
+        hovered: false,
+      };
 
       hitZone.on('pointerover', () => {
-        if (!this.opened || this.tooltipCard.isPinned()) {
+        if (!this.opened) {
+          return;
+        }
+        cardView.hovered = true;
+        this.renderSingleEquippedSlot(cardView);
+        if (this.tooltipCard.isPinned()) {
           return;
         }
         const equippedItem = this.lastSnapshot.equipped[slot];
@@ -430,6 +343,8 @@ export class InventoryModal {
       });
 
       hitZone.on('pointerout', () => {
+        cardView.hovered = false;
+        this.renderSingleEquippedSlot(cardView);
         if (this.tooltipCard.isOpen() && !this.tooltipCard.isPinned()) {
           this.tooltipCard.close();
         }
@@ -462,36 +377,27 @@ export class InventoryModal {
         }
       );
 
-      this.slotCards.push({
-        slot,
-        container: cardContainer,
-        boxBg,
-        iconImage,
-        fallbackIconText,
-        slotLabelText,
-        itemNameText,
-        hitZone,
-      });
+      this.slotCards.push(cardView);
       this.equipmentSection.add(cardContainer);
     }
 
     this.statsBgGraphic = scene.add.graphics();
     this.statsPrimaryText = scene.add
       .text(0, 0, '', {
-        fontFamily: FONT_BODY,
-        fontSize: '13px',
-        color: '#f8fafc',
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '12px',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
         align: 'center',
-        lineSpacing: 4,
+        lineSpacing: 3,
         resolution: 2,
       })
       .setOrigin(0.5, 0.5);
-    this.statsForcesText = scene.add
+    this.statsSecondaryText = scene.add
       .text(0, 0, '', {
-        fontFamily: FONT_BODY,
+        fontFamily: DF_FONTS.BODY,
         fontSize: '10px',
-        color: '#cbd5e1',
+        color: DF_PALETTE.textMuted,
         align: 'center',
         resolution: 2,
       })
@@ -500,28 +406,43 @@ export class InventoryModal {
     this.equipmentSection.add([
       this.statsBgGraphic,
       this.statsPrimaryText,
-      this.statsForcesText,
+      this.statsSecondaryText,
     ]);
 
-    // Seção Mochila (Grade 4x4 = 16 slots + paginação)
+    // Coluna Direita: Mochila (Grade 4x4 = 16 slots + paginação + legenda das 3 Forças)
     this.bagSection = scene.add.container(0, 0);
-    this.bagHeaderIcon = this.hasTextureFrame(UI_ICONS_KEY, BAG_ICON_FRAME)
-      ? scene.add.image(0, 0, UI_ICONS_KEY, BAG_ICON_FRAME).setOrigin(0.5)
+    this.bagHeaderIcon = hasUiTextureFrame(
+      scene,
+      DF_UI_ICONS_KEY,
+      DF_UI_ICON_FRAMES.bag
+    )
+      ? scene.add
+          .image(0, 0, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.bag)
+          .setOrigin(0.5)
       : null;
     this.bagHeaderText = scene.add
-      .text(0, 0, 'MOCHILA DA INCURSÃO (0)', {
-        fontFamily: FONT_TITLE,
-        fontSize: '12px',
-        color: '#f5d076',
+      .text(0, 0, 'MOCHILA (0)', {
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '13px',
+        color: DF_PALETTE.textGold,
         fontStyle: 'bold',
         resolution: 2,
       })
       .setOrigin(0, 0.5);
+    this.forcesLegendText = scene.add
+      .text(0, 0, '', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '10px',
+        color: DF_PALETTE.textLight,
+        fontStyle: 'bold',
+        resolution: 2,
+      })
+      .setOrigin(1, 0.5);
     this.emptyBagText = scene.add
       .text(0, 0, 'Mochila vazia.\nDerrote monstros para obter itens.', {
-        fontFamily: FONT_BODY,
+        fontFamily: DF_FONTS.BODY,
         fontSize: '12px',
-        color: '#64748b',
+        color: DF_PALETTE.textMuted,
         align: 'center',
         resolution: 2,
       })
@@ -530,56 +451,61 @@ export class InventoryModal {
     if (this.bagHeaderIcon) {
       this.bagSection.add(this.bagHeaderIcon);
     }
-    this.bagSection.add([this.bagHeaderText, this.emptyBagText]);
+    this.bagSection.add([
+      this.bagHeaderText,
+      this.forcesLegendText,
+      this.emptyBagText,
+    ]);
 
     for (let i = 0; i < BAG_PAGE_SIZE; i += 1) {
       const bg = scene.add.graphics();
-      const iconImage = this.hasTextureFrame(
-        UI_ICONS_KEY,
-        SLOT_ICON_FRAME.weapon
+      const iconImage = hasUiTextureFrame(
+        scene,
+        DF_UI_ICONS_KEY,
+        DF_SLOT_META.weapon.iconFrame
       )
         ? scene.add
-            .image(0, 0, UI_ICONS_KEY, SLOT_ICON_FRAME.weapon)
+            .image(0, 0, DF_UI_ICONS_KEY, DF_SLOT_META.weapon.iconFrame)
             .setOrigin(0.5)
         : null;
       const fallbackIconText = scene.add
         .text(0, 0, '?', {
-          fontFamily: FONT_TITLE,
+          fontFamily: DF_FONTS.TITLE,
           fontSize: '18px',
-          color: '#cbd5e1',
+          color: DF_PALETTE.textLight,
           fontStyle: 'bold',
           resolution: 2,
         })
         .setOrigin(0.5);
       const powerText = scene.add
         .text(0, 0, '', {
-          fontFamily: FONT_TITLE,
+          fontFamily: DF_FONTS.TITLE,
           fontSize: '10px',
-          color: '#e2e8f0',
+          color: DF_PALETTE.textParchment,
           fontStyle: 'bold',
           resolution: 2,
         })
         .setOrigin(0, 0.5);
       const compareText = scene.add
         .text(0, 0, '', {
-          fontFamily: FONT_BODY,
+          fontFamily: DF_FONTS.BODY,
           fontSize: '11px',
-          color: '#4ade80',
+          color: DF_PALETTE.textSuccess,
           fontStyle: 'bold',
           resolution: 2,
         })
         .setOrigin(1, 0.5);
       const nameText = scene.add
         .text(0, 0, '', {
-          fontFamily: FONT_BODY,
+          fontFamily: DF_FONTS.BODY,
           fontSize: '10px',
-          color: '#e2e8f0',
+          color: DF_PALETTE.textLight,
           align: 'center',
           resolution: 2,
         })
         .setOrigin(0.5, 0.5);
       const hitZone = scene.add
-        .zone(0, 0, 76, 78)
+        .zone(0, 0, 108, 80)
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true });
 
@@ -606,10 +532,16 @@ export class InventoryModal {
         nameText,
         hitZone,
         boundItem: null,
+        hovered: false,
       };
 
       hitZone.on('pointerover', () => {
-        if (!this.opened || !cellView.boundItem || this.tooltipCard.isPinned()) {
+        if (!this.opened || !cellView.boundItem) {
+          return;
+        }
+        cellView.hovered = true;
+        this.renderSingleBagCell(cellView);
+        if (this.tooltipCard.isPinned()) {
           return;
         }
         const item = cellView.boundItem;
@@ -625,6 +557,8 @@ export class InventoryModal {
       });
 
       hitZone.on('pointerout', () => {
+        cellView.hovered = false;
+        this.renderSingleBagCell(cellView);
         if (this.tooltipCard.isOpen() && !this.tooltipCard.isPinned()) {
           this.tooltipCard.close();
         }
@@ -658,19 +592,19 @@ export class InventoryModal {
       this.bagSection.add(cellContainer);
     }
 
-    // Paginação
+    // Paginação da Mochila
     this.prevPageBg = scene.add.graphics();
     this.prevPageText = scene.add
       .text(0, 0, '◄ Anterior', {
-        fontFamily: FONT_BODY,
+        fontFamily: DF_FONTS.BODY,
         fontSize: '11px',
-        color: '#e2e8f0',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
         resolution: 2,
       })
       .setOrigin(0.5);
     this.prevPageZone = scene.add
-      .zone(0, 0, 92, 28)
+      .zone(0, 0, 96, 28)
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
     this.prevPageZone.on(
@@ -698,15 +632,15 @@ export class InventoryModal {
     this.nextPageBg = scene.add.graphics();
     this.nextPageText = scene.add
       .text(0, 0, 'Próxima ►', {
-        fontFamily: FONT_BODY,
+        fontFamily: DF_FONTS.BODY,
         fontSize: '11px',
-        color: '#e2e8f0',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
         resolution: 2,
       })
       .setOrigin(0.5);
     this.nextPageZone = scene.add
-      .zone(0, 0, 92, 28)
+      .zone(0, 0, 96, 28)
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
     this.nextPageZone.on(
@@ -734,9 +668,10 @@ export class InventoryModal {
 
     this.pageInfoText = scene.add
       .text(0, 0, '1/1', {
-        fontFamily: FONT_BODY,
+        fontFamily: DF_FONTS.BODY,
         fontSize: '11px',
-        color: '#cbd5e1',
+        color: DF_PALETTE.textMuted,
+        fontStyle: 'bold',
         resolution: 2,
       })
       .setOrigin(0.5);
@@ -754,7 +689,6 @@ export class InventoryModal {
         this.panelGraphic,
         this.titleText,
         this.closeBtnContainer,
-        this.tabsContainer,
         this.equipmentSection,
         this.bagSection,
       ])
@@ -783,11 +717,8 @@ export class InventoryModal {
   public open(snapshot: InventoryHudSnapshot): void {
     this.opened = true;
     this.bagPage = 0;
-    this.mobileTab = 'equipment';
     this.rootContainer.setVisible(true);
     this.update(snapshot);
-    this.applySectionVisibility();
-    this.drawMobileTabs();
   }
 
   public close(): void {
@@ -815,7 +746,6 @@ export class InventoryModal {
 
     const w = viewport.width;
     const h = viewport.height;
-    const isMobile = viewport.mode === 'mobile_portrait';
 
     this.rootContainer.setPosition(w / 2, h / 2);
 
@@ -824,133 +754,89 @@ export class InventoryModal {
     this.backdropGraphic.fillRect(-w / 2, -h / 2, w, h);
     this.backdropZone.setSize(w, h);
 
-    const panelW = isMobile ? Math.min(342, w - 16) : Math.min(756, w - 32);
-    const panelH = isMobile ? Math.min(606, h - 24) : Math.min(556, h - 32);
-    const headerH = isMobile ? 42 : 44;
+    // Painel Paisagem Amplo 880x486 centralizado em 960x540
+    const panelW = Math.min(880, w - 24);
+    const panelH = Math.min(486, h - 24);
+    const headerH = 42;
 
-    this.drawPanelFrame(panelW, panelH, headerH, isMobile);
+    const innerPadX = 18;
+    const leftColW = Math.min(360, Math.round((panelW - innerPadX * 2) * 0.42));
+    const dividerX = -panelW / 2 + innerPadX + leftColW + 10;
+    const leftCenterX = -panelW / 2 + innerPadX + leftColW / 2;
+    const rightColLeft = dividerX + 14;
+    const rightColW = panelW / 2 - innerPadX - rightColLeft;
+    const rightCenterX = rightColLeft + rightColW / 2;
 
-    this.titleText.setFontSize(isMobile ? '17px' : '18px');
-    this.titleText.setPosition(0, -panelH / 2 + headerH / 2 + 2);
+    this.drawPanelFrame(panelW, panelH, headerH, dividerX);
+
+    this.titleText.setPosition(0, -panelH / 2 + headerH / 2 + 4);
 
     this.closeBtnContainer.setPosition(
-      panelW / 2 - 22,
-      -panelH / 2 + headerH / 2 + 2
+      panelW / 2 - 26,
+      -panelH / 2 + headerH / 2 + 4
     );
-    this.drawCloseButton();
+    this.drawCloseButton(false);
 
-    if (isMobile) {
-      this.tabsContainer.setVisible(true);
-      const tabY = -panelH / 2 + headerH + 20;
-      const tabW = (panelW - 36) / 2;
-      this.tabsContainer.setPosition(0, tabY);
+    // Coluna Esquerda: EQUIPAMENTO (2x3 slots 70x70 + Placa de Atributos com crânio)
+    this.equipmentSection.setPosition(leftCenterX, 0);
+    const contentTopY = -panelH / 2 + headerH + 18;
+    this.equipHeaderText.setPosition(0, contentTopY);
 
-      this.tabEquipText.setPosition(-tabW / 2 - 4, 0);
-      this.tabEquipZone.setPosition(-tabW / 2 - 4, 0).setSize(tabW, 28);
-      this.tabBagText.setPosition(tabW / 2 + 4, 0);
-      this.tabBagZone.setPosition(tabW / 2 + 4, 0).setSize(tabW, 28);
+    this.equipBoxSize = 70;
+    const colOffset = Math.min(82, Math.floor(leftColW * 0.24));
+    const row1Y = contentTopY + 58;
+    const row2Y = row1Y + 104;
+    const row3Y = row2Y + 104;
 
-      // Aba Equipamento 2x3 (Mobile 360x640, slot 74x74)
-      this.equipmentSection.setPosition(0, 0);
-      this.equipBoxSize = 74;
-      const colOffset = 76;
-      const row1Y = -panelH / 2 + headerH + 92;
-      const row2Y = row1Y + 114;
-      const row3Y = row2Y + 114;
+    const coords: Array<{ x: number; y: number }> = [
+      { x: -colOffset, y: row1Y },
+      { x: colOffset, y: row1Y },
+      { x: -colOffset, y: row2Y },
+      { x: colOffset, y: row2Y },
+      { x: -colOffset, y: row3Y },
+      { x: colOffset, y: row3Y },
+    ];
+    this.positionEquipCards(coords);
 
-      const coords: Array<{ x: number; y: number }> = [
-        { x: -colOffset, y: row1Y },
-        { x: colOffset, y: row1Y },
-        { x: -colOffset, y: row2Y },
-        { x: colOffset, y: row2Y },
-        { x: -colOffset, y: row3Y },
-        { x: colOffset, y: row3Y },
-      ];
-      this.positionEquipCards(coords);
+    this.statsBoxWidth = Math.min(336, leftColW - 14);
+    this.statsBoxHeight = 82;
+    const statsY = panelH / 2 - this.statsBoxHeight / 2 - 14;
+    this.positionStatsPanel(0, statsY);
 
-      this.statsBoxWidth = panelW - 32;
-      this.statsBoxHeight = 96;
-      const statsY = panelH / 2 - this.statsBoxHeight / 2 - 18;
-      this.positionStatsPanel(0, statsY);
-
-      // Aba Mochila 4x4 = 16 slots (Mobile 360x640)
-      this.bagSection.setPosition(0, 0);
-      const bagTopY = -panelH / 2 + headerH + 52;
-      if (this.bagHeaderIcon) {
-        this.bagHeaderIcon
-          .setPosition(-panelW / 2 + 26, bagTopY)
-          .setDisplaySize(18, 18);
-        this.bagHeaderText.setPosition(-panelW / 2 + 42, bagTopY);
-      } else {
-        this.bagHeaderText.setPosition(-panelW / 2 + 18, bagTopY);
-      }
-
-      const gap = 6;
-      this.bagCellWidth = Math.floor(
-        (panelW - 32 - gap * (BAG_GRID_COLS - 1)) / BAG_GRID_COLS
-      );
-      this.bagCellHeight = 82;
-      const gridStartY = bagTopY + 62;
-      this.positionBagGrid(0, gridStartY, gap);
-
-      const pagY = panelH / 2 - 26;
-      this.positionPagination(0, pagY, panelW - 36);
-      this.emptyBagText.setPosition(0, gridStartY + this.bagCellHeight * 1.5);
+    // Coluna Direita: MOCHILA (4x4 = 16 slots + legenda das 3 Forças + paginação)
+    this.bagSection.setPosition(rightCenterX, 0);
+    const bagTopY = contentTopY;
+    if (this.bagHeaderIcon) {
+      this.bagHeaderIcon
+        .setPosition(-rightColW / 2 + 10, bagTopY)
+        .setDisplaySize(18, 18);
+      this.bagHeaderText.setPosition(-rightColW / 2 + 26, bagTopY);
     } else {
-      this.tabsContainer.setVisible(false);
-
-      // Desktop 800x600: Coluna Esquerda (Equipamento 2x3 + Placa Atributos) | Coluna Direita (Mochila 4x4)
-      const leftCenterX = -panelW / 4 - 4;
-      const rightCenterX = panelW / 4 + 4;
-
-      this.equipmentSection.setPosition(leftCenterX, 0);
-      this.equipBoxSize = 66;
-      const colOffset = 74;
-      const row1Y = -panelH / 2 + headerH + 64;
-      const row2Y = row1Y + 108;
-      const row3Y = row2Y + 108;
-      const coords: Array<{ x: number; y: number }> = [
-        { x: -colOffset, y: row1Y },
-        { x: colOffset, y: row1Y },
-        { x: -colOffset, y: row2Y },
-        { x: colOffset, y: row2Y },
-        { x: -colOffset, y: row3Y },
-        { x: colOffset, y: row3Y },
-      ];
-      this.positionEquipCards(coords);
-
-      this.statsBoxWidth = panelW / 2 - 44;
-      this.statsBoxHeight = 96;
-      const statsY = panelH / 2 - this.statsBoxHeight / 2 - 18;
-      this.positionStatsPanel(0, statsY);
-
-      this.bagSection.setPosition(rightCenterX, 0);
-      const rightColW = panelW / 2 - 36;
-      const bagTopY = -panelH / 2 + headerH + 22;
-      if (this.bagHeaderIcon) {
-        this.bagHeaderIcon
-          .setPosition(-rightColW / 2 + 10, bagTopY)
-          .setDisplaySize(18, 18);
-        this.bagHeaderText.setPosition(-rightColW / 2 + 26, bagTopY);
-      } else {
-        this.bagHeaderText.setPosition(-rightColW / 2 + 2, bagTopY);
-      }
-
-      const gap = 8;
-      this.bagCellWidth = Math.floor(
-        (rightColW - gap * (BAG_GRID_COLS - 1)) / BAG_GRID_COLS
-      );
-      this.bagCellHeight = 82;
-      const gridStartY = bagTopY + 62;
-      this.positionBagGrid(0, gridStartY, gap);
-
-      const pagY = panelH / 2 - 26;
-      this.positionPagination(0, pagY, rightColW);
-      this.emptyBagText.setPosition(0, gridStartY + this.bagCellHeight * 1.5);
+      this.bagHeaderText.setPosition(-rightColW / 2 + 2, bagTopY);
     }
+    this.forcesLegendText.setPosition(rightColW / 2 - 2, bagTopY);
 
-    this.applySectionVisibility();
-    this.drawMobileTabs();
+    const gap = 8;
+    const pagY = panelH / 2 - 26;
+    const gridTopEdge = bagTopY + 18;
+    const gridBottomEdge = pagY - 22;
+    const availableGridH = Math.max(240, gridBottomEdge - gridTopEdge);
+
+    this.bagCellWidth = Math.floor(
+      (rightColW - gap * (BAG_GRID_COLS - 1)) / BAG_GRID_COLS
+    );
+    this.bagCellHeight = Math.floor(
+      (availableGridH - gap * (BAG_GRID_ROWS - 1)) / BAG_GRID_ROWS
+    );
+    const gridFirstRowCenterY = gridTopEdge + this.bagCellHeight / 2;
+    this.positionBagGrid(0, gridFirstRowCenterY, gap);
+
+    this.positionPagination(0, pagY, rightColW);
+    this.emptyBagText.setPosition(
+      0,
+      gridTopEdge + availableGridH / 2
+    );
+
     this.renderSnapshot();
   }
 
@@ -970,19 +856,19 @@ export class InventoryModal {
       if (card.iconImage) {
         card.iconImage
           .setPosition(0, 0)
-          .setDisplaySize(this.equipBoxSize - 14, this.equipBoxSize - 14);
+          .setDisplaySize(this.equipBoxSize - 16, this.equipBoxSize - 16);
       }
       card.fallbackIconText.setPosition(0, 0);
       card.hitZone
         .setPosition(0, 0)
-        .setSize(this.equipBoxSize + 12, this.equipBoxSize + 28);
+        .setSize(this.equipBoxSize + 14, this.equipBoxSize + 28);
     });
   }
 
   private positionStatsPanel(x: number, y: number): void {
     this.drawStatsFrame(x, y, this.statsBoxWidth, this.statsBoxHeight);
-    this.statsPrimaryText.setPosition(x, y - 6);
-    this.statsForcesText.setPosition(x, y + this.statsBoxHeight / 2 - 14);
+    this.statsPrimaryText.setPosition(x, y - 4);
+    this.statsSecondaryText.setPosition(x, y + this.statsBoxHeight / 2 - 12);
   }
 
   private positionBagGrid(
@@ -992,7 +878,7 @@ export class InventoryModal {
   ): void {
     const stepX = this.bagCellWidth + gap;
     const stepY = this.bagCellHeight + gap;
-    const iconSize = Math.min(40, this.bagCellWidth - 26);
+    const iconSize = Math.min(40, this.bagCellHeight - 34, this.bagCellWidth - 28);
 
     for (let i = 0; i < this.bagCells.length; i += 1) {
       const col = i % BAG_GRID_COLS;
@@ -1003,16 +889,16 @@ export class InventoryModal {
       const cell = this.bagCells[i];
       cell.container.setPosition(cx, cy);
       if (cell.iconImage) {
-        cell.iconImage.setPosition(0, -4).setDisplaySize(iconSize, iconSize);
+        cell.iconImage.setPosition(0, -2).setDisplaySize(iconSize, iconSize);
       }
-      cell.fallbackIconText.setPosition(0, -4);
+      cell.fallbackIconText.setPosition(0, -2);
       cell.powerText.setPosition(
-        -this.bagCellWidth / 2 + 5,
-        -this.bagCellHeight / 2 + 10
+        -this.bagCellWidth / 2 + 7,
+        -this.bagCellHeight / 2 + 11
       );
       cell.compareText.setPosition(
-        this.bagCellWidth / 2 - 5,
-        -this.bagCellHeight / 2 + 10
+        this.bagCellWidth / 2 - 7,
+        -this.bagCellHeight / 2 + 11
       );
       cell.nameText.setPosition(0, this.bagCellHeight / 2 - 11);
       cell.hitZone.setSize(this.bagCellWidth, this.bagCellHeight);
@@ -1020,26 +906,15 @@ export class InventoryModal {
   }
 
   private positionPagination(centerX: number, y: number, width: number): void {
-    const btnW = 90;
+    const btnW = 96;
     const btnH = 28;
-    const edgeOffset = Math.max(btnW / 2 + 28, width / 2 - btnW / 2);
+    const edgeOffset = Math.max(btnW / 2 + 32, width / 2 - btnW / 2);
 
     this.prevPageContainer.setPosition(centerX - edgeOffset, y);
     this.prevPageZone.setSize(btnW, btnH);
     this.nextPageContainer.setPosition(centerX + edgeOffset, y);
     this.nextPageZone.setSize(btnW, btnH);
     this.pageInfoText.setPosition(centerX, y);
-  }
-
-  private applySectionVisibility(): void {
-    const isMobile = this.viewport.mode === 'mobile_portrait';
-    if (!isMobile) {
-      this.equipmentSection.setVisible(true);
-      this.bagSection.setVisible(true);
-      return;
-    }
-    this.equipmentSection.setVisible(this.mobileTab === 'equipment');
-    this.bagSection.setVisible(this.mobileTab === 'bag');
   }
 
   private renderSnapshot(): void {
@@ -1050,150 +925,78 @@ export class InventoryModal {
 
   private renderEquippedSlots(): void {
     for (const card of this.slotCards) {
-      const item = this.lastSnapshot.equipped[card.slot];
-      const boxSize = this.equipBoxSize;
-      const half = boxSize / 2;
+      this.renderSingleEquippedSlot(card);
+    }
+  }
 
-      card.boxBg.clear();
+  private renderSingleEquippedSlot(card: EquipSlotCardView): void {
+    const item = this.lastSnapshot.equipped[card.slot];
+    const slotMeta = DF_SLOT_META[card.slot];
+    const boxSize = this.equipBoxSize;
+    const half = boxSize / 2;
 
-      // Chanfros laterais ornamentais (esquerda e direita) estilo ref_diablo_equipment_panel.jpg
-      card.boxBg.fillStyle(0x3a3227, 1);
-      card.boxBg.fillPoints(
-        [
-          new Phaser.Geom.Point(-half - 5, 0),
-          new Phaser.Geom.Point(-half, -6),
-          new Phaser.Geom.Point(-half, 6),
-        ],
-        true
-      );
-      card.boxBg.fillPoints(
-        [
-          new Phaser.Geom.Point(half + 5, 0),
-          new Phaser.Geom.Point(half, -6),
-          new Phaser.Geom.Point(half, 6),
-        ],
-        true
-      );
-      card.boxBg.lineStyle(1, 0x7c6848, 0.9);
-      card.boxBg.strokePoints(
-        [
-          new Phaser.Geom.Point(-half - 5, 0),
-          new Phaser.Geom.Point(-half, -6),
-          new Phaser.Geom.Point(-half, 6),
-        ],
-        true
-      );
-      card.boxBg.strokePoints(
-        [
-          new Phaser.Geom.Point(half + 5, 0),
-          new Phaser.Geom.Point(half, -6),
-          new Phaser.Geom.Point(half, 6),
-        ],
-        true
-      );
+    if (item) {
+      const rarityTheme = DF_RARITY_THEME[item.rarity];
+      const gemColor =
+        item.force !== 'none'
+          ? DF_FORCE_THEME[item.force].color
+          : rarityTheme.gemColor;
 
-      if (item) {
-        const rarityNum = RARITY_NUM[item.rarity];
-        const rarityHex = RARITY_HEX[item.rarity];
+      drawRaritySlotFrame(card.boxBg, {
+        x: -half,
+        y: -half,
+        width: boxSize,
+        height: boxSize,
+        rarity: item.rarity,
+        bevel: 6,
+        hovered: card.hovered,
+        gemColor,
+        showTopGem: true,
+        showCornerGem: true,
+        clear: true,
+      });
 
-        // Moldura externa metálica + Fundo interno colorido pela raridade
-        card.boxBg.fillStyle(0x1b1815, 1);
-        card.boxBg.fillRect(-half - 2, -half - 2, boxSize + 4, boxSize + 4);
-        card.boxBg.lineStyle(1.5, 0x6e5c42, 0.95);
-        card.boxBg.strokeRect(-half - 2, -half - 2, boxSize + 4, boxSize + 4);
-
-        card.boxBg.fillStyle(RARITY_FILL[item.rarity], 0.96);
-        card.boxBg.fillRect(-half, -half, boxSize, boxSize);
-        card.boxBg.lineStyle(2, rarityNum, 0.96);
-        card.boxBg.strokeRect(-half, -half, boxSize, boxSize);
-        card.boxBg.lineStyle(1, 0x0b0e14, 0.9);
-        card.boxBg.strokeRect(-half + 3, -half + 3, boxSize - 6, boxSize - 6);
-
-        // Losango de gema no topo central da moldura
-        card.boxBg.fillStyle(0x0b0e14, 1);
-        card.boxBg.fillPoints(
-          [
-            new Phaser.Geom.Point(0, -half - 6),
-            new Phaser.Geom.Point(6, -half),
-            new Phaser.Geom.Point(0, -half + 6),
-            new Phaser.Geom.Point(-6, -half),
-          ],
-          true
-        );
-        card.boxBg.fillStyle(rarityNum, 1);
-        card.boxBg.fillPoints(
-          [
-            new Phaser.Geom.Point(0, -half - 4.5),
-            new Phaser.Geom.Point(4.5, -half),
-            new Phaser.Geom.Point(0, -half + 4.5),
-            new Phaser.Geom.Point(-4.5, -half),
-          ],
-          true
-        );
-
-        // Engaste de gema no canto inferior direito
-        const gemX = half - 9;
-        const gemY = half - 9;
-        const gemColor =
-          item.force !== 'none' ? FORCE_NUM[item.force] : rarityNum;
-        card.boxBg.fillStyle(0x090b10, 1);
-        card.boxBg.fillCircle(gemX, gemY, 6);
-        card.boxBg.lineStyle(1, 0x8a7048, 0.95);
-        card.boxBg.strokeCircle(gemX, gemY, 6);
-        card.boxBg.fillStyle(gemColor, 1);
-        card.boxBg.fillCircle(gemX, gemY, 4);
-
-        if (card.iconImage) {
-          card.iconImage.setVisible(true).setAlpha(1).clearTint();
-          card.fallbackIconText.setVisible(false);
-        } else {
-          card.fallbackIconText.setVisible(true).setColor(rarityHex);
-        }
-
-        card.slotLabelText.setText(SLOT_LABELS[card.slot]).setColor(rarityHex);
-        card.itemNameText
-          .setText(SLOT_SUBLABELS[card.slot])
-          .setColor(rarityHex);
+      if (card.iconImage) {
+        card.iconImage.setVisible(true).setAlpha(1).clearTint();
+        card.fallbackIconText.setVisible(false);
       } else {
-        card.boxBg.fillStyle(0x11151f, 0.95);
-        card.boxBg.fillRect(-half, -half, boxSize, boxSize);
-        card.boxBg.lineStyle(1.5, 0x4b5563, 0.85);
-        card.boxBg.strokeRect(-half, -half, boxSize, boxSize);
-        card.boxBg.lineStyle(1, 0x1e293b, 0.8);
-        card.boxBg.strokeRect(-half + 4, -half + 4, boxSize - 8, boxSize - 8);
-
-        // Losango discreto no topo da moldura vazia
-        card.boxBg.fillStyle(0x334155, 1);
-        card.boxBg.fillPoints(
-          [
-            new Phaser.Geom.Point(0, -half - 4),
-            new Phaser.Geom.Point(4, -half),
-            new Phaser.Geom.Point(0, -half + 4),
-            new Phaser.Geom.Point(-4, -half),
-          ],
-          true
-        );
-
-        // Engaste vazio no canto inferior direito
-        const gemX = half - 9;
-        const gemY = half - 9;
-        card.boxBg.fillStyle(0x090b10, 0.9);
-        card.boxBg.fillCircle(gemX, gemY, 5.5);
-        card.boxBg.lineStyle(1, 0x475569, 0.8);
-        card.boxBg.strokeCircle(gemX, gemY, 5.5);
-
-        if (card.iconImage) {
-          card.iconImage.setVisible(true).setAlpha(0.24).setTint(0x64748b);
-          card.fallbackIconText.setVisible(false);
-        } else {
-          card.fallbackIconText.setVisible(true).setColor('#475569');
-        }
-
-        card.slotLabelText.setText(SLOT_LABELS[card.slot]).setColor('#94a3b8');
-        card.itemNameText
-          .setText(SLOT_SUBLABELS[card.slot])
-          .setColor('#94a3b8');
+        card.fallbackIconText.setVisible(true).setColor(rarityTheme.hex);
       }
+
+      card.slotLabelText
+        .setText(slotMeta.labelUpper)
+        .setColor(rarityTheme.hex);
+      card.itemNameText
+        .setText(this.truncateName(item.name, 14))
+        .setColor(rarityTheme.accentHex);
+    } else {
+      drawRaritySlotFrame(card.boxBg, {
+        x: -half,
+        y: -half,
+        width: boxSize,
+        height: boxSize,
+        rarity: null,
+        empty: true,
+        bevel: 6,
+        hovered: card.hovered,
+        showTopGem: true,
+        showCornerGem: true,
+        clear: true,
+      });
+
+      if (card.iconImage) {
+        card.iconImage.setVisible(true).setAlpha(0.24).setTint(0x64748b);
+        card.fallbackIconText.setVisible(false);
+      } else {
+        card.fallbackIconText.setVisible(true).setColor(DF_PALETTE.textMuted);
+      }
+
+      card.slotLabelText
+        .setText(slotMeta.labelUpper)
+        .setColor(DF_PALETTE.textMuted);
+      card.itemNameText
+        .setText(slotMeta.labelTitle)
+        .setColor(DF_PALETTE.textMuted);
     }
   }
 
@@ -1201,22 +1004,31 @@ export class InventoryModal {
     const s = this.lastSnapshot.heroStats;
     const f = this.lastSnapshot.activeForces;
     const critPct = Math.round(s.critChance * 100);
+    const lsPct = Math.round(this.lastSnapshot.lifeSteal * 100);
+    const cdrPct = Math.round(this.lastSnapshot.cooldownReduction * 100);
 
     this.statsPrimaryText.setText(
-      `Poder de Ataque: ${Math.round(s.attack)}\n` +
-        `Armadura: ${Math.round(s.defense)}\n` +
-        `Vida: ${Math.round(s.maxHp)}`
+      `Poder de Ataque: ${formatStatNumber(s.attack)}\n` +
+        `Armadura: ${formatStatNumber(s.defense)}   ·   Vida: ${formatStatNumber(s.maxHp)}`
     );
 
-    this.statsForcesText.setText(
-      `Crítico: ${critPct}%  |  Inferno ${f.inferno} · Submundo ${f.submundo} · Empíreo ${f.empireo}`
+    const extraParts = [`Crítico: ${critPct}%`];
+    if (lsPct > 0) {
+      extraParts.push(`Roubo: ${lsPct}%`);
+    }
+    if (cdrPct > 0) {
+      extraParts.push(`Recarga: -${cdrPct}%`);
+    }
+    this.statsSecondaryText.setText(extraParts.join('  ·  '));
+
+    this.forcesLegendText.setText(
+      `${DF_FORCE_THEME.inferno.label} ${f.inferno}  ·  ${DF_FORCE_THEME.submundo.label} ${f.submundo}  ·  ${DF_FORCE_THEME.empireo.label} ${f.empireo}`
     );
   }
 
   private renderBagGrid(): void {
     const totalItems = this.lastSnapshot.bag.length;
-    this.bagHeaderText.setText(`MOCHILA DA INCURSÃO (${totalItems})`);
-    this.tabBagText.setText(`MOCHILA (${totalItems})`);
+    this.bagHeaderText.setText(`MOCHILA (${totalItems})`);
 
     const totalPages = this.getTotalPages();
     const startIdx = this.bagPage * BAG_PAGE_SIZE;
@@ -1229,246 +1041,211 @@ export class InventoryModal {
 
     for (let i = 0; i < this.bagCells.length; i += 1) {
       const cell = this.bagCells[i];
-      const item = pageItems[i] ?? null;
-      cell.boundItem = item;
-      cell.bg.clear();
+      cell.boundItem = pageItems[i] ?? null;
+      this.renderSingleBagCell(cell);
+    }
 
-      if (!item) {
-        cell.container.setVisible(totalItems > 0);
-        cell.bg.fillStyle(0x10131c, 0.72);
-        cell.bg.fillRoundedRect(
-          -this.bagCellWidth / 2,
-          -this.bagCellHeight / 2,
-          this.bagCellWidth,
-          this.bagCellHeight,
-          4
-        );
-        cell.bg.lineStyle(1, 0x2d3648, 0.7);
-        cell.bg.strokeRoundedRect(
-          -this.bagCellWidth / 2,
-          -this.bagCellHeight / 2,
-          this.bagCellWidth,
-          this.bagCellHeight,
-          4
-        );
-        cell.iconImage?.setVisible(false);
-        cell.fallbackIconText.setVisible(false);
-        cell.powerText.setVisible(false);
-        cell.compareText.setVisible(false);
-        cell.nameText.setVisible(false);
-        continue;
-      }
+    const showPagination = totalPages > 1;
+    this.prevPageContainer.setVisible(showPagination);
+    this.nextPageContainer.setVisible(showPagination);
+    this.pageInfoText.setVisible(showPagination);
 
-      cell.container.setVisible(true);
-      const rarityNum = RARITY_NUM[item.rarity];
-      const rarityHex = RARITY_HEX[item.rarity];
-      const halfW = this.bagCellWidth / 2;
-      const halfH = this.bagCellHeight / 2;
-
-      cell.bg.fillStyle(RARITY_FILL[item.rarity], 0.94);
-      cell.bg.fillRoundedRect(
-        -halfW,
-        -halfH,
-        this.bagCellWidth,
-        this.bagCellHeight,
-        4
+    if (showPagination) {
+      this.pageInfoText.setText(`${this.bagPage + 1}/${totalPages}`);
+      this.drawPaginationButton(
+        this.prevPageBg,
+        this.prevPageText,
+        this.bagPage > 0
       );
-      cell.bg.lineStyle(1.8, rarityNum, 0.92);
-      cell.bg.strokeRoundedRect(
-        -halfW,
-        -halfH,
-        this.bagCellWidth,
-        this.bagCellHeight,
-        4
+      this.drawPaginationButton(
+        this.nextPageBg,
+        this.nextPageText,
+        this.bagPage < totalPages - 1
       );
+    }
+  }
 
-      if (item.force !== 'none') {
-        cell.bg.fillStyle(FORCE_NUM[item.force], 1);
-        cell.bg.fillCircle(halfW - 8, halfH - 22, 3.5);
-      }
+  private renderSingleBagCell(cell: BagCellView): void {
+    const item = cell.boundItem;
+    const totalItems = this.lastSnapshot.bag.length;
+    const halfW = this.bagCellWidth / 2;
+    const halfH = this.bagCellHeight / 2;
 
-      const frame = SLOT_ICON_FRAME[item.slot];
-      if (cell.iconImage && this.hasTextureFrame(UI_ICONS_KEY, frame)) {
-        cell.iconImage.setFrame(frame).setVisible(true);
-        cell.fallbackIconText.setVisible(false);
-      } else {
-        cell.iconImage?.setVisible(false);
-        cell.fallbackIconText
-          .setText(SLOT_LABELS[item.slot][0] ?? '?')
-          .setColor(rarityHex)
-          .setVisible(true);
-      }
+    if (!item) {
+      cell.container.setVisible(totalItems > 0);
+      drawRaritySlotFrame(cell.bg, {
+        x: -halfW,
+        y: -halfH,
+        width: this.bagCellWidth,
+        height: this.bagCellHeight,
+        rarity: null,
+        empty: true,
+        bevel: 5,
+        fillColor: DF_PALETTE.deepRecess,
+        showTopGem: false,
+        showCornerGem: false,
+        clear: true,
+      });
+      cell.iconImage?.setVisible(false);
+      cell.fallbackIconText.setVisible(false);
+      cell.powerText.setVisible(false);
+      cell.compareText.setVisible(false);
+      cell.nameText.setVisible(false);
+      return;
+    }
 
-      const itemPower = calculateItemPower(item);
-      cell.powerText
-        .setText(`${itemPower}`)
-        .setColor('#f8fafc')
-        .setVisible(true);
+    cell.container.setVisible(true);
+    const rarityTheme = DF_RARITY_THEME[item.rarity];
+    const slotMeta = DF_SLOT_META[item.slot];
+    const gemColor =
+      item.force !== 'none'
+        ? DF_FORCE_THEME[item.force].color
+        : rarityTheme.gemColor;
 
-      const equipped = this.lastSnapshot.equipped[item.slot];
-      const eqPower = equipped ? calculateItemPower(equipped) : 0;
-      const delta = itemPower - eqPower;
-      if (!equipped || delta > 0) {
-        cell.compareText.setText('▲').setColor('#4ade80').setVisible(true);
-      } else if (delta < 0) {
-        cell.compareText.setText('▼').setColor('#f87171').setVisible(true);
-      } else {
-        cell.compareText.setText('=').setColor('#94a3b8').setVisible(true);
-      }
+    drawRaritySlotFrame(cell.bg, {
+      x: -halfW,
+      y: -halfH,
+      width: this.bagCellWidth,
+      height: this.bagCellHeight,
+      rarity: item.rarity,
+      bevel: 5,
+      hovered: cell.hovered,
+      gemColor,
+      showTopGem: false,
+      showCornerGem: true,
+      clear: true,
+    });
 
-      cell.nameText
-        .setText(this.truncateName(item.name, 10))
-        .setColor(rarityHex)
+    if (
+      cell.iconImage &&
+      hasUiTextureFrame(this.scene, DF_UI_ICONS_KEY, slotMeta.iconFrame)
+    ) {
+      cell.iconImage.setFrame(slotMeta.iconFrame).setVisible(true);
+      cell.fallbackIconText.setVisible(false);
+    } else {
+      cell.iconImage?.setVisible(false);
+      cell.fallbackIconText
+        .setText(slotMeta.labelUpper[0] ?? '?')
+        .setColor(rarityTheme.hex)
         .setVisible(true);
     }
 
-    this.pageInfoText.setText(`${this.bagPage + 1}/${totalPages}`);
-    const hasPrev = this.bagPage > 0;
-    const hasNext = this.bagPage < totalPages - 1;
-    this.drawPaginationButton(this.prevPageBg, this.prevPageText, hasPrev);
-    this.drawPaginationButton(this.nextPageBg, this.nextPageText, hasNext);
+    const itemPower = calculateItemPower(item);
+    cell.powerText
+      .setText(formatStatNumber(itemPower))
+      .setColor(DF_PALETTE.textParchment)
+      .setVisible(true);
+
+    const equipped = this.lastSnapshot.equipped[item.slot];
+    const eqPower = equipped ? calculateItemPower(equipped) : 0;
+    const delta = itemPower - eqPower;
+    if (!equipped || delta > 0) {
+      cell.compareText
+        .setText('▲')
+        .setColor(DF_PALETTE.textSuccess)
+        .setVisible(true);
+    } else if (delta < 0) {
+      cell.compareText
+        .setText('▼')
+        .setColor(DF_PALETTE.textDanger)
+        .setVisible(true);
+    } else {
+      cell.compareText
+        .setText('=')
+        .setColor(DF_PALETTE.textMuted)
+        .setVisible(true);
+    }
+
+    cell.nameText
+      .setText(this.truncateName(item.name, 13))
+      .setColor(rarityTheme.hex)
+      .setVisible(true);
   }
 
   private drawPanelFrame(
     panelW: number,
     panelH: number,
     headerH: number,
-    isMobile: boolean
+    dividerX: number
   ): void {
     const left = -panelW / 2;
     const top = -panelH / 2;
 
-    this.panelGraphic.clear();
+    drawOrnatePanel(this.panelGraphic, {
+      x: left,
+      y: top,
+      width: panelW,
+      height: panelH,
+      bevel: 12,
+      fillColor: DF_PALETTE.obsidianBg,
+      fillAlpha: 0.98,
+      innerFillColor: DF_PALETTE.innerSurface,
+      outerBorderColor: DF_PALETTE.bronzeBorder,
+      innerBorderColor: DF_PALETTE.metalBorder,
+      accentColor: DF_PALETTE.agedGold,
+      headerHeight: headerH,
+      headerColor: DF_PALETTE.headerBg,
+      headerGlowColor: DF_PALETTE.agedGold,
+      headerGlowAlpha: 0.14,
+      shadow: true,
+      cornerOrnaments: true,
+      clear: true,
+    });
 
-    // Sombra externa
-    this.panelGraphic.fillStyle(0x000000, 0.55);
-    this.panelGraphic.fillRoundedRect(left + 5, top + 6, panelW, panelH, 4);
-
-    // Fundo principal escuro 2D Dark Fantasy
-    this.panelGraphic.fillStyle(0x161c22, 0.98);
-    this.panelGraphic.fillRect(left, top, panelW, panelH);
-
-    // Placa escura bronzeada do cabeçalho
-    this.panelGraphic.fillStyle(0x212326, 1);
-    this.panelGraphic.fillRect(left + 4, top + 4, panelW - 8, headerH);
-    this.panelGraphic.lineStyle(1.5, 0x8a7048, 0.95);
+    // Divisória vertical ornamental separando Equipamento (esquerda) e Mochila (direita)
+    const divTop = top + headerH + 14;
+    const divBottom = top + panelH - 16;
+    this.panelGraphic.lineStyle(1.4, DF_PALETTE.bronzeDark, 0.9);
+    this.panelGraphic.lineBetween(dividerX, divTop, dividerX, divBottom);
+    this.panelGraphic.lineStyle(0.8, DF_PALETTE.agedGold, 0.35);
     this.panelGraphic.lineBetween(
-      left + 4,
-      top + headerH + 4,
-      left + panelW - 4,
-      top + headerH + 4
+      dividerX + 1.5,
+      divTop + 12,
+      dividerX + 1.5,
+      divBottom - 12
     );
 
-    // Moldura dupla chanfrada
-    this.panelGraphic.lineStyle(2.5, 0x7c6848, 1);
-    this.panelGraphic.strokeRect(left, top, panelW, panelH);
-    this.panelGraphic.lineStyle(1.5, 0x3f4756, 0.95);
-    this.panelGraphic.strokeRect(left + 5, top + 5, panelW - 10, panelH - 10);
-
-    // Ornamentos nos cantos
-    const c = 7;
-    this.panelGraphic.fillStyle(0x9a825c, 1);
-    this.panelGraphic.fillRect(left + 2, top + 2, c, c);
-    this.panelGraphic.fillRect(left + panelW - c - 2, top + 2, c, c);
-    this.panelGraphic.fillRect(left + 2, top + panelH - c - 2, c, c);
-    this.panelGraphic.fillRect(
-      left + panelW - c - 2,
-      top + panelH - c - 2,
-      c,
-      c
+    // Divisória horizontal sutil sob o cabeçalho da coluna direita
+    drawOrnamentalDivider(
+      this.panelGraphic,
+      dividerX + 14,
+      top + headerH + 31,
+      panelW / 2 - 18 - (dividerX + 14)
     );
-
-    // Divisória vertical no PC entre Equipamento e Mochila
-    if (!isMobile) {
-      this.panelGraphic.lineStyle(1.5, 0x4a4337, 0.9);
-      this.panelGraphic.lineBetween(
-        0,
-        top + headerH + 16,
-        0,
-        top + panelH - 16
-      );
-    }
   }
 
   private drawStatsFrame(x: number, y: number, w: number, h: number): void {
     const left = x - w / 2;
     const top = y - h / 2;
 
-    this.statsBgGraphic.clear();
-    this.statsBgGraphic.fillStyle(0x1b1a17, 0.96);
-    this.statsBgGraphic.fillRect(left, top, w, h);
+    drawOrnatePanel(this.statsBgGraphic, {
+      x: left,
+      y: top,
+      width: w,
+      height: h,
+      bevel: 8,
+      fillColor: DF_PALETTE.deepRecess,
+      fillAlpha: 0.96,
+      innerFillColor: DF_PALETTE.obsidianBg,
+      outerBorderColor: DF_PALETTE.bronzeBorder,
+      innerBorderColor: DF_PALETTE.bronzeDark,
+      accentColor: DF_PALETTE.agedGold,
+      shadow: false,
+      cornerOrnaments: false,
+      clear: true,
+    });
 
-    this.statsBgGraphic.lineStyle(2, 0x8a7048, 1);
-    this.statsBgGraphic.strokeRect(left, top, w, h);
-    this.statsBgGraphic.lineStyle(1, 0x3b3328, 0.9);
-    this.statsBgGraphic.strokeRect(left + 4, top + 4, w - 8, h - 8);
-
-    // Crânio ornamental no topo central
-    const skY = top;
-    this.statsBgGraphic.fillStyle(0x26231e, 1);
-    this.statsBgGraphic.fillRoundedRect(x - 18, skY - 10, 36, 20, 6);
-    this.statsBgGraphic.lineStyle(1.5, 0x8a7048, 1);
-    this.statsBgGraphic.strokeRoundedRect(x - 18, skY - 10, 36, 20, 6);
-
-    this.statsBgGraphic.fillStyle(0xd6d3d1, 0.95);
-    this.statsBgGraphic.fillCircle(x, skY - 2, 6);
-    this.statsBgGraphic.fillRect(x - 3.5, skY + 2, 7, 4);
-
-    // Olhos e nariz do crânio
-    this.statsBgGraphic.fillStyle(0x141820, 1);
-    this.statsBgGraphic.fillCircle(x - 2.2, skY - 2, 1.5);
-    this.statsBgGraphic.fillCircle(x + 2.2, skY - 2, 1.5);
-    this.statsBgGraphic.fillRect(x - 0.8, skY + 0.5, 1.6, 1.8);
+    // Crânio ornamental coroando o topo central da placa de atributos
+    drawSkullCrest(this.statsBgGraphic, x, top + 1, 0.9);
   }
 
-  private drawCloseButton(): void {
-    this.closeBtnBg.clear();
-    this.closeBtnBg.fillStyle(0x7f1d1d, 0.98);
-    this.closeBtnBg.fillRoundedRect(-15, -15, 30, 30, 3);
-    this.closeBtnBg.lineStyle(1.5, 0xef4444, 0.95);
-    this.closeBtnBg.strokeRoundedRect(-15, -15, 30, 30, 3);
-  }
-
-  private drawMobileTabs(): void {
-    const isMobile = this.viewport.mode === 'mobile_portrait';
-    if (!isMobile) {
-      return;
-    }
-    const panelW = Math.min(342, this.viewport.width - 16);
-    const tabW = (panelW - 36) / 2;
-
-    this.drawTabButton(
-      this.tabEquipBg,
-      this.tabEquipText,
-      -tabW / 2 - 4,
-      tabW,
-      28,
-      this.mobileTab === 'equipment'
-    );
-    this.drawTabButton(
-      this.tabBagBg,
-      this.tabBagText,
-      tabW / 2 + 4,
-      tabW,
-      28,
-      this.mobileTab === 'bag'
-    );
-  }
-
-  private drawTabButton(
-    gfx: Phaser.GameObjects.Graphics,
-    text: Phaser.GameObjects.Text,
-    x: number,
-    w: number,
-    h: number,
-    active: boolean
-  ): void {
-    gfx.clear();
-    gfx.fillStyle(active ? 0x2a2319 : 0x11151e, 0.98);
-    gfx.fillRoundedRect(x - w / 2, -h / 2, w, h, 3);
-    gfx.lineStyle(1.5, active ? 0xc29b61 : 0x3b4454, 0.95);
-    gfx.strokeRoundedRect(x - w / 2, -h / 2, w, h, 3);
-    text.setColor(active ? '#f5d076' : '#94a3b8');
+  private drawCloseButton(hovered: boolean): void {
+    drawOrnateButton(this.closeBtnBg, -16, -16, 32, 32, {
+      variant: 'crimson',
+      bevel: 5,
+      hovered,
+      clear: true,
+    });
   }
 
   private drawPaginationButton(
@@ -1476,12 +1253,13 @@ export class InventoryModal {
     text: Phaser.GameObjects.Text,
     enabled: boolean
   ): void {
-    gfx.clear();
-    gfx.fillStyle(enabled ? 0x222838 : 0x131722, 0.95);
-    gfx.fillRoundedRect(-45, -14, 90, 28, 4);
-    gfx.lineStyle(1, enabled ? 0x8a7048 : 0x2c3444, 0.9);
-    gfx.strokeRoundedRect(-45, -14, 90, 28, 4);
-    text.setColor(enabled ? '#f8fafc' : '#475569');
+    drawOrnateButton(gfx, -48, -14, 96, 28, {
+      variant: 'iron',
+      bevel: 5,
+      disabled: !enabled,
+      clear: true,
+    });
+    text.setColor(enabled ? DF_PALETTE.textParchment : DF_PALETTE.textMuted);
   }
 
   private getTotalPages(): number {
@@ -1493,13 +1271,5 @@ export class InventoryModal {
       return name;
     }
     return `${name.slice(0, Math.max(1, maxLen - 1))}…`;
-  }
-
-  private hasTextureFrame(key: string, frame: number): boolean {
-    if (!this.scene.textures.exists(key)) {
-      return false;
-    }
-    const tex = this.scene.textures.get(key);
-    return tex.has(String(frame)) || tex.has(frame as unknown as string);
   }
 }

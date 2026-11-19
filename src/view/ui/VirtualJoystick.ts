@@ -1,20 +1,22 @@
 import Phaser from 'phaser';
 import { Vector2D, ViewportConfig, resolveViewportConfig } from '../../core/index';
+import { DF_PALETTE } from './DarkFantasyUiBuilder';
 
 export class VirtualJoystick {
   private readonly scene: Phaser.Scene;
   private viewport: ViewportConfig;
-  private baseGraphic: Phaser.GameObjects.Graphics;
-  private thumbGraphic: Phaser.GameObjects.Graphics;
+  private readonly baseGraphic: Phaser.GameObjects.Graphics;
+  private readonly thumbGraphic: Phaser.GameObjects.Graphics;
 
   private activePointerId: number | null = null;
-  private originX = 0;
-  private originY = 0;
-  private currentX = 0;
-  private currentY = 0;
+  private originX = 96;
+  private originY = 444;
+  private currentX = 96;
+  private currentY = 444;
   private direction: Vector2D = { x: 0, y: 0 };
 
   private readonly maxRadius = 46;
+  private readonly thumbRadius = 20;
   private readonly deadZone = 7;
 
   private readonly onPointerDownBound: (
@@ -26,7 +28,10 @@ export class VirtualJoystick {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    this.viewport = resolveViewportConfig(scene.scale.width || 800, scene.scale.height || 600);
+    this.viewport = resolveViewportConfig(
+      scene.scale.width || 960,
+      scene.scale.height || 540
+    );
 
     const totalPointers = scene.input.manager?.pointersTotal ?? 2;
     if (totalPointers < 4) {
@@ -45,8 +50,10 @@ export class VirtualJoystick {
       pointer: Phaser.Input.Pointer,
       currentlyOver?: Phaser.GameObjects.GameObject[]
     ) => this.handlePointerDown(pointer, currentlyOver);
-    this.onPointerMoveBound = (pointer: Phaser.Input.Pointer) => this.handlePointerMove(pointer);
-    this.onPointerUpBound = (pointer: Phaser.Input.Pointer) => this.handlePointerUp(pointer);
+    this.onPointerMoveBound = (pointer: Phaser.Input.Pointer) =>
+      this.handlePointerMove(pointer);
+    this.onPointerUpBound = (pointer: Phaser.Input.Pointer) =>
+      this.handlePointerUp(pointer);
 
     scene.input.on('pointerdown', this.onPointerDownBound);
     scene.input.on('pointermove', this.onPointerMoveBound);
@@ -83,13 +90,8 @@ export class VirtualJoystick {
   }
 
   private resetRestingPosition(): void {
-    if (this.viewport.mode === 'mobile_portrait') {
-      this.originX = 72;
-      this.originY = this.viewport.height - 92;
-    } else {
-      this.originX = 88;
-      this.originY = this.viewport.height - 88;
-    }
+    this.originX = 96;
+    this.originY = this.viewport.height - 96;
     this.currentX = this.originX;
     this.currentY = this.originY;
   }
@@ -97,22 +99,7 @@ export class VirtualJoystick {
   private isEligibleTouchZone(x: number, y: number): boolean {
     const w = this.viewport.width;
     const h = this.viewport.height;
-
-    if (this.viewport.mode === 'mobile_portrait') {
-      const inTopLeftHero = x < 204 && y < 100;
-      const inTopRightHud = x > w - 164 && y < 120;
-      const inActionCluster = x > w * 0.5 && y > h - 200;
-      return !inTopLeftHero && !inTopRightHud && !inActionCluster;
-    }
-
-    const inTopLeftHeroDesktop = x < 260 && y < 118;
-    const inTopRightHudDesktop = x > w - 210 && y < 145;
-    const inActionClusterDesktop = x > w - 210 && y > h - 210;
-    if (inTopLeftHeroDesktop || inTopRightHudDesktop || inActionClusterDesktop) {
-      return false;
-    }
-
-    return x <= w * 0.55 || y >= h * 0.45;
+    return x >= 0 && x <= w * 0.46 && y >= 90 && y <= h;
   }
 
   private syncActivePointer(): void {
@@ -219,24 +206,43 @@ export class VirtualJoystick {
 
   private render(): void {
     const isActive = this.activePointerId !== null;
-    const isMobile = this.viewport.mode === 'mobile_portrait';
-    const baseFillAlpha = isActive ? 0.52 : isMobile ? 0.34 : 0.22;
-    const ringAlpha = isActive ? 0.85 : isMobile ? 0.52 : 0.34;
+    const baseFillAlpha = isActive ? 0.56 : 0.28;
+    const ringAlpha = isActive ? 0.9 : 0.46;
     const innerRingRadius = Math.round(this.maxRadius * 0.54);
 
-    // Outer dark fantasy metallic circular D-pad base
+    // Outer dark fantasy metallic circular base
     this.baseGraphic.clear();
-    this.baseGraphic.fillStyle(0x090b10, baseFillAlpha);
+
+    if (isActive) {
+      this.baseGraphic.fillStyle(DF_PALETTE.agedGold, 0.12);
+      this.baseGraphic.fillCircle(this.originX, this.originY, this.maxRadius + 5);
+    }
+
+    this.baseGraphic.fillStyle(DF_PALETTE.deepRecess, baseFillAlpha);
     this.baseGraphic.fillCircle(this.originX, this.originY, this.maxRadius);
 
-    // Subtle dark metallic bevel rings
-    this.baseGraphic.lineStyle(2, isActive ? 0xc9a25e : 0x7c7468, ringAlpha);
+    // Dark steel outer lip + bronze/gold metallic bevel ring
+    this.baseGraphic.lineStyle(3, DF_PALETTE.metalDark, ringAlpha * 0.9);
+    this.baseGraphic.strokeCircle(this.originX, this.originY, this.maxRadius + 1);
+    this.baseGraphic.lineStyle(
+      2,
+      isActive ? DF_PALETTE.agedGold : DF_PALETTE.bronzeBorder,
+      ringAlpha
+    );
     this.baseGraphic.strokeCircle(this.originX, this.originY, this.maxRadius);
-    this.baseGraphic.lineStyle(1, isActive ? 0x38bdf8 : 0x475569, ringAlpha * 0.72);
+    this.baseGraphic.lineStyle(
+      1,
+      isActive ? DF_PALETTE.goldBright : DF_PALETTE.metalBorder,
+      ringAlpha * 0.72
+    );
     this.baseGraphic.strokeCircle(this.originX, this.originY, this.maxRadius - 3);
 
     // Inner guide ring
-    this.baseGraphic.lineStyle(1, isActive ? 0x67e8f9 : 0x64748b, ringAlpha * 0.58);
+    this.baseGraphic.lineStyle(
+      1,
+      isActive ? DF_PALETTE.agedGold : DF_PALETTE.metalHighlight,
+      ringAlpha * 0.52
+    );
     this.baseGraphic.strokeCircle(this.originX, this.originY, innerRingRadius);
 
     // 4 directional cardinal arrows (N / S / E / W)
@@ -248,10 +254,10 @@ export class VirtualJoystick {
       dy: number;
       active: boolean;
     }> = [
-      { dx: 0, dy: -1, active: isActive && this.direction.y < -0.35 }, // N
-      { dx: 0, dy: 1, active: isActive && this.direction.y > 0.35 }, // S
-      { dx: 1, dy: 0, active: isActive && this.direction.x > 0.35 }, // E
-      { dx: -1, dy: 0, active: isActive && this.direction.x < -0.35 }, // W
+      { dx: 0, dy: -1, active: isActive && this.direction.y < -0.35 },
+      { dx: 0, dy: 1, active: isActive && this.direction.y > 0.35 },
+      { dx: 1, dy: 0, active: isActive && this.direction.x > 0.35 },
+      { dx: -1, dy: 0, active: isActive && this.direction.x < -0.35 },
     ];
 
     for (const dir of dirs) {
@@ -264,8 +270,10 @@ export class VirtualJoystick {
       const perpX = -dir.dy * arrowHalfBase;
       const perpY = dir.dx * arrowHalfBase;
 
-      const arrowColor = dir.active ? 0x67e8f9 : 0x9ca3af;
-      const arrowAlpha = dir.active ? 0.92 : ringAlpha * 0.75;
+      const arrowColor = dir.active
+        ? DF_PALETTE.goldBright
+        : DF_PALETTE.metalHighlight;
+      const arrowAlpha = dir.active ? 0.96 : ringAlpha * 0.72;
       this.baseGraphic.fillStyle(arrowColor, arrowAlpha);
       this.baseGraphic.fillTriangle(
         tipX,
@@ -277,24 +285,37 @@ export class VirtualJoystick {
       );
     }
 
-    // Translucent metallic/spectral thumbstick
-    const thumbRadius = 18;
-    const thumbAlpha = isActive ? 0.88 : isMobile ? 0.46 : 0.3;
+    // Translucent metallic thumbstick knob (r = 20)
+    const knobR = this.thumbRadius;
+    const thumbAlpha = isActive ? 0.92 : 0.4;
     this.thumbGraphic.clear();
 
     if (isActive) {
-      // Soft spectral cyan halo when actively dragging
-      this.thumbGraphic.fillStyle(0x38bdf8, 0.2);
-      this.thumbGraphic.fillCircle(this.currentX, this.currentY, thumbRadius + 5);
+      this.thumbGraphic.fillStyle(DF_PALETTE.agedGold, 0.2);
+      this.thumbGraphic.fillCircle(this.currentX, this.currentY, knobR + 6);
+      this.thumbGraphic.fillStyle(DF_PALETTE.goldBright, 0.14);
+      this.thumbGraphic.fillCircle(this.currentX, this.currentY, knobR + 2.5);
     }
 
-    this.thumbGraphic.fillStyle(isActive ? 0x162436 : 0x1e2430, thumbAlpha);
-    this.thumbGraphic.fillCircle(this.currentX, this.currentY, thumbRadius);
+    this.thumbGraphic.fillStyle(
+      isActive ? DF_PALETTE.buttonIronFill : DF_PALETTE.innerSurface,
+      thumbAlpha
+    );
+    this.thumbGraphic.fillCircle(this.currentX, this.currentY, knobR);
 
-    // Metallic rim + inner specular highlight
-    this.thumbGraphic.lineStyle(2, isActive ? 0x67e8f9 : 0x94a3b8, thumbAlpha);
-    this.thumbGraphic.strokeCircle(this.currentX, this.currentY, thumbRadius);
-    this.thumbGraphic.fillStyle(isActive ? 0xbae6fd : 0xcbd5e1, thumbAlpha * 0.35);
-    this.thumbGraphic.fillCircle(this.currentX - 4, this.currentY - 4, 6);
+    // Metallic bronze/steel rim + inner recess + subtle highlight
+    this.thumbGraphic.lineStyle(
+      2.2,
+      isActive ? DF_PALETTE.agedGold : DF_PALETTE.bronzeBorder,
+      thumbAlpha
+    );
+    this.thumbGraphic.strokeCircle(this.currentX, this.currentY, knobR);
+    this.thumbGraphic.lineStyle(1, DF_PALETTE.metalDark, thumbAlpha * 0.85);
+    this.thumbGraphic.strokeCircle(this.currentX, this.currentY, knobR - 3);
+    this.thumbGraphic.fillStyle(
+      isActive ? DF_PALETTE.goldBright : DF_PALETTE.metalHighlight,
+      thumbAlpha * 0.34
+    );
+    this.thumbGraphic.fillCircle(this.currentX - 4.5, this.currentY - 4.5, 6);
   }
 }

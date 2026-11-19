@@ -180,7 +180,7 @@ export class DungeonScene extends Phaser.Scene {
   private hud!: DungeonHud;
   private inventoryModal!: InventoryModal;
   private cameraRig?: SceneCameraRig;
-  private viewport = resolveViewportConfig(800, 600);
+  private viewport = resolveViewportConfig(960, 540);
 
   private arenaLayer!: Phaser.GameObjects.Container;
   private lightingGraphics!: Phaser.GameObjects.Graphics;
@@ -292,13 +292,13 @@ export class DungeonScene extends Phaser.Scene {
     });
 
     this.viewport = resolveViewportConfig(
-      this.scale.width || 800,
-      this.scale.height || 600
+      this.scale.width || 960,
+      this.scale.height || 540
     );
     this.cameraRig = new SceneCameraRig(this, {
       width: this.viewport.width,
       height: this.viewport.height,
-      worldZoom: this.getWorldZoom(this.viewport.mode),
+      worldZoom: this.getWorldZoom(),
       boundsWidth: this.viewport.width,
       boundsHeight: this.viewport.height,
     });
@@ -387,8 +387,8 @@ export class DungeonScene extends Phaser.Scene {
     const nowMs = this.elapsedTimeMs;
 
     const bounds = {
-      width: this.scale.width || 800,
-      height: this.scale.height || 600,
+      width: this.scale.width || 960,
+      height: this.scale.height || 540,
       padding: ARENA_PADDING,
     };
 
@@ -470,8 +470,8 @@ export class DungeonScene extends Phaser.Scene {
 
     const nowMs = this.elapsedTimeMs;
     const bounds = {
-      width: this.scale.width || 800,
-      height: this.scale.height || 600,
+      width: this.scale.width || 960,
+      height: this.scale.height || 540,
       padding: ARENA_PADDING,
     };
     const moveDir = this.hud.getMoveVector();
@@ -633,8 +633,8 @@ export class DungeonScene extends Phaser.Scene {
     stageId?: CampaignStageId;
     testArena?: boolean;
   }): void {
-    const width = this.scale.width || 800;
-    const height = this.scale.height || 600;
+    const width = this.scale.width || 960;
+    const height = this.scale.height || 540;
 
     this.isTestArena = Boolean(data?.testArena);
     this.testArenaWave = 1;
@@ -750,8 +750,8 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private loadCurrentRoom(): void {
-    const width = this.scale.width || 800;
-    const height = this.scale.height || 600;
+    const width = this.scale.width || 960;
+    const height = this.scale.height || 540;
     const currentRoom = getCurrentRoom(this.runState);
 
     this.destroyPortal();
@@ -1267,8 +1267,8 @@ export class DungeonScene extends Phaser.Scene {
     spawns: ReadonlyArray<{ id: string; dx: number; dy: number }>,
     waveNum: number
   ): void {
-    const width = this.scale.width || 800;
-    const height = this.scale.height || 600;
+    const width = this.scale.width || 960;
+    const height = this.scale.height || 540;
     this.monsters = [];
     for (const spec of spawns) {
       const def = this.monsterDefMap.get(spec.id);
@@ -1431,8 +1431,8 @@ export class DungeonScene extends Phaser.Scene {
   private spawnRoomPortal(): void {
     this.destroyPortal();
 
-    const width = this.scale.width || 800;
-    const height = this.scale.height || 600;
+    const width = this.scale.width || 960;
+    const height = this.scale.height || 540;
     const portalX = Math.round(width / 2);
     const portalY = Math.round(Math.max(88, height * 0.24));
 
@@ -1689,8 +1689,8 @@ export class DungeonScene extends Phaser.Scene {
     const minimap = {
       heroX: this.hero.position.x,
       heroY: this.hero.position.y,
-      arenaWidth: this.scale.width || 800,
-      arenaHeight: this.scale.height || 600,
+      arenaWidth: this.scale.width || 960,
+      arenaHeight: this.scale.height || 540,
       enemies: this.monsters
         .filter((m) => m.isAlive)
         .map((m) => ({
@@ -1733,8 +1733,8 @@ export class DungeonScene extends Phaser.Scene {
     this.hud.update(snapshot);
   }
 
-  private getWorldZoom(mode: 'desktop_landscape' | 'mobile_portrait'): number {
-    return mode === 'mobile_portrait' ? 1.45 : 1.65;
+  private getWorldZoom(): number {
+    return 1.45;
   }
 
   private handleViewportResize(width: number, height: number): void {
@@ -1789,7 +1789,7 @@ export class DungeonScene extends Phaser.Scene {
     this.cameraRig?.resize(
       viewport.width,
       viewport.height,
-      this.getWorldZoom(viewport.mode),
+      this.getWorldZoom(),
       viewport.width,
       viewport.height
     );
@@ -1894,8 +1894,8 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private spawnGroundDrop(item: ItemInstance, rawPosition: Vector2D): void {
-    const width = this.scale.width || 800;
-    const height = this.scale.height || 600;
+    const width = this.scale.width || 960;
+    const height = this.scale.height || 540;
     const x = Math.max(
       ARENA_PADDING,
       Math.min(width - ARENA_PADDING, rawPosition.x)

@@ -6,11 +6,14 @@ import {
   type ViewportConfig,
 } from '../../core/index';
 import { soundManager } from '../audio/SoundManager';
-
-const FONT_TITLE =
-  "'Cinzel', 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
-const FONT_BODY =
-  "'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif";
+import {
+  DF_FONTS,
+  DF_PALETTE,
+  drawOrnamentalDivider,
+  drawOrnateButton,
+  drawOrnatePanel,
+  hasUiTextureFrame,
+} from './DarkFantasyUiBuilder';
 
 const PORTRAIT_FRAME_MAP: Record<PortraitId, number> = {
   hero_living: 0,
@@ -37,14 +40,11 @@ const PORTRAIT_THEME: Record<
   system: { color: 0xfacc15, hex: '#fde047', badge: 'SY' },
 };
 
-const PALETTE = {
-  panelBg: 0x0d0f16,
-  surfaceBg: 0x161924,
-  bronze: 0x8a7048,
-  steel: 0x525a6e,
-  btnContinue: 0x162133,
-  btnClose: 0x3b151c,
-} as const;
+const DIALOGUE_BOX_MAX_W = 820;
+const DIALOGUE_BOX_H = 148;
+const PORTRAIT_SIZE = 128;
+const ACTION_BTN_W = 126;
+const ACTION_BTN_H = 38;
 
 export class DialogueBox {
   private readonly scene: Phaser.Scene;
@@ -53,6 +53,7 @@ export class DialogueBox {
   private lines: DialogueLine[] = [];
   private currentIndex = 0;
   private opened = false;
+  private actionBtnHovered = false;
   private onComplete?: () => void;
 
   private readonly rootContainer: Phaser.GameObjects.Container;
@@ -81,8 +82,8 @@ export class DialogueBox {
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     this.viewport = resolveViewportConfig(
-      scene.scale.width || 800,
-      scene.scale.height || 600
+      scene.scale.width || 960,
+      scene.scale.height || 540
     );
 
     this.backdropGraphic = scene.add.graphics();
@@ -107,9 +108,9 @@ export class DialogueBox {
     this.portraitFallbackGraphic = scene.add.graphics();
     this.portraitFallbackText = scene.add
       .text(0, 0, 'SY', {
-        fontFamily: FONT_TITLE,
-        fontSize: '18px',
-        color: '#f8fafc',
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '24px',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
         resolution: 2,
       })
@@ -120,59 +121,71 @@ export class DialogueBox {
       : null;
 
     this.speakerText = scene.add.text(0, 0, '', {
-      fontFamily: FONT_TITLE,
-      fontSize: '11px',
-      color: '#90e0ef',
+      fontFamily: DF_FONTS.TITLE,
+      fontSize: '12px',
+      color: DF_PALETTE.textBlue,
       fontStyle: 'bold',
       resolution: 2,
     });
 
     this.titleText = scene.add.text(0, 0, '', {
-      fontFamily: FONT_TITLE,
+      fontFamily: DF_FONTS.TITLE,
       fontSize: '14px',
-      color: '#ffd166',
+      color: DF_PALETTE.textGold,
       fontStyle: 'bold',
       resolution: 2,
     });
 
     this.bodyText = scene.add.text(0, 0, '', {
-      fontFamily: FONT_BODY,
+      fontFamily: DF_FONTS.BODY,
       fontSize: '12px',
-      color: '#e2e8f0',
-      lineSpacing: 5,
+      color: DF_PALETTE.textLight,
+      lineSpacing: 4,
       resolution: 2,
     });
 
-    this.pageText = scene.add.text(0, 0, '1/1', {
-      fontFamily: FONT_BODY,
-      fontSize: '11px',
-      color: '#94a3b8',
-      fontStyle: 'bold',
-      resolution: 2,
-    });
+    this.pageText = scene.add
+      .text(0, 0, '1/1', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '11px',
+        color: DF_PALETTE.textMuted,
+        fontStyle: 'bold',
+        resolution: 2,
+      })
+      .setOrigin(1, 0);
 
-    this.shortcutText = scene.add.text(0, 0, '[Enter/Espaço]', {
-      fontFamily: FONT_BODY,
-      fontSize: '10px',
-      color: '#64748b',
-      resolution: 2,
-    });
+    this.shortcutText = scene.add
+      .text(0, 0, '[Enter / Espaço]', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '10px',
+        color: DF_PALETTE.textMuted,
+        resolution: 2,
+      })
+      .setOrigin(0.5, 0);
 
     this.actionBtnBg = scene.add.graphics();
     this.actionBtnText = scene.add
       .text(0, 0, 'Continuar', {
-        fontFamily: FONT_BODY,
+        fontFamily: DF_FONTS.TITLE,
         fontSize: '12px',
-        color: '#ffffff',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
         resolution: 2,
       })
       .setOrigin(0.5);
     this.actionBtnZone = scene.add
-      .zone(0, 0, 120, 32)
+      .zone(0, 0, ACTION_BTN_W, ACTION_BTN_H)
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
 
+    this.actionBtnZone.on('pointerover', () => {
+      this.actionBtnHovered = true;
+      this.redrawCurrentActionButton();
+    });
+    this.actionBtnZone.on('pointerout', () => {
+      this.actionBtnHovered = false;
+      this.redrawCurrentActionButton();
+    });
     this.actionBtnZone.on(
       'pointerdown',
       (
@@ -249,6 +262,7 @@ export class DialogueBox {
     this.currentIndex = 0;
     this.onComplete = onComplete;
     this.opened = true;
+    this.actionBtnHovered = false;
 
     this.layout();
     this.renderCurrentLine();
@@ -277,6 +291,7 @@ export class DialogueBox {
     }
 
     this.opened = false;
+    this.actionBtnHovered = false;
     this.rootContainer.setVisible(false);
     soundManager.play('ui_click');
 
@@ -293,8 +308,8 @@ export class DialogueBox {
 
   public handleResize(): void {
     this.viewport = resolveViewportConfig(
-      this.scene.scale.width || 800,
-      this.scene.scale.height || 600
+      this.scene.scale.width || 960,
+      this.scene.scale.height || 540
     );
     this.layout();
     if (this.opened) {
@@ -304,7 +319,7 @@ export class DialogueBox {
 
   public destroy(): void {
     this.scene.input.keyboard?.off('keydown', this.keydownHandler);
-    this.rootContainer.destroy();
+    this.rootContainer.destroy(true);
   }
 
   private renderCurrentLine(): void {
@@ -326,72 +341,59 @@ export class DialogueBox {
     this.drawPanelAndButton(theme.color, isLast);
   }
 
+  private redrawCurrentActionButton(): void {
+    const isLast = this.currentIndex >= Math.max(0, this.lines.length - 1);
+    drawOrnateButton(
+      this.actionBtnBg,
+      -ACTION_BTN_W / 2,
+      -ACTION_BTN_H / 2,
+      ACTION_BTN_W,
+      ACTION_BTN_H,
+      {
+        variant: isLast ? 'crimson' : 'blue',
+        bevel: 6,
+        hovered: this.actionBtnHovered,
+        clear: true,
+      }
+    );
+  }
+
   private drawPortrait(
     portraitId: PortraitId,
     theme: { color: number; hex: string; badge: string }
   ): void {
-    const isMobile = this.viewport.mode === 'mobile_portrait';
     const metrics = this.getBoxMetrics();
-    const portraitSize = isMobile ? 68 : 84;
-    const portraitCenterX = -metrics.boxW / 2 + metrics.padX + portraitSize / 2;
-    const portraitCenterY = -metrics.boxH / 2 + metrics.padY + portraitSize / 2 + 4;
+    const portraitCenterX = -metrics.boxW / 2 + metrics.padX + PORTRAIT_SIZE / 2;
+    const portraitCenterY = 0;
 
-    this.portraitFrameGraphic.clear();
-    const px = portraitCenterX - portraitSize / 2;
-    const py = portraitCenterY - portraitSize / 2;
-    // Double refined metallic chamfered frame around portrait
-    this.fillChamferedRect(
-      this.portraitFrameGraphic,
-      px,
-      py,
-      portraitSize,
-      portraitSize,
-      7,
-      PALETTE.panelBg,
-      1
-    );
-    this.strokeChamferedRect(
-      this.portraitFrameGraphic,
-      px,
-      py,
-      portraitSize,
-      portraitSize,
-      7,
-      2,
-      PALETTE.bronze,
-      0.95
-    );
-    this.fillChamferedRect(
-      this.portraitFrameGraphic,
-      px + 4,
-      py + 4,
-      portraitSize - 8,
-      portraitSize - 8,
-      5,
-      PALETTE.surfaceBg,
-      0.96
-    );
-    this.strokeChamferedRect(
-      this.portraitFrameGraphic,
-      px + 4,
-      py + 4,
-      portraitSize - 8,
-      portraitSize - 8,
-      5,
-      1.5,
-      theme.color,
-      0.92
-    );
+    drawOrnatePanel(this.portraitFrameGraphic, {
+      x: portraitCenterX - PORTRAIT_SIZE / 2,
+      y: portraitCenterY - PORTRAIT_SIZE / 2,
+      width: PORTRAIT_SIZE,
+      height: PORTRAIT_SIZE,
+      bevel: 8,
+      fillColor: DF_PALETTE.obsidianBg,
+      fillAlpha: 1,
+      innerFillColor: DF_PALETTE.innerSurface,
+      outerBorderColor: DF_PALETTE.bronzeBorder,
+      innerBorderColor: theme.color,
+      accentColor: theme.color,
+      shadow: false,
+      cornerOrnaments: true,
+      clear: true,
+    });
 
-    const frameIndex = PORTRAIT_FRAME_MAP[portraitId] ?? PORTRAIT_FRAME_MAP.system;
+    const frameIndex =
+      PORTRAIT_FRAME_MAP[portraitId] ?? PORTRAIT_FRAME_MAP.system;
     const hasPortraitFrame =
-      this.portraitSprite !== null && this.hasTextureFrame('portraits', frameIndex);
+      this.portraitSprite !== null &&
+      hasUiTextureFrame(this.scene, 'portraits', frameIndex);
 
     if (hasPortraitFrame && this.portraitSprite) {
       this.portraitSprite
         .setPosition(portraitCenterX, portraitCenterY)
         .setFrame(frameIndex)
-        .setDisplaySize(portraitSize - 12, portraitSize - 12)
+        .setDisplaySize(PORTRAIT_SIZE - 14, PORTRAIT_SIZE - 14)
         .setVisible(true);
       this.portraitFallbackGraphic.clear();
       this.portraitFallbackText.setVisible(false);
@@ -404,108 +406,67 @@ export class DialogueBox {
       this.portraitFallbackGraphic.fillCircle(
         portraitCenterX,
         portraitCenterY,
-        portraitSize * 0.34
+        PORTRAIT_SIZE * 0.34
       );
-      this.portraitFallbackGraphic.lineStyle(1.5, theme.color, 0.8);
+      this.portraitFallbackGraphic.lineStyle(1.5, theme.color, 0.85);
       this.portraitFallbackGraphic.strokeCircle(
         portraitCenterX,
         portraitCenterY,
-        portraitSize * 0.34
+        PORTRAIT_SIZE * 0.34
       );
       this.portraitFallbackText
         .setPosition(portraitCenterX, portraitCenterY)
         .setColor(theme.hex)
-        .setFontSize(isMobile ? 16 : 20)
         .setText(theme.badge)
         .setVisible(true);
     }
   }
 
   private drawPanelAndButton(accentColor: number, isLast: boolean): void {
-    const isMobile = this.viewport.mode === 'mobile_portrait';
-    const { boxW, boxH, padX, padY } = this.getBoxMetrics();
-    const portraitSize = isMobile ? 68 : 84;
-    const textLeft = -boxW / 2 + padX + portraitSize + (isMobile ? 12 : 16);
+    const { boxW, boxH, padX } = this.getBoxMetrics();
+    const textLeft = -boxW / 2 + padX + PORTRAIT_SIZE + 16;
     const textRight = boxW / 2 - padX;
 
-    this.panelGraphic.clear();
-    this.fillChamferedRect(
-      this.panelGraphic,
-      -boxW / 2,
-      -boxH / 2,
-      boxW,
-      boxH,
-      10,
-      PALETTE.panelBg,
-      0.97
-    );
-    this.strokeChamferedRect(
-      this.panelGraphic,
-      -boxW / 2,
-      -boxH / 2,
-      boxW,
-      boxH,
-      10,
-      2,
-      PALETTE.bronze,
-      0.95
-    );
-    this.strokeChamferedRect(
-      this.panelGraphic,
-      -boxW / 2 + 4,
-      -boxH / 2 + 4,
-      boxW - 8,
-      boxH - 8,
-      8,
-      1,
-      PALETTE.steel,
-      0.75
-    );
-
-    // Subtle accent header & bronze footer dividers
-    const headerDivY = -boxH / 2 + padY + (isMobile ? 35 : 37);
-    this.panelGraphic.lineStyle(1, accentColor, 0.45);
-    this.panelGraphic.lineBetween(textLeft, headerDivY, textRight, headerDivY);
-
-    const footerDivY = boxH / 2 - 44;
-    this.panelGraphic.lineStyle(1, PALETTE.bronze, 0.4);
-    this.panelGraphic.lineBetween(-boxW / 2 + padX, footerDivY, textRight, footerDivY);
-
-    const btnW = isMobile ? 112 : 120;
-    const btnH = 32;
-    this.actionBtnZone.setSize(btnW, btnH);
-    this.actionBtnBg.clear();
-    this.fillChamferedRect(
-      this.actionBtnBg,
-      -btnW / 2,
-      -btnH / 2,
-      btnW,
-      btnH,
-      5,
-      isLast ? PALETTE.btnClose : PALETTE.btnContinue,
-      0.96
-    );
-    this.strokeChamferedRect(
-      this.actionBtnBg,
-      -btnW / 2,
-      -btnH / 2,
-      btnW,
-      btnH,
-      5,
-      1.6,
-      PALETTE.bronze,
-      0.96
-    );
-    this.strokeChamferedRect(
-      this.actionBtnBg,
-      -btnW / 2 + 2.5,
-      -btnH / 2 + 2.5,
-      btnW - 5,
-      btnH - 5,
-      3.5,
-      0.8,
+    drawOrnatePanel(this.panelGraphic, {
+      x: -boxW / 2,
+      y: -boxH / 2,
+      width: boxW,
+      height: boxH,
+      bevel: 10,
+      fillColor: DF_PALETTE.obsidianBg,
+      fillAlpha: 0.97,
+      innerFillColor: DF_PALETTE.innerSurface,
+      outerBorderColor: DF_PALETTE.bronzeBorder,
+      innerBorderColor: DF_PALETTE.metalBorder,
       accentColor,
-      0.7
+      shadow: true,
+      cornerOrnaments: true,
+      clear: true,
+    });
+
+    // Divisor ornamental sutil entre nome/título e a fala
+    const headerDivY = -boxH / 2 + 49;
+    drawOrnamentalDivider(
+      this.panelGraphic,
+      textLeft,
+      headerDivY,
+      textRight - textLeft,
+      DF_PALETTE.bronzeBorder
+    );
+
+    this.actionBtnZone.setSize(ACTION_BTN_W, ACTION_BTN_H);
+    drawOrnateButton(
+      this.actionBtnBg,
+      -ACTION_BTN_W / 2,
+      -ACTION_BTN_H / 2,
+      ACTION_BTN_W,
+      ACTION_BTN_H,
+      {
+        variant: isLast ? 'crimson' : 'blue',
+        bevel: 6,
+        hovered: this.actionBtnHovered,
+        clear: true,
+      }
     );
   }
 
@@ -516,31 +477,18 @@ export class DialogueBox {
     padY: number;
     centerYOffset: number;
   } {
-    const isMobile = this.viewport.mode === 'mobile_portrait';
     const w = this.viewport.width;
     const h = this.viewport.height;
 
-    if (isMobile) {
-      const boxW = Math.min(w - 20, 344);
-      const boxH = 236;
-      const targetCenterY = Math.round(h / 2 + 12);
-      return {
-        boxW,
-        boxH,
-        padX: 14,
-        padY: 14,
-        centerYOffset: targetCenterY,
-      };
-    }
+    const boxW = Math.min(DIALOGUE_BOX_MAX_W, w - 32);
+    const boxH = DIALOGUE_BOX_H;
+    const targetCenterY = h - boxH / 2 - 16;
 
-    const boxW = Math.min(w - 40, 648);
-    const boxH = 196;
-    const targetCenterY = h - 128;
     return {
       boxW,
       boxH,
-      padX: 18,
-      padY: 16,
+      padX: 14,
+      padY: 12,
       centerYOffset: targetCenterY,
     };
   }
@@ -548,47 +496,41 @@ export class DialogueBox {
   private layout(): void {
     const w = this.viewport.width;
     const h = this.viewport.height;
-    const isMobile = this.viewport.mode === 'mobile_portrait';
     const { boxW, boxH, padX, padY, centerYOffset } = this.getBoxMetrics();
 
     this.rootContainer.setPosition(w / 2, centerYOffset);
 
-    // Backdrop covers the whole screen regardless of rootContainer Y offset
+    // Backdrop cobrindo toda a tela independente do deslocamento vertical da caixa
     this.backdropGraphic.clear();
-    this.backdropGraphic.fillStyle(0x04060a, 0.72);
+    this.backdropGraphic.fillStyle(0x04060a, 0.68);
     this.backdropGraphic.fillRect(-w / 2, -centerYOffset, w, h);
     this.backdropZone
       .setPosition(0, h / 2 - centerYOffset)
       .setSize(w, h);
 
-    const portraitSize = isMobile ? 68 : 84;
-    const textLeft = -boxW / 2 + padX + portraitSize + (isMobile ? 12 : 16);
-    const textRight = boxW / 2 - padX;
-    const textWidth = Math.max(120, textRight - textLeft);
+    const textLeft = -boxW / 2 + padX + PORTRAIT_SIZE + 16;
+    const rightEdge = boxW / 2 - padX;
+    const bodyRight = rightEdge - ACTION_BTN_W - 18;
+    const headerWidth = Math.max(160, rightEdge - textLeft - 46);
+    const bodyWidth = Math.max(160, bodyRight - textLeft);
     const top = -boxH / 2 + padY;
 
-    this.speakerText.setFontSize(isMobile ? 10 : 11).setPosition(textLeft, top);
-    this.titleText
-      .setFontSize(isMobile ? 12 : 14)
-      .setWordWrapWidth(textWidth)
-      .setPosition(textLeft, top + 16);
-    this.bodyText
-      .setFontSize(isMobile ? 11 : 12)
-      .setWordWrapWidth(textWidth)
-      .setPosition(textLeft, top + (isMobile ? 42 : 44));
+    this.speakerText.setPosition(textLeft, top);
+    this.titleText.setWordWrapWidth(headerWidth).setPosition(textLeft, top + 16);
+    this.bodyText.setWordWrapWidth(bodyWidth).setPosition(textLeft, top + 45);
 
-    const footerY = boxH / 2 - 24;
-    this.pageText.setPosition(-boxW / 2 + padX, footerY - 7);
+    this.pageText.setPosition(rightEdge, top + 2);
+
+    const btnCenterX = rightEdge - ACTION_BTN_W / 2;
+    const btnCenterY = 18;
+    this.actionBtnContainer.setPosition(btnCenterX, btnCenterY);
     this.shortcutText
-      .setVisible(!isMobile)
-      .setPosition(-boxW / 2 + padX + 46, footerY - 6);
-
-    const btnW = isMobile ? 112 : 120;
-    this.actionBtnContainer.setPosition(textRight - btnW / 2, footerY);
+      .setVisible(true)
+      .setPosition(btnCenterX, btnCenterY + ACTION_BTN_H / 2 + 6);
 
     const currentLine = this.lines[this.currentIndex];
     const theme = currentLine
-      ? PORTRAIT_THEME[currentLine.portraitId] ?? PORTRAIT_THEME.system
+      ? (PORTRAIT_THEME[currentLine.portraitId] ?? PORTRAIT_THEME.system)
       : PORTRAIT_THEME.system;
     this.drawPanelAndButton(
       theme.color,
@@ -597,61 +539,5 @@ export class DialogueBox {
     if (currentLine) {
       this.drawPortrait(currentLine.portraitId, theme);
     }
-  }
-
-  private hasTextureFrame(key: string, frame: number): boolean {
-    if (!this.scene.textures.exists(key)) {
-      return false;
-    }
-    return this.scene.textures.get(key).has(String(frame));
-  }
-
-  private buildChamferedPoints(
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    bevel: number
-  ): Phaser.Types.Math.Vector2Like[] {
-    const b = Math.min(bevel, w * 0.25, h * 0.25);
-    return [
-      { x: x + b, y },
-      { x: x + w - b, y },
-      { x: x + w, y: y + b },
-      { x: x + w, y: y + h - b },
-      { x: x + w - b, y: y + h },
-      { x: x + b, y: y + h },
-      { x, y: y + h - b },
-      { x, y: y + b },
-    ];
-  }
-
-  private fillChamferedRect(
-    gfx: Phaser.GameObjects.Graphics,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    bevel: number,
-    color: number,
-    alpha: number
-  ): void {
-    gfx.fillStyle(color, alpha);
-    gfx.fillPoints(this.buildChamferedPoints(x, y, w, h, bevel), true);
-  }
-
-  private strokeChamferedRect(
-    gfx: Phaser.GameObjects.Graphics,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    bevel: number,
-    lineWidth: number,
-    color: number,
-    alpha: number
-  ): void {
-    gfx.lineStyle(lineWidth, color, alpha);
-    gfx.strokePoints(this.buildChamferedPoints(x, y, w, h, bevel), true, true);
   }
 }

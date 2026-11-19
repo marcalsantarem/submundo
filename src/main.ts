@@ -5,6 +5,10 @@ import { BootScene } from './view/scenes/BootScene';
 import { DungeonScene } from './view/scenes/DungeonScene';
 import { HubScene } from './view/scenes/HubScene';
 
+interface LockableScreenOrientation {
+  lock?: (orientation: 'landscape') => Promise<void>;
+}
+
 export function createGameConfig(viewport: ViewportConfig): Phaser.Types.Core.GameConfig {
   return {
     type: Phaser.AUTO,
@@ -32,19 +36,72 @@ export function createGameConfig(viewport: ViewportConfig): Phaser.Types.Core.Ga
   };
 }
 
+function setupLandscapeOrientationLock(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const isTouchDevice =
+    (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) ||
+    'ontouchstart' in window ||
+    (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches);
+
+  if (!isTouchDevice) {
+    return;
+  }
+
+  let attempted = false;
+  const tryLockLandscape = () => {
+    if (attempted) {
+      return;
+    }
+    attempted = true;
+    try {
+      const orientation = window.screen?.orientation as unknown as
+        | LockableScreenOrientation
+        | undefined;
+      if (orientation && typeof orientation.lock === 'function') {
+        void Promise.resolve(orientation.lock('landscape')).catch(() => {});
+      }
+    } catch {
+      // Safe fallback when orientation lock is unsupported or blocked by browser policy
+    }
+  };
+
+  window.addEventListener('pointerdown', tryLockLandscape, { once: true, passive: true });
+  window.addEventListener('touchstart', tryLockLandscape, { once: true, passive: true });
+}
+
+function setupRotateOverlayDismiss(): void {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  const overlay = document.getElementById('rotate-overlay');
+  const dismissBtn = document.getElementById('rotate-dismiss-btn');
+  if (!overlay || !dismissBtn) {
+    return;
+  }
+
+  dismissBtn.addEventListener('click', () => {
+    overlay.setAttribute('data-dismissed', 'true');
+    overlay.style.display = 'none';
+  });
+}
+
 export function bootstrapGame(): Phaser.Game {
   const initialViewport = resolveViewportConfig(window.innerWidth, window.innerHeight);
   const game = new Phaser.Game(createGameConfig(initialViewport));
 
-  let currentMode = initialViewport.mode;
-  window.addEventListener('resize', () => {
-    const nextViewport = resolveViewportConfig(window.innerWidth, window.innerHeight);
-    if (nextViewport.mode !== currentMode) {
-      currentMode = nextViewport.mode;
-      game.scale.setGameSize(nextViewport.width, nextViewport.height);
-    }
+  const handleViewportChange = () => {
     game.scale.refresh();
-  });
+  };
+
+  window.addEventListener('resize', handleViewportChange);
+  window.addEventListener('orientationchange', handleViewportChange);
+
+  setupLandscapeOrientationLock();
+  setupRotateOverlayDismiss();
 
   document.title = `SUBMUNDO v${GAME_VERSION}`;
   return game;
