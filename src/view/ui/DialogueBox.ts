@@ -32,6 +32,15 @@ const PORTRAIT_THEME: Record<
   system: { color: 0xfacc15, hex: '#fde047', badge: 'SY' },
 };
 
+const PALETTE = {
+  panelBg: 0x0d0f16,
+  surfaceBg: 0x161924,
+  bronze: 0x8a7048,
+  steel: 0x525a6e,
+  btnContinue: 0x162133,
+  btnClose: 0x3b151c,
+} as const;
+
 export class DialogueBox {
   private readonly scene: Phaser.Scene;
   private viewport: ViewportConfig;
@@ -316,34 +325,61 @@ export class DialogueBox {
     const portraitCenterY = -metrics.boxH / 2 + metrics.padY + portraitSize / 2 + 4;
 
     this.portraitFrameGraphic.clear();
-    this.portraitFrameGraphic.fillStyle(0x070b13, 1);
-    this.portraitFrameGraphic.fillRoundedRect(
-      portraitCenterX - portraitSize / 2,
-      portraitCenterY - portraitSize / 2,
+    const px = portraitCenterX - portraitSize / 2;
+    const py = portraitCenterY - portraitSize / 2;
+    // Double refined metallic chamfered frame around portrait
+    this.fillChamferedRect(
+      this.portraitFrameGraphic,
+      px,
+      py,
       portraitSize,
       portraitSize,
-      6
+      7,
+      PALETTE.panelBg,
+      1
     );
-    this.portraitFrameGraphic.lineStyle(2, theme.color, 0.92);
-    this.portraitFrameGraphic.strokeRoundedRect(
-      portraitCenterX - portraitSize / 2,
-      portraitCenterY - portraitSize / 2,
+    this.strokeChamferedRect(
+      this.portraitFrameGraphic,
+      px,
+      py,
       portraitSize,
       portraitSize,
-      6
+      7,
+      2,
+      PALETTE.bronze,
+      0.95
+    );
+    this.fillChamferedRect(
+      this.portraitFrameGraphic,
+      px + 4,
+      py + 4,
+      portraitSize - 8,
+      portraitSize - 8,
+      5,
+      PALETTE.surfaceBg,
+      0.96
+    );
+    this.strokeChamferedRect(
+      this.portraitFrameGraphic,
+      px + 4,
+      py + 4,
+      portraitSize - 8,
+      portraitSize - 8,
+      5,
+      1.5,
+      theme.color,
+      0.92
     );
 
     const frameIndex = PORTRAIT_FRAME_MAP[portraitId] ?? PORTRAIT_FRAME_MAP.system;
     const hasPortraitFrame =
-      this.portraitSprite !== null &&
-      this.scene.textures.exists('portraits') &&
-      this.scene.textures.get('portraits').has(String(frameIndex));
+      this.portraitSprite !== null && this.hasTextureFrame('portraits', frameIndex);
 
     if (hasPortraitFrame && this.portraitSprite) {
       this.portraitSprite
         .setPosition(portraitCenterX, portraitCenterY)
         .setFrame(frameIndex)
-        .setDisplaySize(portraitSize - 8, portraitSize - 8)
+        .setDisplaySize(portraitSize - 12, portraitSize - 12)
         .setVisible(true);
       this.portraitFallbackGraphic.clear();
       this.portraitFallbackText.setVisible(false);
@@ -374,30 +410,91 @@ export class DialogueBox {
   }
 
   private drawPanelAndButton(accentColor: number, isLast: boolean): void {
-    const { boxW, boxH } = this.getBoxMetrics();
+    const isMobile = this.viewport.mode === 'mobile_portrait';
+    const { boxW, boxH, padX, padY } = this.getBoxMetrics();
+    const portraitSize = isMobile ? 68 : 84;
+    const textLeft = -boxW / 2 + padX + portraitSize + (isMobile ? 12 : 16);
+    const textRight = boxW / 2 - padX;
 
     this.panelGraphic.clear();
-    this.panelGraphic.fillStyle(0x0b1120, 0.97);
-    this.panelGraphic.fillRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 9);
-    this.panelGraphic.lineStyle(2, accentColor, 0.9);
-    this.panelGraphic.strokeRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 9);
-    this.panelGraphic.lineStyle(1, 0x334155, 0.75);
-    this.panelGraphic.strokeRoundedRect(
+    this.fillChamferedRect(
+      this.panelGraphic,
+      -boxW / 2,
+      -boxH / 2,
+      boxW,
+      boxH,
+      10,
+      PALETTE.panelBg,
+      0.97
+    );
+    this.strokeChamferedRect(
+      this.panelGraphic,
+      -boxW / 2,
+      -boxH / 2,
+      boxW,
+      boxH,
+      10,
+      2,
+      PALETTE.bronze,
+      0.95
+    );
+    this.strokeChamferedRect(
+      this.panelGraphic,
       -boxW / 2 + 4,
       -boxH / 2 + 4,
       boxW - 8,
       boxH - 8,
-      6
+      8,
+      1,
+      PALETTE.steel,
+      0.75
     );
 
-    const btnW = this.viewport.mode === 'mobile_portrait' ? 112 : 120;
+    // Subtle accent header & bronze footer dividers
+    const headerDivY = -boxH / 2 + padY + (isMobile ? 35 : 37);
+    this.panelGraphic.lineStyle(1, accentColor, 0.45);
+    this.panelGraphic.lineBetween(textLeft, headerDivY, textRight, headerDivY);
+
+    const footerDivY = boxH / 2 - 44;
+    this.panelGraphic.lineStyle(1, PALETTE.bronze, 0.4);
+    this.panelGraphic.lineBetween(-boxW / 2 + padX, footerDivY, textRight, footerDivY);
+
+    const btnW = isMobile ? 112 : 120;
     const btnH = 32;
     this.actionBtnZone.setSize(btnW, btnH);
     this.actionBtnBg.clear();
-    this.actionBtnBg.fillStyle(isLast ? 0x1e3a5f : 0x155e75, 0.96);
-    this.actionBtnBg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 6);
-    this.actionBtnBg.lineStyle(1.6, accentColor, 0.98);
-    this.actionBtnBg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 6);
+    this.fillChamferedRect(
+      this.actionBtnBg,
+      -btnW / 2,
+      -btnH / 2,
+      btnW,
+      btnH,
+      5,
+      isLast ? PALETTE.btnClose : PALETTE.btnContinue,
+      0.96
+    );
+    this.strokeChamferedRect(
+      this.actionBtnBg,
+      -btnW / 2,
+      -btnH / 2,
+      btnW,
+      btnH,
+      5,
+      1.6,
+      PALETTE.bronze,
+      0.96
+    );
+    this.strokeChamferedRect(
+      this.actionBtnBg,
+      -btnW / 2 + 2.5,
+      -btnH / 2 + 2.5,
+      btnW - 5,
+      btnH - 5,
+      3.5,
+      0.8,
+      accentColor,
+      0.7
+    );
   }
 
   private getBoxMetrics(): {
@@ -488,5 +585,61 @@ export class DialogueBox {
     if (currentLine) {
       this.drawPortrait(currentLine.portraitId, theme);
     }
+  }
+
+  private hasTextureFrame(key: string, frame: number): boolean {
+    if (!this.scene.textures.exists(key)) {
+      return false;
+    }
+    return this.scene.textures.get(key).has(String(frame));
+  }
+
+  private buildChamferedPoints(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    bevel: number
+  ): Phaser.Types.Math.Vector2Like[] {
+    const b = Math.min(bevel, w * 0.25, h * 0.25);
+    return [
+      { x: x + b, y },
+      { x: x + w - b, y },
+      { x: x + w, y: y + b },
+      { x: x + w, y: y + h - b },
+      { x: x + w - b, y: y + h },
+      { x: x + b, y: y + h },
+      { x, y: y + h - b },
+      { x, y: y + b },
+    ];
+  }
+
+  private fillChamferedRect(
+    gfx: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    bevel: number,
+    color: number,
+    alpha: number
+  ): void {
+    gfx.fillStyle(color, alpha);
+    gfx.fillPoints(this.buildChamferedPoints(x, y, w, h, bevel), true);
+  }
+
+  private strokeChamferedRect(
+    gfx: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    bevel: number,
+    lineWidth: number,
+    color: number,
+    alpha: number
+  ): void {
+    gfx.lineStyle(lineWidth, color, alpha);
+    gfx.strokePoints(this.buildChamferedPoints(x, y, w, h, bevel), true, true);
   }
 }

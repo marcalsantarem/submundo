@@ -24,6 +24,7 @@ export interface BlacksmithModalSnapshot {
 interface BlacksmithItemRowView {
   container: Phaser.GameObjects.Container;
   bg: Phaser.GameObjects.Graphics;
+  slotIcon: Phaser.GameObjects.Image | null;
   nameText: Phaser.GameObjects.Text;
   levelText: Phaser.GameObjects.Text;
   statsText: Phaser.GameObjects.Text;
@@ -39,6 +40,7 @@ interface BlacksmithItemRowView {
 interface ForgeCardView {
   container: Phaser.GameObjects.Container;
   bg: Phaser.GameObjects.Graphics;
+  essenceIcon: Phaser.GameObjects.Image | null;
   titleText: Phaser.GameObjects.Text;
   descText: Phaser.GameObjects.Text;
   costText: Phaser.GameObjects.Text;
@@ -57,6 +59,28 @@ const SLOT_LABELS: Record<EquipSlot, string> = {
   ring: 'Anel',
 };
 
+const SLOT_ICON_FRAME: Record<EquipSlot, number> = {
+  weapon: 12,
+  armor: 13,
+  amulet: 14,
+  ring: 15,
+};
+
+const UI_ICONS_KEY = 'ui_icons';
+const ICON_SOULS_FRAME = 10;
+const ICON_ESSENCE_FRAME = 11;
+
+const PALETTE = {
+  BG_DEEP: 0x0d0f16,
+  BG_SURFACE: 0x161924,
+  BORDER_BRONZE: 0x8a7048,
+  BORDER_STEEL: 0x525a6e,
+  CLOSE_FILL: 0x2b1215,
+  UPGRADE_FILL: 0x172b3a,
+  UPGRADE_STROKE: 0x48cae4,
+  FORGE_FILL: 0x3b1912,
+} as const;
+
 const RARITY_HEX: Record<Rarity, string> = {
   common: '#e4e4e7',
   magic: '#38bdf8',
@@ -65,7 +89,7 @@ const RARITY_HEX: Record<Rarity, string> = {
 };
 
 const RARITY_NUM: Record<Rarity, number> = {
-  common: 0xe4e4e7,
+  common: 0x8a7048,
   magic: 0x38bdf8,
   rare: 0xfacc15,
   legendary: 0xf97316,
@@ -109,8 +133,11 @@ export class BlacksmithModal {
   private readonly balancesBgGraphic: Phaser.GameObjects.Graphics;
   private readonly tipBgGraphic: Phaser.GameObjects.Graphics;
 
+  private readonly soulsIcon: Phaser.GameObjects.Image | null;
+  private readonly essenceIcon: Phaser.GameObjects.Image | null;
   private readonly titleText: Phaser.GameObjects.Text;
-  private readonly balancesText: Phaser.GameObjects.Text;
+  private readonly soulsBalanceText: Phaser.GameObjects.Text;
+  private readonly essenceBalanceText: Phaser.GameObjects.Text;
   private readonly itemsHeaderText: Phaser.GameObjects.Text;
   private readonly forgeHeaderText: Phaser.GameObjects.Text;
   private readonly emptyItemsText: Phaser.GameObjects.Text;
@@ -174,31 +201,45 @@ export class BlacksmithModal {
     this.balancesBgGraphic = scene.add.graphics();
     this.tipBgGraphic = scene.add.graphics();
 
+    this.soulsIcon = this.hasTextureFrame(UI_ICONS_KEY, ICON_SOULS_FRAME)
+      ? scene.add.image(0, 0, UI_ICONS_KEY, ICON_SOULS_FRAME).setOrigin(0.5)
+      : null;
+    this.essenceIcon = this.hasTextureFrame(UI_ICONS_KEY, ICON_ESSENCE_FRAME)
+      ? scene.add.image(0, 0, UI_ICONS_KEY, ICON_ESSENCE_FRAME).setOrigin(0.5)
+      : null;
+
     this.titleText = scene.add.text(0, 0, 'FERREIRO ESPIRITUAL', {
       fontFamily: 'monospace',
       fontSize: '15px',
-      color: '#ffd166',
+      color: '#f0c46c',
       fontStyle: 'bold',
     });
 
-    this.balancesText = scene.add.text(0, 0, 'Almas: 0 | Essências de General: 0', {
+    this.soulsBalanceText = scene.add.text(0, 0, 'Almas: 0', {
       fontFamily: 'monospace',
       fontSize: '11px',
       color: '#90e0ef',
       fontStyle: 'bold',
     });
 
+    this.essenceBalanceText = scene.add.text(0, 0, 'Essências de General: 0', {
+      fontFamily: 'monospace',
+      fontSize: '11px',
+      color: '#f4a261',
+      fontStyle: 'bold',
+    });
+
     this.itemsHeaderText = scene.add.text(0, 0, 'APRIMORAR ITENS (0)', {
       fontFamily: 'monospace',
       fontSize: '11px',
-      color: '#94a3b8',
+      color: '#cbd5e1',
       fontStyle: 'bold',
     });
 
     this.forgeHeaderText = scene.add.text(0, 0, 'FORJAR RELÍQUIAS', {
       fontFamily: 'monospace',
       fontSize: '11px',
-      color: '#94a3b8',
+      color: '#f0c46c',
       fontStyle: 'bold',
     });
 
@@ -233,7 +274,7 @@ export class BlacksmithModal {
       .text(0, 0, 'Fechar', {
         fontFamily: 'monospace',
         fontSize: '12px',
-        color: '#f8fafc',
+        color: '#f8e7c2',
         fontStyle: 'bold',
       })
       .setOrigin(0.5, 0.5);
@@ -352,7 +393,8 @@ export class BlacksmithModal {
       this.balancesBgGraphic,
       this.tipBgGraphic,
       this.titleText,
-      this.balancesText,
+      this.soulsBalanceText,
+      this.essenceBalanceText,
       this.itemsHeaderText,
       this.forgeHeaderText,
       this.emptyItemsText,
@@ -362,10 +404,19 @@ export class BlacksmithModal {
       this.nextPageContainer,
       this.pageInfoText,
     ];
+    if (this.soulsIcon) {
+      rootChildren.push(this.soulsIcon);
+    }
+    if (this.essenceIcon) {
+      rootChildren.push(this.essenceIcon);
+    }
 
     // Build Item Upgrade Rows
     for (let i = 0; i < MAX_ITEM_ROWS; i++) {
       const bg = scene.add.graphics();
+      const slotIcon = this.hasTextureFrame(UI_ICONS_KEY, SLOT_ICON_FRAME.weapon)
+        ? scene.add.image(0, 0, UI_ICONS_KEY, SLOT_ICON_FRAME.weapon).setOrigin(0.5)
+        : null;
       const nameText = scene.add.text(0, 0, '', {
         fontFamily: 'monospace',
         fontSize: '11px',
@@ -376,7 +427,7 @@ export class BlacksmithModal {
         .text(0, 0, '', {
           fontFamily: 'monospace',
           fontSize: '10px',
-          color: '#ffd166',
+          color: '#f0c46c',
           fontStyle: 'bold',
         })
         .setOrigin(1, 0);
@@ -408,16 +459,22 @@ export class BlacksmithModal {
 
       const btnContainer = scene.add.container(0, 0, [btnBg, btnText, btnZone]);
 
+      const rowChildren: Phaser.GameObjects.GameObject[] = [bg];
+      if (slotIcon) {
+        rowChildren.push(slotIcon);
+      }
+      rowChildren.push(
+        nameText,
+        levelText,
+        statsText,
+        costText,
+        btnContainer
+      );
+
       const rowView: BlacksmithItemRowView = {
-        container: scene.add.container(0, 0, [
-          bg,
-          nameText,
-          levelText,
-          statsText,
-          costText,
-          btnContainer,
-        ]),
+        container: scene.add.container(0, 0, rowChildren),
         bg,
+        slotIcon,
         nameText,
         levelText,
         statsText,
@@ -453,6 +510,9 @@ export class BlacksmithModal {
     // Build Forge Recipe Cards
     for (let i = 0; i < MAX_FORGE_CARDS; i++) {
       const bg = scene.add.graphics();
+      const essenceIcon = this.hasTextureFrame(UI_ICONS_KEY, ICON_ESSENCE_FRAME)
+        ? scene.add.image(0, 0, UI_ICONS_KEY, ICON_ESSENCE_FRAME).setOrigin(0.5)
+        : null;
       const titleText = scene.add.text(0, 0, '', {
         fontFamily: 'monospace',
         fontSize: '11px',
@@ -487,15 +547,16 @@ export class BlacksmithModal {
 
       const btnContainer = scene.add.container(0, 0, [btnBg, btnText, btnZone]);
 
+      const cardChildren: Phaser.GameObjects.GameObject[] = [bg];
+      if (essenceIcon) {
+        cardChildren.push(essenceIcon);
+      }
+      cardChildren.push(titleText, descText, costText, btnContainer);
+
       const cardView: ForgeCardView = {
-        container: scene.add.container(0, 0, [
-          bg,
-          titleText,
-          descText,
-          costText,
-          btnContainer,
-        ]),
+        container: scene.add.container(0, 0, cardChildren),
         bg,
+        essenceIcon,
         titleText,
         descText,
         costText,
@@ -581,7 +642,7 @@ export class BlacksmithModal {
     this.rootContainer.setPosition(w / 2, h / 2);
 
     this.backdropGraphic.clear();
-    this.backdropGraphic.fillStyle(0x04060a, 0.82);
+    this.backdropGraphic.fillStyle(0x04060a, 0.84);
     this.backdropGraphic.fillRect(-w / 2, -h / 2, w, h);
     this.backdropZone.setSize(w, h);
 
@@ -589,10 +650,18 @@ export class BlacksmithModal {
     const boxH = isMobile ? h - 44 : 524;
 
     this.panelGraphic.clear();
-    this.panelGraphic.fillStyle(0x0f1420, 0.97);
-    this.panelGraphic.fillRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 8);
-    this.panelGraphic.lineStyle(2, 0x3b4252, 1);
-    this.panelGraphic.strokeRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 8);
+    this.drawChamferedPanel(
+      this.panelGraphic,
+      -boxW / 2,
+      -boxH / 2,
+      boxW,
+      boxH,
+      12,
+      PALETTE.BG_DEEP,
+      0.97,
+      PALETTE.BORDER_BRONZE,
+      PALETTE.BORDER_STEEL
+    );
 
     const leftEdge = -boxW / 2 + 16;
     const rightEdge = boxW / 2 - 16;
@@ -607,22 +676,63 @@ export class BlacksmithModal {
     const closeH = isMobile ? 26 : 28;
     this.closeBtnContainer.setPosition(rightEdge - closeW / 2, topEdge + 12);
     this.closeBtnZone.setSize(closeW, closeH);
-    this.closeBtnBg.clear();
-    this.closeBtnBg.fillStyle(0x7f1d1d, 0.92);
-    this.closeBtnBg.fillRoundedRect(-closeW / 2, -closeH / 2, closeW, closeH, 5);
-    this.closeBtnBg.lineStyle(1.5, 0xfca5a5, 0.85);
-    this.closeBtnBg.strokeRoundedRect(-closeW / 2, -closeH / 2, closeW, closeH, 5);
+    this.drawChamferedButton(
+      this.closeBtnBg,
+      closeW,
+      closeH,
+      5,
+      PALETTE.CLOSE_FILL,
+      PALETTE.BORDER_BRONZE
+    );
 
     const balY = topEdge + (isMobile ? 30 : 34);
     const balH = isMobile ? 24 : 26;
-    this.balancesBgGraphic.clear();
-    this.balancesBgGraphic.fillStyle(0x161d2e, 0.92);
-    this.balancesBgGraphic.fillRoundedRect(leftEdge, balY, innerW, balH, 5);
-    this.balancesBgGraphic.lineStyle(1, 0x2b3448, 0.9);
-    this.balancesBgGraphic.strokeRoundedRect(leftEdge, balY, innerW, balH, 5);
+    this.drawChamferedBox(
+      this.balancesBgGraphic,
+      leftEdge,
+      balY,
+      innerW,
+      balH,
+      5,
+      PALETTE.BG_SURFACE,
+      0.95,
+      PALETTE.BORDER_STEEL,
+      1.2
+    );
 
-    this.balancesText.setFontSize(isMobile ? 10 : 11);
-    this.balancesText.setPosition(leftEdge + 10, balY + (isMobile ? 5 : 6));
+    const balCenterY = balY + balH / 2;
+    const balIconSize = isMobile ? 14 : 16;
+    const hasSoulsIcon =
+      this.soulsIcon !== null &&
+      this.hasTextureFrame(UI_ICONS_KEY, ICON_SOULS_FRAME);
+    const hasEssenceIcon =
+      this.essenceIcon !== null &&
+      this.hasTextureFrame(UI_ICONS_KEY, ICON_ESSENCE_FRAME);
+
+    if (this.soulsIcon) {
+      this.soulsIcon
+        .setVisible(hasSoulsIcon)
+        .setPosition(leftEdge + 14, balCenterY)
+        .setDisplaySize(balIconSize, balIconSize);
+    }
+    this.soulsBalanceText.setFontSize(isMobile ? 10 : 11);
+    this.soulsBalanceText.setPosition(
+      leftEdge + (hasSoulsIcon ? 25 : 10),
+      balY + (isMobile ? 6 : 6)
+    );
+
+    const essenceColX = leftEdge + (isMobile ? 148 : 196);
+    if (this.essenceIcon) {
+      this.essenceIcon
+        .setVisible(hasEssenceIcon)
+        .setPosition(essenceColX, balCenterY)
+        .setDisplaySize(balIconSize, balIconSize);
+    }
+    this.essenceBalanceText.setFontSize(isMobile ? 10 : 11);
+    this.essenceBalanceText.setPosition(
+      essenceColX + (hasEssenceIcon ? 11 : 0),
+      balY + (isMobile ? 6 : 6)
+    );
 
     if (isMobile) {
       // Stacked on Mobile: Forge Cards top, Item Upgrade Rows bottom
@@ -690,11 +800,18 @@ export class BlacksmithModal {
       const tipY = listTop + forgeH * MAX_FORGE_CARDS + 26;
       const tipH = 82;
       this.tipBgGraphic.setVisible(true);
-      this.tipBgGraphic.clear();
-      this.tipBgGraphic.fillStyle(0x131a2b, 0.9);
-      this.tipBgGraphic.fillRoundedRect(rightColLeft, tipY, rightColW, tipH, 6);
-      this.tipBgGraphic.lineStyle(1, 0x2b3448, 0.9);
-      this.tipBgGraphic.strokeRoundedRect(rightColLeft, tipY, rightColW, tipH, 6);
+      this.drawChamferedBox(
+        this.tipBgGraphic,
+        rightColLeft,
+        tipY,
+        rightColW,
+        tipH,
+        6,
+        PALETTE.BG_SURFACE,
+        0.92,
+        PALETTE.BORDER_STEEL,
+        1.2
+      );
 
       this.tipText.setVisible(true);
       this.tipText.setFontSize(10);
@@ -750,18 +867,18 @@ export class BlacksmithModal {
     const btnH = isMobile ? 26 : 28;
     row.container.setData('btnW', btnW);
     row.container.setData('btnH', btnH);
+    row.container.setData('leftX', left);
+    row.container.setData('topY', top);
+
+    const iconSize = isMobile ? 18 : 22;
+    row.slotIcon?.setPosition(left + iconSize / 2, top + iconSize / 2);
+    row.slotIcon?.setDisplaySize(iconSize, iconSize);
 
     row.nameText.setFontSize(isMobile ? 10 : 11);
-    row.nameText.setWordWrapWidth(w - 94);
-    row.nameText.setPosition(left, top);
-
     row.levelText.setFontSize(isMobile ? 10 : 11);
     row.levelText.setPosition(right, top);
 
     row.statsText.setFontSize(isMobile ? 9 : 10);
-    row.statsText.setWordWrapWidth(w - btnW - 24);
-    row.statsText.setPosition(left, top + 20);
-
     row.costText.setFontSize(isMobile ? 9 : 10);
     row.costText.setPosition(left, bottom - 14);
 
@@ -790,20 +907,26 @@ export class BlacksmithModal {
     const btnH = isMobile ? 26 : 28;
     card.container.setData('btnW', btnW);
     card.container.setData('btnH', btnH);
+    card.container.setData('leftX', left);
 
     card.titleText.setFontSize(isMobile ? 10 : 11);
     card.titleText.setWordWrapWidth(w - 20);
     card.titleText.setPosition(left, top);
 
+    const iconSize = isMobile ? 13 : 15;
     if (isMobile) {
       card.descText.setFontSize(9);
       card.descText.setWordWrapWidth(w - btnW - 24);
       card.descText.setPosition(left, top + 16);
 
+      card.essenceIcon
+        ?.setPosition(left + iconSize / 2, bottom - 7)
+        .setDisplaySize(iconSize, iconSize);
+      card.container.setData('costY', bottom - 13);
+
       card.costText.setFontSize(9);
       card.costText.setOrigin(0, 0);
-      card.costText.setWordWrapWidth(w - btnW - 24);
-      card.costText.setPosition(left, bottom - 13);
+      card.costText.setWordWrapWidth(w - btnW - 40);
 
       card.btnContainer.setPosition(right - btnW / 2, bottom - btnH / 2 + 1);
     } else {
@@ -811,10 +934,14 @@ export class BlacksmithModal {
       card.descText.setWordWrapWidth(w - 20);
       card.descText.setPosition(left, top + 20);
 
+      card.essenceIcon
+        ?.setPosition(left + iconSize / 2, bottom - btnH / 2)
+        .setDisplaySize(iconSize, iconSize);
+      card.container.setData('costY', bottom - btnH / 2);
+
       card.costText.setFontSize(10);
       card.costText.setOrigin(0, 0.5);
-      card.costText.setWordWrapWidth(w - btnW - 30);
-      card.costText.setPosition(left, bottom - btnH / 2);
+      card.costText.setWordWrapWidth(w - btnW - 46);
 
       card.btnContainer.setPosition(right - btnW / 2, bottom - btnH / 2);
     }
@@ -826,10 +953,11 @@ export class BlacksmithModal {
     const snap = this.lastSnapshot;
     const isMobile = this.viewport.mode === 'mobile_portrait';
 
-    this.balancesText.setText(
+    this.soulsBalanceText.setText(`Almas: ${snap.souls}`);
+    this.essenceBalanceText.setText(
       isMobile
-        ? `Almas: ${snap.souls}  |  Essências: ${snap.generalEssences}`
-        : `Almas: ${snap.souls}   |   Essências de General: ${snap.generalEssences}`
+        ? `Essências: ${snap.generalEssences}`
+        : `Essências de General: ${snap.generalEssences}`
     );
 
     // Render Forge Cards
@@ -855,20 +983,39 @@ export class BlacksmithModal {
       const cardH = (card.container.getData('cardH') as number) || 74;
       const btnW = (card.container.getData('btnW') as number) || 76;
       const btnH = (card.container.getData('btnH') as number) || 26;
+      const leftX = (card.container.getData('leftX') as number) ?? -cardW / 2 + 10;
+      const costY = (card.container.getData('costY') as number) ?? 0;
 
       const rarityNum = RARITY_NUM[recipe.rarity];
       const rarityHex = RARITY_HEX[recipe.rarity];
 
-      card.bg.clear();
-      card.bg.fillStyle(0x141b2d, 0.94);
-      card.bg.fillRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 6);
-      card.bg.lineStyle(1.5, rarityNum, canAfford ? 0.95 : 0.45);
-      card.bg.strokeRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 6);
+      this.drawChamferedBox(
+        card.bg,
+        -cardW / 2,
+        -cardH / 2,
+        cardW,
+        cardH,
+        6,
+        PALETTE.BG_SURFACE,
+        0.95,
+        canAfford ? rarityNum : PALETTE.BORDER_STEEL,
+        1.5
+      );
 
       this.setTextClamped(card.titleText, recipe.name, 1);
       card.titleText.setColor(rarityHex);
 
       this.setTextClamped(card.descText, recipe.description, isMobile ? 2 : 3);
+
+      const hasEssenceIcon =
+        recipe.essenceCost > 0 &&
+        card.essenceIcon !== null &&
+        this.hasTextureFrame(UI_ICONS_KEY, ICON_ESSENCE_FRAME);
+      card.essenceIcon?.setVisible(hasEssenceIcon);
+      card.costText.setPosition(
+        leftX + (hasEssenceIcon ? (isMobile ? 17 : 19) : 0),
+        costY
+      );
 
       const costParts: string[] = [];
       if (recipe.essenceCost > 0) {
@@ -878,13 +1025,16 @@ export class BlacksmithModal {
         costParts.push(`${recipe.soulCost} Almas`);
       }
       card.costText.setText(`Custo: ${costParts.join(' + ')}`);
-      card.costText.setColor(canAfford ? '#ffd166' : '#f87171');
+      card.costText.setColor(canAfford ? '#f0c46c' : '#f87171');
 
-      card.btnBg.clear();
-      card.btnBg.fillStyle(canAfford ? 0x7c2d12 : 0x1e293b, 0.95);
-      card.btnBg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 5);
-      card.btnBg.lineStyle(1.5, canAfford ? rarityNum : 0x475569, 0.9);
-      card.btnBg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 5);
+      this.drawChamferedButton(
+        card.btnBg,
+        btnW,
+        btnH,
+        5,
+        canAfford ? PALETTE.FORGE_FILL : PALETTE.BG_DEEP,
+        canAfford ? rarityNum : PALETTE.BORDER_STEEL
+      );
       card.btnText.setColor(canAfford ? '#ffffff' : '#64748b');
     }
 
@@ -922,15 +1072,41 @@ export class BlacksmithModal {
       const rowH = (row.container.getData('rowH') as number) || 84;
       const btnW = (row.container.getData('btnW') as number) || 86;
       const btnH = (row.container.getData('btnH') as number) || 26;
+      const leftX = (row.container.getData('leftX') as number) ?? -rowW / 2 + 10;
+      const topY = (row.container.getData('topY') as number) ?? -rowH / 2 + 7;
 
       const borderNum = RARITY_NUM[item.rarity];
       const borderHex = RARITY_HEX[item.rarity];
 
-      row.bg.clear();
-      row.bg.fillStyle(0x141b2d, 0.94);
-      row.bg.fillRoundedRect(-rowW / 2, -rowH / 2, rowW, rowH, 6);
-      row.bg.lineStyle(1.5, borderNum, 0.9);
-      row.bg.strokeRoundedRect(-rowW / 2, -rowH / 2, rowW, rowH, 6);
+      this.drawChamferedBox(
+        row.bg,
+        -rowW / 2,
+        -rowH / 2,
+        rowW,
+        rowH,
+        6,
+        PALETTE.BG_SURFACE,
+        0.95,
+        borderNum,
+        1.5
+      );
+
+      const slotFrame = SLOT_ICON_FRAME[item.slot];
+      const hasSlotIcon =
+        row.slotIcon !== null &&
+        this.hasTextureFrame(UI_ICONS_KEY, slotFrame);
+      if (row.slotIcon) {
+        row.slotIcon.setVisible(hasSlotIcon);
+        if (hasSlotIcon) {
+          row.slotIcon.setFrame(slotFrame);
+        }
+      }
+
+      const iconOffset = hasSlotIcon ? (isMobile ? 23 : 27) : 0;
+      row.nameText.setPosition(leftX + iconOffset, topY);
+      row.nameText.setWordWrapWidth(rowW - 94 - iconOffset);
+      row.statsText.setPosition(leftX + iconOffset, topY + 20);
+      row.statsText.setWordWrapWidth(rowW - btnW - 24 - iconOffset);
 
       const suffix =
         level > 0 && !item.name.includes(`(+${level})`) ? ` (+${level})` : '';
@@ -942,7 +1118,7 @@ export class BlacksmithModal {
       row.nameText.setColor(borderHex);
 
       row.levelText.setText(`+${level}/+${snap.maxUpgradeLevel}`);
-      row.levelText.setColor(isMax ? '#ffd166' : '#cbd5e1');
+      row.levelText.setColor(isMax ? '#f0c46c' : '#cbd5e1');
 
       const bonuses = this.formatItemBonuses(item, isMobile ? 2 : 3);
       const statsLine = `${FORCE_LABELS[item.force]} · ${bonuses || `Poder ${item.powerScore}`}`;
@@ -950,31 +1126,43 @@ export class BlacksmithModal {
 
       if (isMax) {
         row.costText.setText('Aprimoramento Máximo');
-        row.costText.setColor('#ffd166');
+        row.costText.setColor('#f0c46c');
       } else {
         row.costText.setText(`Custo: ${cost} Almas`);
         row.costText.setColor(canAfford ? '#90e0ef' : '#f87171');
       }
 
-      row.btnBg.clear();
       if (isMax) {
-        row.btnBg.fillStyle(0x1e293b, 0.92);
-        row.btnBg.lineStyle(1, 0x64748b, 0.8);
-        row.btnText.setText('Máximo');
-        row.btnText.setColor('#ffd166');
+        this.drawChamferedButton(
+          row.btnBg,
+          btnW,
+          btnH,
+          5,
+          PALETTE.BG_DEEP,
+          PALETTE.BORDER_BRONZE
+        );
+        row.btnText.setText('Máximo').setColor('#f0c46c');
       } else if (canAfford) {
-        row.btnBg.fillStyle(0x155e75, 0.96);
-        row.btnBg.lineStyle(1.5, 0x48cae4, 1);
-        row.btnText.setText('Aprimorar');
-        row.btnText.setColor('#ffffff');
+        this.drawChamferedButton(
+          row.btnBg,
+          btnW,
+          btnH,
+          5,
+          PALETTE.UPGRADE_FILL,
+          PALETTE.UPGRADE_STROKE
+        );
+        row.btnText.setText('Aprimorar').setColor('#ffffff');
       } else {
-        row.btnBg.fillStyle(0x1e293b, 0.78);
-        row.btnBg.lineStyle(1, 0x475569, 0.75);
-        row.btnText.setText('Aprimorar');
-        row.btnText.setColor('#64748b');
+        this.drawChamferedButton(
+          row.btnBg,
+          btnW,
+          btnH,
+          5,
+          PALETTE.BG_DEEP,
+          PALETTE.BORDER_STEEL
+        );
+        row.btnText.setText('Aprimorar').setColor('#64748b');
       }
-      row.btnBg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 5);
-      row.btnBg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 5);
     }
 
     // Pagination buttons
@@ -999,12 +1187,116 @@ export class BlacksmithModal {
     label: Phaser.GameObjects.Text,
     enabled: boolean
   ): void {
-    bg.clear();
-    bg.fillStyle(enabled ? 0x1e293b : 0x0f172a, 0.95);
-    bg.fillRoundedRect(-34, -12, 68, 24, 4);
-    bg.lineStyle(1, enabled ? 0x64748b : 0x334155, 0.9);
-    bg.strokeRoundedRect(-34, -12, 68, 24, 4);
+    this.drawChamferedButton(
+      bg,
+      68,
+      24,
+      4,
+      enabled ? PALETTE.BG_SURFACE : PALETTE.BG_DEEP,
+      enabled ? PALETTE.BORDER_BRONZE : PALETTE.BORDER_STEEL
+    );
     label.setColor(enabled ? '#f8fafc' : '#475569');
+  }
+
+  private drawChamferedPanel(
+    gfx: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    bevel: number,
+    fillColor: number,
+    fillAlpha: number,
+    outerStroke: number,
+    innerStroke: number
+  ): void {
+    const outerPts = this.getChamferPoints(x, y, w, h, bevel);
+    const innerPts = this.getChamferPoints(
+      x + 4,
+      y + 4,
+      w - 8,
+      h - 8,
+      Math.max(4, bevel - 3)
+    );
+
+    gfx.fillStyle(fillColor, fillAlpha);
+    gfx.fillPoints(outerPts, true);
+    gfx.lineStyle(1, innerStroke, 0.7);
+    gfx.strokePoints(innerPts, true, true);
+    gfx.lineStyle(2, outerStroke, 0.96);
+    gfx.strokePoints(outerPts, true, true);
+  }
+
+  private drawChamferedBox(
+    gfx: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    bevel: number,
+    fillColor: number,
+    fillAlpha: number,
+    strokeColor: number,
+    lineWidth: number
+  ): void {
+    gfx.clear();
+    const pts = this.getChamferPoints(x, y, w, h, bevel);
+    gfx.fillStyle(fillColor, fillAlpha);
+    gfx.fillPoints(pts, true);
+    gfx.lineStyle(lineWidth, strokeColor, 0.92);
+    gfx.strokePoints(pts, true, true);
+  }
+
+  private drawChamferedButton(
+    gfx: Phaser.GameObjects.Graphics,
+    w: number,
+    h: number,
+    bevel: number,
+    fillColor: number,
+    strokeColor: number
+  ): void {
+    gfx.clear();
+    const outerPts = this.getChamferPoints(-w / 2, -h / 2, w, h, bevel);
+    const innerPts = this.getChamferPoints(
+      -w / 2 + 2,
+      -h / 2 + 2,
+      Math.max(4, w - 4),
+      Math.max(4, h - 4),
+      Math.max(2, bevel - 1)
+    );
+    gfx.fillStyle(fillColor, 0.95);
+    gfx.fillPoints(outerPts, true);
+    gfx.lineStyle(1, PALETTE.BG_DEEP, 0.85);
+    gfx.strokePoints(innerPts, true, true);
+    gfx.lineStyle(1.5, strokeColor, 0.95);
+    gfx.strokePoints(outerPts, true, true);
+  }
+
+  private hasTextureFrame(key: string, frame: number): boolean {
+    if (!this.scene.textures?.exists(key)) {
+      return false;
+    }
+    return this.scene.textures.get(key).has(String(frame));
+  }
+
+  private getChamferPoints(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    bevel: number
+  ): Array<{ x: number; y: number }> {
+    const b = Math.min(bevel, w * 0.35, h * 0.35);
+    return [
+      { x: x + b, y },
+      { x: x + w - b, y },
+      { x: x + w, y: y + b },
+      { x: x + w, y: y + h - b },
+      { x: x + w - b, y: y + h },
+      { x: x + b, y: y + h },
+      { x, y: y + h - b },
+      { x, y: y + b },
+    ];
   }
 
   private formatItemBonuses(item: ItemInstance, maxEntries: number): string {

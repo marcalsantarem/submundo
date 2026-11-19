@@ -32,6 +32,18 @@ interface AltarRowView {
 }
 
 const MAX_ROWS_PER_PAGE = 5;
+const UI_ICONS_KEY = 'ui_icons';
+const ICON_SOULS_FRAME = 10;
+
+const PALETTE = {
+  BG_DEEP: 0x0d0f16,
+  BG_SURFACE: 0x161924,
+  BORDER_BRONZE: 0x8a7048,
+  BORDER_STEEL: 0x525a6e,
+  CLOSE_FILL: 0x2b1215,
+  BUY_FILL: 0x172b3a,
+  BUY_STROKE: 0x48cae4,
+} as const;
 
 export class AltarModal {
   private readonly scene: Phaser.Scene;
@@ -61,6 +73,8 @@ export class AltarModal {
   private readonly backdropZone: Phaser.GameObjects.Zone;
   private readonly panelGraphic: Phaser.GameObjects.Graphics;
   private readonly soulsBgGraphic: Phaser.GameObjects.Graphics;
+  private readonly soulsIcon: Phaser.GameObjects.Image | null;
+  private readonly soulsFallbackGraphic: Phaser.GameObjects.Graphics;
 
   private readonly titleText: Phaser.GameObjects.Text;
   private readonly soulsText: Phaser.GameObjects.Text;
@@ -122,10 +136,17 @@ export class AltarModal {
     this.panelGraphic = scene.add.graphics();
     this.soulsBgGraphic = scene.add.graphics();
 
+    this.soulsIcon = this.hasTextureFrame(UI_ICONS_KEY, ICON_SOULS_FRAME)
+      ? scene.add.image(0, 0, UI_ICONS_KEY, ICON_SOULS_FRAME).setOrigin(0.5)
+      : null;
+
+    this.soulsFallbackGraphic = scene.add.graphics();
+    this.drawSoulsFallbackDiamond();
+
     this.titleText = scene.add.text(0, 0, 'ALTAR DE ALMAS', {
       fontFamily: 'monospace',
       fontSize: '15px',
-      color: '#ffd166',
+      color: '#f0c46c',
       fontStyle: 'bold',
     });
 
@@ -157,7 +178,7 @@ export class AltarModal {
       .text(0, 0, 'Fechar', {
         fontFamily: 'monospace',
         fontSize: '12px',
-        color: '#f8fafc',
+        color: '#f8e7c2',
         fontStyle: 'bold',
       })
       .setOrigin(0.5, 0.5);
@@ -276,6 +297,7 @@ export class AltarModal {
       this.backdropZone,
       this.panelGraphic,
       this.soulsBgGraphic,
+      this.soulsFallbackGraphic,
       this.titleText,
       this.soulsText,
       this.introText,
@@ -285,6 +307,9 @@ export class AltarModal {
       this.nextPageContainer,
       this.pageInfoText,
     ];
+    if (this.soulsIcon) {
+      rootChildren.splice(5, 0, this.soulsIcon);
+    }
 
     for (let i = 0; i < MAX_ROWS_PER_PAGE; i++) {
       const bg = scene.add.graphics();
@@ -298,7 +323,7 @@ export class AltarModal {
         .text(0, 0, '', {
           fontFamily: 'monospace',
           fontSize: '11px',
-          color: '#ffd166',
+          color: '#f0c46c',
           fontStyle: 'bold',
         })
         .setOrigin(1, 0);
@@ -436,7 +461,7 @@ export class AltarModal {
     this.rootContainer.setPosition(w / 2, h / 2);
 
     this.backdropGraphic.clear();
-    this.backdropGraphic.fillStyle(0x04060a, 0.82);
+    this.backdropGraphic.fillStyle(0x04060a, 0.84);
     this.backdropGraphic.fillRect(-w / 2, -h / 2, w, h);
     this.backdropZone.setSize(w, h);
 
@@ -444,10 +469,18 @@ export class AltarModal {
     const boxH = isMobile ? h - 44 : 520;
 
     this.panelGraphic.clear();
-    this.panelGraphic.fillStyle(0x0f1420, 0.97);
-    this.panelGraphic.fillRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 8);
-    this.panelGraphic.lineStyle(2, 0x3b4252, 1);
-    this.panelGraphic.strokeRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 8);
+    this.drawChamferedPanel(
+      this.panelGraphic,
+      -boxW / 2,
+      -boxH / 2,
+      boxW,
+      boxH,
+      12,
+      PALETTE.BG_DEEP,
+      0.97,
+      PALETTE.BORDER_BRONZE,
+      PALETTE.BORDER_STEEL
+    );
 
     const leftEdge = -boxW / 2 + 16;
     const rightEdge = boxW / 2 - 16;
@@ -461,22 +494,38 @@ export class AltarModal {
     const closeH = isMobile ? 26 : 28;
     this.closeBtnContainer.setPosition(rightEdge - closeW / 2, topEdge + 12);
     this.closeBtnZone.setSize(closeW, closeH);
-    this.closeBtnBg.clear();
-    this.closeBtnBg.fillStyle(0x7f1d1d, 0.92);
-    this.closeBtnBg.fillRoundedRect(-closeW / 2, -closeH / 2, closeW, closeH, 5);
-    this.closeBtnBg.lineStyle(1.5, 0xfca5a5, 0.85);
-    this.closeBtnBg.strokeRoundedRect(-closeW / 2, -closeH / 2, closeW, closeH, 5);
+    this.drawChamferedButton(
+      this.closeBtnBg,
+      closeW,
+      closeH,
+      5,
+      PALETTE.CLOSE_FILL,
+      PALETTE.BORDER_BRONZE
+    );
 
     const soulsBarY = topEdge + (isMobile ? 32 : 34);
     const soulsBarH = isMobile ? 24 : 26;
-    this.soulsBgGraphic.clear();
-    this.soulsBgGraphic.fillStyle(0x161d2e, 0.92);
-    this.soulsBgGraphic.fillRoundedRect(leftEdge, soulsBarY, innerW, soulsBarH, 5);
-    this.soulsBgGraphic.lineStyle(1, 0x2b3448, 0.9);
-    this.soulsBgGraphic.strokeRoundedRect(leftEdge, soulsBarY, innerW, soulsBarH, 5);
+    this.drawChamferedBox(
+      this.soulsBgGraphic,
+      leftEdge,
+      soulsBarY,
+      innerW,
+      soulsBarH,
+      5,
+      PALETTE.BG_SURFACE,
+      0.95,
+      PALETTE.BORDER_STEEL,
+      1.2
+    );
+
+    const iconSize = isMobile ? 14 : 16;
+    const iconCenterX = leftEdge + 14;
+    const iconCenterY = soulsBarY + soulsBarH / 2;
+    this.soulsIcon?.setPosition(iconCenterX, iconCenterY).setDisplaySize(iconSize, iconSize);
+    this.soulsFallbackGraphic.setPosition(iconCenterX, iconCenterY);
 
     this.soulsText.setFontSize(isMobile ? 11 : 12);
-    this.soulsText.setPosition(leftEdge + 10, soulsBarY + (isMobile ? 5 : 6));
+    this.soulsText.setPosition(leftEdge + 26, soulsBarY + (isMobile ? 5 : 6));
 
     const introY = soulsBarY + soulsBarH + 7;
     this.introText.setFontSize(isMobile ? 9 : 10);
@@ -558,6 +607,15 @@ export class AltarModal {
     const snap = this.lastSnapshot;
     const isMobile = this.viewport.mode === 'mobile_portrait';
 
+    const hasSoulsIcon =
+      this.soulsIcon !== null &&
+      this.hasTextureFrame(UI_ICONS_KEY, ICON_SOULS_FRAME);
+    this.soulsIcon?.setVisible(hasSoulsIcon);
+    if (hasSoulsIcon && this.soulsIcon) {
+      this.soulsIcon.setFrame(ICON_SOULS_FRAME);
+    }
+    this.soulsFallbackGraphic.setVisible(!hasSoulsIcon);
+
     this.soulsText.setText(`Almas disponíveis: ${snap.souls}`);
     this.setTextClamped(
       this.introText,
@@ -596,19 +654,28 @@ export class AltarModal {
       const btnW = (row.container.getData('btnW') as number) || 92;
       const btnH = (row.container.getData('btnH') as number) || 28;
 
-      row.bg.clear();
-      row.bg.fillStyle(0x141b2d, 0.94);
-      row.bg.fillRoundedRect(-rowW / 2, -rowH / 2, rowW, rowH, 6);
-      row.bg.lineStyle(
-        1.5,
-        isMax ? 0xffd166 : canAfford ? 0x48cae4 : 0x334155,
-        0.92
+      const rowBorder = isMax
+        ? PALETTE.BORDER_BRONZE
+        : canAfford
+          ? PALETTE.BUY_STROKE
+          : PALETTE.BORDER_STEEL;
+
+      this.drawChamferedBox(
+        row.bg,
+        -rowW / 2,
+        -rowH / 2,
+        rowW,
+        rowH,
+        6,
+        PALETTE.BG_SURFACE,
+        0.95,
+        rowBorder,
+        1.5
       );
-      row.bg.strokeRoundedRect(-rowW / 2, -rowH / 2, rowW, rowH, 6);
 
       this.setTextClamped(row.nameText, def.name, 1);
       row.levelText.setText(`Nv. ${level}/${def.maxLevel}`);
-      row.levelText.setColor(isMax ? '#ffd166' : '#cbd5e1');
+      row.levelText.setColor(isMax ? '#f0c46c' : '#cbd5e1');
 
       const bonusStr = this.formatBonusSummary(def.bonusPerLevel, level);
       this.setTextClamped(row.bonusText, bonusStr, 1);
@@ -616,31 +683,43 @@ export class AltarModal {
 
       if (isMax) {
         row.costText.setText('Nível Máximo');
-        row.costText.setColor('#ffd166');
+        row.costText.setColor('#f0c46c');
       } else {
         row.costText.setText(`Custo: ${cost} Almas`);
         row.costText.setColor(canAfford ? '#90e0ef' : '#f87171');
       }
 
-      row.btnBg.clear();
       if (isMax) {
-        row.btnBg.fillStyle(0x1e293b, 0.92);
-        row.btnBg.lineStyle(1, 0x64748b, 0.8);
-        row.btnText.setText('Máximo');
-        row.btnText.setColor('#ffd166');
+        this.drawChamferedButton(
+          row.btnBg,
+          btnW,
+          btnH,
+          5,
+          PALETTE.BG_DEEP,
+          PALETTE.BORDER_BRONZE
+        );
+        row.btnText.setText('Máximo').setColor('#f0c46c');
       } else if (canAfford) {
-        row.btnBg.fillStyle(0x155e75, 0.96);
-        row.btnBg.lineStyle(1.5, 0x48cae4, 1);
-        row.btnText.setText('Aprimorar');
-        row.btnText.setColor('#ffffff');
+        this.drawChamferedButton(
+          row.btnBg,
+          btnW,
+          btnH,
+          5,
+          PALETTE.BUY_FILL,
+          PALETTE.BUY_STROKE
+        );
+        row.btnText.setText('Aprimorar').setColor('#ffffff');
       } else {
-        row.btnBg.fillStyle(0x1e293b, 0.78);
-        row.btnBg.lineStyle(1, 0x475569, 0.75);
-        row.btnText.setText('Aprimorar');
-        row.btnText.setColor('#64748b');
+        this.drawChamferedButton(
+          row.btnBg,
+          btnW,
+          btnH,
+          5,
+          PALETTE.BG_DEEP,
+          PALETTE.BORDER_STEEL
+        );
+        row.btnText.setText('Aprimorar').setColor('#64748b');
       }
-      row.btnBg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 5);
-      row.btnBg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 5);
     }
 
     const showPagination = upgrades.length > MAX_ROWS_PER_PAGE;
@@ -664,12 +743,124 @@ export class AltarModal {
     label: Phaser.GameObjects.Text,
     enabled: boolean
   ): void {
-    bg.clear();
-    bg.fillStyle(enabled ? 0x1e293b : 0x0f172a, 0.95);
-    bg.fillRoundedRect(-34, -12, 68, 24, 4);
-    bg.lineStyle(1, enabled ? 0x64748b : 0x334155, 0.9);
-    bg.strokeRoundedRect(-34, -12, 68, 24, 4);
+    this.drawChamferedButton(
+      bg,
+      68,
+      24,
+      4,
+      enabled ? PALETTE.BG_SURFACE : PALETTE.BG_DEEP,
+      enabled ? PALETTE.BORDER_BRONZE : PALETTE.BORDER_STEEL
+    );
     label.setColor(enabled ? '#f8fafc' : '#475569');
+  }
+
+  private drawChamferedPanel(
+    gfx: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    bevel: number,
+    fillColor: number,
+    fillAlpha: number,
+    outerStroke: number,
+    innerStroke: number
+  ): void {
+    const outerPts = this.getChamferPoints(x, y, w, h, bevel);
+    const innerPts = this.getChamferPoints(x + 4, y + 4, w - 8, h - 8, Math.max(4, bevel - 3));
+
+    gfx.fillStyle(fillColor, fillAlpha);
+    gfx.fillPoints(outerPts, true);
+    gfx.lineStyle(1, innerStroke, 0.7);
+    gfx.strokePoints(innerPts, true, true);
+    gfx.lineStyle(2, outerStroke, 0.96);
+    gfx.strokePoints(outerPts, true, true);
+  }
+
+  private drawChamferedBox(
+    gfx: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    bevel: number,
+    fillColor: number,
+    fillAlpha: number,
+    strokeColor: number,
+    lineWidth: number
+  ): void {
+    gfx.clear();
+    const pts = this.getChamferPoints(x, y, w, h, bevel);
+    gfx.fillStyle(fillColor, fillAlpha);
+    gfx.fillPoints(pts, true);
+    gfx.lineStyle(lineWidth, strokeColor, 0.92);
+    gfx.strokePoints(pts, true, true);
+  }
+
+  private drawChamferedButton(
+    gfx: Phaser.GameObjects.Graphics,
+    w: number,
+    h: number,
+    bevel: number,
+    fillColor: number,
+    strokeColor: number
+  ): void {
+    gfx.clear();
+    const outerPts = this.getChamferPoints(-w / 2, -h / 2, w, h, bevel);
+    const innerPts = this.getChamferPoints(
+      -w / 2 + 2,
+      -h / 2 + 2,
+      Math.max(4, w - 4),
+      Math.max(4, h - 4),
+      Math.max(2, bevel - 1)
+    );
+    gfx.fillStyle(fillColor, 0.95);
+    gfx.fillPoints(outerPts, true);
+    gfx.lineStyle(1, PALETTE.BG_DEEP, 0.85);
+    gfx.strokePoints(innerPts, true, true);
+    gfx.lineStyle(1.5, strokeColor, 0.95);
+    gfx.strokePoints(outerPts, true, true);
+  }
+
+  private drawSoulsFallbackDiamond(): void {
+    this.soulsFallbackGraphic.clear();
+    this.soulsFallbackGraphic.fillStyle(0x90e0ef, 0.95);
+    this.soulsFallbackGraphic.fillPoints(
+      [
+        { x: 0, y: -5 },
+        { x: 5, y: 0 },
+        { x: 0, y: 5 },
+        { x: -5, y: 0 },
+      ],
+      true
+    );
+  }
+
+  private hasTextureFrame(key: string, frame: number): boolean {
+    if (!this.scene.textures?.exists(key)) {
+      return false;
+    }
+    return this.scene.textures.get(key).has(String(frame));
+  }
+
+  private getChamferPoints(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    bevel: number
+  ): Array<{ x: number; y: number }> {
+    const b = Math.min(bevel, w * 0.35, h * 0.35);
+    return [
+      { x: x + b, y },
+      { x: x + w - b, y },
+      { x: x + w, y: y + b },
+      { x: x + w, y: y + h - b },
+      { x: x + w - b, y: y + h },
+      { x: x + b, y: y + h },
+      { x, y: y + h - b },
+      { x, y: y + b },
+    ];
   }
 
   private formatBonusSummary(bonusPerLevel: StatBonus, level: number): string {

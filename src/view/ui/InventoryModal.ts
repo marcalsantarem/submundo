@@ -25,6 +25,7 @@ interface EquipSlotCardView {
   slot: EquipSlot;
   container: Phaser.GameObjects.Container;
   bg: Phaser.GameObjects.Graphics;
+  iconImage: Phaser.GameObjects.Image | null;
   headerText: Phaser.GameObjects.Text;
   powerText: Phaser.GameObjects.Text;
   nameText: Phaser.GameObjects.Text;
@@ -83,6 +84,28 @@ const FORCE_HEX: Record<ForceType, string> = {
 
 const MAX_BAG_ROWS = 4;
 
+const UI_ICONS_KEY = 'ui_icons';
+
+const BAG_ICON_FRAME = 6;
+
+const SLOT_ICON_FRAME: Record<EquipSlot, number> = {
+  weapon: 12,
+  armor: 13,
+  amulet: 14,
+  ring: 15,
+};
+
+const PALETTE = {
+  panelBg: 0x0d0f16,
+  surfaceBg: 0x161924,
+  emptyBg: 0x10131c,
+  bronze: 0x8a7048,
+  steel: 0x525a6e,
+  goldSubtle: 0xc29b61,
+  closeBg: 0x4c1319,
+  closeBorder: 0x9f343e,
+} as const;
+
 export class InventoryModal {
   private readonly scene: Phaser.Scene;
   private readonly callbacks: {
@@ -102,6 +125,7 @@ export class InventoryModal {
   private readonly panelGraphic: Phaser.GameObjects.Graphics;
   private readonly statsBgGraphic: Phaser.GameObjects.Graphics;
 
+  private readonly bagHeaderIcon: Phaser.GameObjects.Image | null;
   private readonly titleText: Phaser.GameObjects.Text;
   private readonly infernoForceText: Phaser.GameObjects.Text;
   private readonly submundoForceText: Phaser.GameObjects.Text;
@@ -187,6 +211,10 @@ export class InventoryModal {
 
     this.panelGraphic = scene.add.graphics();
     this.statsBgGraphic = scene.add.graphics();
+
+    this.bagHeaderIcon = this.hasTextureFrame(UI_ICONS_KEY, BAG_ICON_FRAME)
+      ? scene.add.image(0, 0, UI_ICONS_KEY, BAG_ICON_FRAME).setOrigin(0.5)
+      : null;
 
     this.titleText = scene.add.text(0, 0, 'INVENTÁRIO E EQUIPAMENTOS', {
       fontFamily: 'monospace',
@@ -368,6 +396,11 @@ export class InventoryModal {
       this.backdropZone,
       this.panelGraphic,
       this.statsBgGraphic,
+    ];
+    if (this.bagHeaderIcon) {
+      rootChildren.push(this.bagHeaderIcon);
+    }
+    rootChildren.push(
       this.titleText,
       this.infernoForceText,
       this.submundoForceText,
@@ -379,12 +412,16 @@ export class InventoryModal {
       this.closeBtnContainer,
       this.prevPageContainer,
       this.nextPageContainer,
-      this.pageInfoText,
-    ];
+      this.pageInfoText
+    );
 
     // Build 4 Equipped Slot Cards
     for (const slot of EQUIP_SLOT_ORDER) {
       const bg = scene.add.graphics();
+      const iconFrame = SLOT_ICON_FRAME[slot];
+      const iconImage = this.hasTextureFrame(UI_ICONS_KEY, iconFrame)
+        ? scene.add.image(0, 0, UI_ICONS_KEY, iconFrame).setOrigin(0.5)
+        : null;
       const headerText = scene.add.text(0, 0, SLOT_LABELS[slot], {
         fontFamily: 'monospace',
         fontSize: '10px',
@@ -433,19 +470,19 @@ export class InventoryModal {
         }
       );
 
-      const container = scene.add.container(0, 0, [
-        bg,
-        headerText,
-        powerText,
-        nameText,
-        detailText,
-        hitZone,
-      ]);
+      const cardChildren: Phaser.GameObjects.GameObject[] = [bg];
+      if (iconImage) {
+        cardChildren.push(iconImage);
+      }
+      cardChildren.push(headerText, powerText, nameText, detailText, hitZone);
+
+      const container = scene.add.container(0, 0, cardChildren);
 
       this.slotCards.push({
         slot,
         container,
         bg,
+        iconImage,
         headerText,
         powerText,
         nameText,
@@ -598,29 +635,89 @@ export class InventoryModal {
     const boxH = isMobile ? h - 52 : 510;
 
     this.panelGraphic.clear();
-    this.panelGraphic.fillStyle(0x0f1420, 0.97);
-    this.panelGraphic.fillRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 8);
-    this.panelGraphic.lineStyle(2, 0x3b4252, 1);
-    this.panelGraphic.strokeRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 8);
+    this.fillChamferedRect(
+      this.panelGraphic,
+      -boxW / 2,
+      -boxH / 2,
+      boxW,
+      boxH,
+      10,
+      PALETTE.panelBg,
+      0.97
+    );
+    this.strokeChamferedRect(
+      this.panelGraphic,
+      -boxW / 2,
+      -boxH / 2,
+      boxW,
+      boxH,
+      10,
+      2,
+      PALETTE.bronze,
+      0.95
+    );
+    this.strokeChamferedRect(
+      this.panelGraphic,
+      -boxW / 2 + 4,
+      -boxH / 2 + 4,
+      boxW - 8,
+      boxH - 8,
+      8,
+      1,
+      PALETTE.steel,
+      0.78
+    );
 
     // Header + Close
     const leftEdge = -boxW / 2 + 16;
     const rightEdge = boxW / 2 - 16;
     const topEdge = -boxH / 2 + 14;
 
+    const hasBagIcon =
+      this.bagHeaderIcon !== null &&
+      this.hasTextureFrame(UI_ICONS_KEY, BAG_ICON_FRAME);
+    const bagIconSize = isMobile ? 16 : 18;
+    if (this.bagHeaderIcon) {
+      this.bagHeaderIcon.setVisible(hasBagIcon);
+      if (hasBagIcon) {
+        this.bagHeaderIcon
+          .setFrame(BAG_ICON_FRAME)
+          .setDisplaySize(bagIconSize, bagIconSize)
+          .setPosition(leftEdge + bagIconSize / 2, topEdge + (isMobile ? 8 : 9));
+      }
+    }
+
+    const titleX = hasBagIcon ? leftEdge + bagIconSize + 7 : leftEdge;
     this.titleText.setText(isMobile ? 'INVENTÁRIO' : 'INVENTÁRIO E EQUIPAMENTOS');
     this.titleText.setFontSize(isMobile ? 14 : 15);
-    this.titleText.setPosition(leftEdge, topEdge);
+    this.titleText.setPosition(titleX, topEdge);
 
     const closeW = isMobile ? 72 : 84;
     const closeH = 28;
     this.closeBtnContainer.setPosition(rightEdge - closeW / 2, topEdge + 12);
     this.closeBtnZone.setSize(closeW, closeH);
     this.closeBtnBg.clear();
-    this.closeBtnBg.fillStyle(0x7f1d1d, 0.92);
-    this.closeBtnBg.fillRoundedRect(-closeW / 2, -closeH / 2, closeW, closeH, 5);
-    this.closeBtnBg.lineStyle(1.5, 0xfca5a5, 0.85);
-    this.closeBtnBg.strokeRoundedRect(-closeW / 2, -closeH / 2, closeW, closeH, 5);
+    this.fillChamferedRect(
+      this.closeBtnBg,
+      -closeW / 2,
+      -closeH / 2,
+      closeW,
+      closeH,
+      5,
+      PALETTE.closeBg,
+      0.95
+    );
+    this.strokeChamferedRect(
+      this.closeBtnBg,
+      -closeW / 2,
+      -closeH / 2,
+      closeW,
+      closeH,
+      5,
+      1.5,
+      PALETTE.closeBorder,
+      0.92
+    );
 
     // Active Forces
     const forcesY = topEdge + 22;
@@ -633,10 +730,35 @@ export class InventoryModal {
     const statsH = isMobile ? 34 : 26;
     const innerW = boxW - 32;
     this.statsBgGraphic.clear();
-    this.statsBgGraphic.fillStyle(0x161d2e, 0.92);
-    this.statsBgGraphic.fillRoundedRect(leftEdge, statsY, innerW, statsH, 5);
-    this.statsBgGraphic.lineStyle(1, 0x2b3448, 0.9);
-    this.statsBgGraphic.strokeRoundedRect(leftEdge, statsY, innerW, statsH, 5);
+    this.fillChamferedRect(
+      this.statsBgGraphic,
+      leftEdge,
+      statsY,
+      innerW,
+      statsH,
+      5,
+      PALETTE.surfaceBg,
+      0.94
+    );
+    this.strokeChamferedRect(
+      this.statsBgGraphic,
+      leftEdge,
+      statsY,
+      innerW,
+      statsH,
+      5,
+      1,
+      PALETTE.steel,
+      0.85
+    );
+    // Subtle golden divider below stats strip
+    this.panelGraphic.lineStyle(1, PALETTE.bronze, 0.5);
+    this.panelGraphic.lineBetween(
+      leftEdge,
+      statsY + statsH + 6,
+      rightEdge,
+      statsY + statsH + 6
+    );
     this.statsText.setFontSize(isMobile ? 10 : 11);
     this.statsText.setPosition(leftEdge + 8, statsY + (isMobile ? 5 : 6));
 
@@ -658,6 +780,13 @@ export class InventoryModal {
       });
 
       const bagHeaderY = gridTop + cardH * 2 + 16;
+      this.panelGraphic.lineStyle(1, PALETTE.bronze, 0.45);
+      this.panelGraphic.lineBetween(
+        leftEdge,
+        bagHeaderY - 7,
+        rightEdge,
+        bagHeaderY - 7
+      );
       this.bagHeaderText.setFontSize(10);
       this.bagHeaderText.setPosition(leftEdge, bagHeaderY);
 
@@ -680,6 +809,15 @@ export class InventoryModal {
       const leftColW = 284;
       const rightColLeft = leftEdge + leftColW + 16;
       const rightColW = rightEdge - rightColLeft;
+
+      // Subtle bronze/steel vertical divider between equipped & bag columns
+      this.panelGraphic.lineStyle(1, PALETTE.bronze, 0.45);
+      this.panelGraphic.lineBetween(
+        leftEdge + leftColW + 8,
+        bodyHeaderY,
+        leftEdge + leftColW + 8,
+        boxH / 2 - 14
+      );
 
       this.equippedHeaderText.setFontSize(11);
       this.equippedHeaderText.setPosition(leftEdge, bodyHeaderY);
@@ -749,13 +887,33 @@ export class InventoryModal {
     card.powerText.setFontSize(isMobile ? 9 : 10);
     card.powerText.setPosition(right, top);
 
+    const iconFrame = SLOT_ICON_FRAME[card.slot];
+    const hasIcon =
+      card.iconImage !== null && this.hasTextureFrame(UI_ICONS_KEY, iconFrame);
+    const iconBoxSize = isMobile ? 24 : 34;
+    const iconTop = top + (isMobile ? 16 : 20);
+
+    if (card.iconImage) {
+      card.iconImage.setVisible(hasIcon);
+      if (hasIcon) {
+        const iconDisplay = isMobile ? 20 : 28;
+        card.iconImage
+          .setFrame(iconFrame)
+          .setDisplaySize(iconDisplay, iconDisplay)
+          .setPosition(left + iconBoxSize / 2, iconTop + iconBoxSize / 2);
+      }
+    }
+
+    const textLeft = hasIcon ? left + iconBoxSize + 6 : left;
+    const textWidth = Math.max(64, right - textLeft);
+
     card.nameText.setFontSize(isMobile ? 10 : 11);
-    card.nameText.setWordWrapWidth(w - 16);
-    card.nameText.setPosition(left, top + (isMobile ? 13 : 16));
+    card.nameText.setWordWrapWidth(textWidth);
+    card.nameText.setPosition(textLeft, top + (isMobile ? 13 : 16));
 
     card.detailText.setFontSize(isMobile ? 9 : 10);
-    card.detailText.setWordWrapWidth(w - 16);
-    card.detailText.setPosition(left, top + (isMobile ? 31 : 36));
+    card.detailText.setWordWrapWidth(textWidth);
+    card.detailText.setPosition(textLeft, top + (isMobile ? 31 : 36));
   }
 
   private layoutBagRow(
@@ -833,17 +991,75 @@ export class InventoryModal {
       const item = snap.equipped[card.slot];
       const cardW = (card.container.getData('cardW') as number) || 150;
       const cardH = (card.container.getData('cardH') as number) || 66;
+      const cardLeft = -cardW / 2 + 8;
       const cardTop = -cardH / 2 + 6;
       const cardBottom = cardH / 2 - 5;
+      const iconBoxSize = isMobile ? 24 : 34;
+      const iconTop = cardTop + (isMobile ? 16 : 20);
+      const hasIcon =
+        card.iconImage !== null &&
+        this.hasTextureFrame(UI_ICONS_KEY, SLOT_ICON_FRAME[card.slot]);
 
       card.bg.clear();
       if (item) {
         const borderNum = RARITY_NUM[item.rarity];
         const borderHex = RARITY_HEX[item.rarity];
-        card.bg.fillStyle(0x161f33, 0.95);
-        card.bg.fillRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 6);
-        card.bg.lineStyle(2, borderNum, 0.95);
-        card.bg.strokeRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 6);
+        this.fillChamferedRect(
+          card.bg,
+          -cardW / 2,
+          -cardH / 2,
+          cardW,
+          cardH,
+          6,
+          PALETTE.surfaceBg,
+          0.96
+        );
+        this.strokeChamferedRect(
+          card.bg,
+          -cardW / 2,
+          -cardH / 2,
+          cardW,
+          cardH,
+          6,
+          1.8,
+          borderNum,
+          0.95
+        );
+        this.strokeChamferedRect(
+          card.bg,
+          -cardW / 2 + 2.5,
+          -cardH / 2 + 2.5,
+          cardW - 5,
+          cardH - 5,
+          4.5,
+          0.8,
+          PALETTE.bronze,
+          0.55
+        );
+        if (hasIcon && card.iconImage) {
+          this.fillChamferedRect(
+            card.bg,
+            cardLeft,
+            iconTop,
+            iconBoxSize,
+            iconBoxSize,
+            4,
+            PALETTE.panelBg,
+            0.95
+          );
+          this.strokeChamferedRect(
+            card.bg,
+            cardLeft,
+            iconTop,
+            iconBoxSize,
+            iconBoxSize,
+            4,
+            1.2,
+            borderNum,
+            0.85
+          );
+          card.iconImage.setAlpha(1);
+        }
 
         card.headerText.setText(
           `${SLOT_LABELS[card.slot]} · ${FORCE_LABELS[item.force]}`
@@ -874,10 +1090,51 @@ export class InventoryModal {
         );
         card.detailText.setColor('#cbd5e1');
       } else {
-        card.bg.fillStyle(0x111622, 0.78);
-        card.bg.fillRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 6);
-        card.bg.lineStyle(1, 0x334155, 0.85);
-        card.bg.strokeRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 6);
+        this.fillChamferedRect(
+          card.bg,
+          -cardW / 2,
+          -cardH / 2,
+          cardW,
+          cardH,
+          6,
+          PALETTE.emptyBg,
+          0.84
+        );
+        this.strokeChamferedRect(
+          card.bg,
+          -cardW / 2,
+          -cardH / 2,
+          cardW,
+          cardH,
+          6,
+          1,
+          PALETTE.steel,
+          0.72
+        );
+        if (hasIcon && card.iconImage) {
+          this.fillChamferedRect(
+            card.bg,
+            cardLeft,
+            iconTop,
+            iconBoxSize,
+            iconBoxSize,
+            4,
+            PALETTE.panelBg,
+            0.78
+          );
+          this.strokeChamferedRect(
+            card.bg,
+            cardLeft,
+            iconTop,
+            iconBoxSize,
+            iconBoxSize,
+            4,
+            1,
+            PALETTE.steel,
+            0.55
+          );
+          card.iconImage.setAlpha(0.32);
+        }
 
         card.headerText.setText(SLOT_LABELS[card.slot]);
         card.headerText.setColor('#64748b');
@@ -921,10 +1178,38 @@ export class InventoryModal {
       const borderHex = RARITY_HEX[item.rarity];
 
       row.bg.clear();
-      row.bg.fillStyle(0x141b2d, 0.94);
-      row.bg.fillRoundedRect(-rowW / 2, -rowH / 2, rowW, rowH, 6);
-      row.bg.lineStyle(1.5, borderNum, 0.9);
-      row.bg.strokeRoundedRect(-rowW / 2, -rowH / 2, rowW, rowH, 6);
+      this.fillChamferedRect(
+        row.bg,
+        -rowW / 2,
+        -rowH / 2,
+        rowW,
+        rowH,
+        6,
+        PALETTE.surfaceBg,
+        0.95
+      );
+      this.strokeChamferedRect(
+        row.bg,
+        -rowW / 2,
+        -rowH / 2,
+        rowW,
+        rowH,
+        6,
+        1.5,
+        borderNum,
+        0.9
+      );
+      this.strokeChamferedRect(
+        row.bg,
+        -rowW / 2 + 2,
+        -rowH / 2 + 2,
+        rowW - 4,
+        rowH - 4,
+        4.5,
+        0.7,
+        PALETTE.steel,
+        0.45
+      );
 
       const equippedInSlot = snap.equipped[item.slot];
       const currentScore = equippedInSlot ? equippedInSlot.powerScore : 0;
@@ -991,10 +1276,27 @@ export class InventoryModal {
     enabled: boolean
   ): void {
     bg.clear();
-    bg.fillStyle(enabled ? 0x1e293b : 0x0f172a, 0.95);
-    bg.fillRoundedRect(-34, -13, 68, 26, 4);
-    bg.lineStyle(1, enabled ? 0x64748b : 0x334155, 0.9);
-    bg.strokeRoundedRect(-34, -13, 68, 26, 4);
+    this.fillChamferedRect(
+      bg,
+      -34,
+      -13,
+      68,
+      26,
+      4,
+      enabled ? PALETTE.surfaceBg : PALETTE.panelBg,
+      0.95
+    );
+    this.strokeChamferedRect(
+      bg,
+      -34,
+      -13,
+      68,
+      26,
+      4,
+      1.2,
+      enabled ? PALETTE.bronze : PALETTE.steel,
+      enabled ? 0.92 : 0.45
+    );
     label.setColor(enabled ? '#f8fafc' : '#475569');
   }
 
@@ -1065,5 +1367,61 @@ export class InventoryModal {
   private formatPercent(value: number): string {
     const pct = Math.abs(value) <= 1 ? value * 100 : value;
     return `${Math.round(pct)}%`;
+  }
+
+  private hasTextureFrame(key: string, frame: number): boolean {
+    if (!this.scene.textures.exists(key)) {
+      return false;
+    }
+    return this.scene.textures.get(key).has(String(frame));
+  }
+
+  private buildChamferedPoints(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    bevel: number
+  ): Phaser.Types.Math.Vector2Like[] {
+    const b = Math.min(bevel, w * 0.25, h * 0.25);
+    return [
+      { x: x + b, y },
+      { x: x + w - b, y },
+      { x: x + w, y: y + b },
+      { x: x + w, y: y + h - b },
+      { x: x + w - b, y: y + h },
+      { x: x + b, y: y + h },
+      { x, y: y + h - b },
+      { x, y: y + b },
+    ];
+  }
+
+  private fillChamferedRect(
+    gfx: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    bevel: number,
+    color: number,
+    alpha: number
+  ): void {
+    gfx.fillStyle(color, alpha);
+    gfx.fillPoints(this.buildChamferedPoints(x, y, w, h, bevel), true);
+  }
+
+  private strokeChamferedRect(
+    gfx: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    bevel: number,
+    lineWidth: number,
+    color: number,
+    alpha: number
+  ): void {
+    gfx.lineStyle(lineWidth, color, alpha);
+    gfx.strokePoints(this.buildChamferedPoints(x, y, w, h, bevel), true, true);
   }
 }
