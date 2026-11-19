@@ -90,6 +90,18 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 - **Submundo (`showBleedEffect`):** Impacto carmesim e gotículas descendentes em `#ef4444` / `#991b1b` / `#fca5a5`.
 - **Drops e Coleta (`showLootDropBeam`, `showItemPickupBanner`):** Feixe vertical por raridade (`#e4e4e7`, `#38bdf8`, `#facc15`, `#f97316`) e banner flutuante com contorno `#09090b`.
 
+### 3.3. Masmorra Básica 2.5D (M8 piloto)
+
+Ambiente-piloto (decisão #17) em top-down 2.5D: topo da parede + face frontal de 2 tiles (`wall_face_upper` sobre `wall_face_lower`), piso Abismo de baixa luminância e luz quente das tochas (`#f59e0b` / `#fde047`). Gerado por `python scripts/art/buildDungeonBasic.py` (sheets, manifest e prancha `assets/mockups/preview_m8_dungeon_basic_sheets.png`); mockup `960x540` por `python scripts/art/buildMockupDungeonBasic.py` (`assets/mockups/mockup_m8_dungeon_basic.png`). Exibição 1:1 no mundo (`TILE_DISPLAY_SIZE = 32`), filtro nearest recomendado.
+
+| Key | Arquivo | Dimensões Totais | Frame (`LxA`) | Qtd. Frames | Convenção de Frames (Índice: Nome) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `dungeon_basic_tiles` | `dungeon_basic_tiles.png` | `1088x32` px | `32x32` px | 34 | `0..5: floor_0, floor_1, floor_2, floor_cracked, floor_moss, floor_blood`, `6: wall_top`, `7: wall_top_s`, `8: wall_side_l`, `9: wall_side_r`, `10: wall_bottom`, `11..14: corner_in_tl/tr/bl/br`, `15..18: corner_out_tl/tr/bl/br`, `19: wall_face_upper`, `20: wall_face_lower`, `21: wall_face_upper_cracked`, `22: wall_face_lower_grate`, `23..24: door_arch_l/r`, `25..26: door_open_l/r`, `27..28: door_threshold_l/r`, `29..33: shadow_s, shadow_l, shadow_r, shadow_corner_l, shadow_corner_r` (alfa, sobrepostas ao piso) |
+| `dungeon_basic_props` | `dungeon_basic_props.png` | `352x32` px | `32x32` px | 11 | `0..3: torch_0..3` (animação `torch`, 8 fps, loop), `4: chest_closed`, `5: barrel`, `6: urn`, `7: bones`, `8: rubble`, `9: chain`, `10: skulls_candle` |
+| `dungeon_basic_props_tall` | `dungeon_basic_props_tall.png` | `64x64` px | `32x64` px | 2 | `0: pillar`, `1: pillar_broken` (origem sugerida `0.5, 0.95`) |
+
+- **Montagem da sala:** linha 0 = `corner_in_tl` + `wall_top_s` + `corner_in_tr`; linhas 1–2 = face (porta 2x2 com `door_arch_*`/`door_open_*`); linha 3 = piso com `door_threshold_*` sob a porta e `shadow_s`/`shadow_corner_*`; colunas laterais = `wall_side_l/r` com `shadow_l/r` no piso vizinho; última linha = `corner_in_bl` + `wall_bottom` + `corner_in_br`. Tochas e correntes ficam na linha da `wall_face_upper`.
+
 ---
 
 ## 4. Pipeline e Substituição Futura

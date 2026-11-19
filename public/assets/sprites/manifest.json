@@ -771,6 +771,99 @@
         "slot_helm",
         "slot_boots"
       ]
+    },
+    "dungeon_basic_tiles": {
+      "key": "dungeon_basic_tiles",
+      "file": "dungeon_basic_tiles.png",
+      "width": 1088,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "floor_0",
+        "floor_1",
+        "floor_2",
+        "floor_cracked",
+        "floor_moss",
+        "floor_blood",
+        "wall_top",
+        "wall_top_s",
+        "wall_side_l",
+        "wall_side_r",
+        "wall_bottom",
+        "corner_in_tl",
+        "corner_in_tr",
+        "corner_in_bl",
+        "corner_in_br",
+        "corner_out_tl",
+        "corner_out_tr",
+        "corner_out_bl",
+        "corner_out_br",
+        "wall_face_upper",
+        "wall_face_lower",
+        "wall_face_upper_cracked",
+        "wall_face_lower_grate",
+        "door_arch_l",
+        "door_arch_r",
+        "door_open_l",
+        "door_open_r",
+        "door_threshold_l",
+        "door_threshold_r",
+        "shadow_s",
+        "shadow_l",
+        "shadow_r",
+        "shadow_corner_l",
+        "shadow_corner_r"
+      ]
+    },
+    "dungeon_basic_props": {
+      "key": "dungeon_basic_props",
+      "file": "dungeon_basic_props.png",
+      "width": 352,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "torch_0",
+        "torch_1",
+        "torch_2",
+        "torch_3",
+        "chest_closed",
+        "barrel",
+        "urn",
+        "bones",
+        "rubble",
+        "chain",
+        "skulls_candle"
+      ],
+      "animations": {
+        "torch": {
+          "frames": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "frameRate": 8,
+          "repeat": -1
+        }
+      }
+    },
+    "dungeon_basic_props_tall": {
+      "key": "dungeon_basic_props_tall",
+      "file": "dungeon_basic_props_tall.png",
+      "width": 64,
+      "height": 64,
+      "frameWidth": 32,
+      "frameHeight": 64,
+      "frames": [
+        "pillar",
+        "pillar_broken"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.95
+      }
     }
   }
 }
