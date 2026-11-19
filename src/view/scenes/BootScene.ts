@@ -209,7 +209,7 @@ export class BootScene extends Phaser.Scene {
 
   public create(): void {
     this.ensureFallbackTextures();
-    this.applyLinearFilterToUiTextures();
+    this.applyTextureFilters();
 
     const { width, height } = this.scale;
     this.cameras.main.setBackgroundColor('#09090b');
@@ -237,11 +237,15 @@ export class BootScene extends Phaser.Scene {
     }
   }
 
-  private applyLinearFilterToUiTextures(): void {
-    for (const key of LINEAR_TEXTURE_KEYS) {
-      if (this.textures.exists(key)) {
-        this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);
+  private applyTextureFilters(): void {
+    for (const spec of SPRITESHEET_SPECS) {
+      if (!this.textures.exists(spec.key)) {
+        continue;
       }
+      const mode = LINEAR_TEXTURE_KEYS.includes(spec.key)
+        ? Phaser.Textures.FilterMode.LINEAR
+        : Phaser.Textures.FilterMode.NEAREST;
+      this.textures.get(spec.key).setFilter(mode);
     }
   }
 

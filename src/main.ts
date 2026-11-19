@@ -12,8 +12,13 @@ export function createGameConfig(viewport: ViewportConfig): Phaser.Types.Core.Ga
     width: viewport.width,
     height: viewport.height,
     backgroundColor: '#09090b',
-    pixelArt: true,
+    pixelArt: false,
     roundPixels: true,
+    render: {
+      antialias: true,
+      pixelArt: false,
+      roundPixels: true,
+    },
     input: {
       activePointers: 4,
     },
