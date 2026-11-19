@@ -53,6 +53,13 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
     fallbackColor: 0xdc2626,
   },
   {
+    key: 'skeleton_chief',
+    file: 'assets/sprites/skeleton_chief.png',
+    frameWidth: 80,
+    frameHeight: 80,
+    fallbackColor: 0xdc2626,
+  },
+  {
     key: 'dungeon_tiles',
     file: 'assets/sprites/dungeon_tiles.png',
     frameWidth: 16,
@@ -118,9 +125,37 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
   {
     key: 'cave_bat',
     file: 'assets/sprites/cave_bat.png',
-    frameWidth: 32,
-    frameHeight: 32,
+    frameWidth: 80,
+    frameHeight: 80,
     fallbackColor: 0x7c3aed,
+  },
+  {
+    key: 'slime',
+    file: 'assets/sprites/slime.png',
+    frameWidth: 80,
+    frameHeight: 80,
+    fallbackColor: 0x22c55e,
+  },
+  {
+    key: 'wolf',
+    file: 'assets/sprites/wolf.png',
+    frameWidth: 80,
+    frameHeight: 80,
+    fallbackColor: 0x94a3b8,
+  },
+  {
+    key: 'skeleton',
+    file: 'assets/sprites/skeleton.png',
+    frameWidth: 80,
+    frameHeight: 80,
+    fallbackColor: 0xe2e8f0,
+  },
+  {
+    key: 'skeleton_archer',
+    file: 'assets/sprites/skeleton_archer.png',
+    frameWidth: 80,
+    frameHeight: 80,
+    fallbackColor: 0x65a30d,
   },
   {
     key: 'weapons',
@@ -128,6 +163,20 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
     frameWidth: 48,
     frameHeight: 48,
     fallbackColor: 0x94a3b8,
+  },
+  {
+    key: 'wolf_alpha',
+    file: 'assets/sprites/wolf_alpha.png',
+    frameWidth: 80,
+    frameHeight: 80,
+    fallbackColor: 0x9a3412,
+  },
+  {
+    key: 'karnak',
+    file: 'assets/sprites/karnak.png',
+    frameWidth: 96,
+    frameHeight: 96,
+    fallbackColor: 0x991b1b,
   },
 ];
 
@@ -171,10 +220,10 @@ export class BootScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    if ('HubScene' in this.scene.manager.keys) {
+    if ('DungeonScene' in this.scene.manager.keys) {
+      this.scene.start('DungeonScene', { testArena: true });
+    } else if ('HubScene' in this.scene.manager.keys) {
       this.scene.start('HubScene');
-    } else if ('DungeonScene' in this.scene.manager.keys) {
-      this.scene.start('DungeonScene');
     }
   }
 

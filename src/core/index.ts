@@ -7,10 +7,13 @@ export type ForceType = 'inferno' | 'submundo' | 'empireo' | 'none';
 
 export type MonsterType = 'normal' | 'boss';
 
+export type MonsterAttackType = 'melee' | 'ranged';
+
 export interface MonsterDef {
   id: string;
   name: string;
   type: MonsterType;
+  attackType?: MonsterAttackType;
   maxHp: number;
   attack: number;
   defense: number;

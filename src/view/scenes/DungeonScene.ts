@@ -67,6 +67,7 @@ import {
   CombatVfxManager,
   HERO_WALK_FOOTSTEP_FRAMES,
   registerGameAnimations,
+  resolveMonsterAnimKey,
   spawnFootstepDust,
 } from '../sprites/CombatVfx';
 import { HeroWeaponRig } from '../sprites/HeroWeaponRig';
@@ -80,7 +81,35 @@ import {
 interface MonsterVisual {
   sprite: Phaser.GameObjects.Sprite;
   hpBar: Phaser.GameObjects.Graphics;
+  isActionPlaying?: boolean;
+  isDying?: boolean;
+  deathFinished?: boolean;
 }
+
+const ANIMATED_SPRITESHEET_MONSTERS = new Set<string>([
+  'slime',
+  'cave_bat',
+  'wolf',
+  'skeleton',
+  'skeleton_archer',
+  'skeleton_chief',
+  'wolf_alpha',
+  'karnak',
+]);
+
+const TEST_ARENA_WAVE_1: ReadonlyArray<{ id: string; dx: number; dy: number }> = [
+  { id: 'slime', dx: -160, dy: -110 },
+  { id: 'cave_bat', dx: 160, dy: -110 },
+  { id: 'wolf', dx: -185, dy: 20 },
+  { id: 'skeleton', dx: 185, dy: 20 },
+  { id: 'skeleton_archer', dx: -120, dy: 135 },
+];
+
+const TEST_ARENA_WAVE_2: ReadonlyArray<{ id: string; dx: number; dy: number }> = [
+  { id: 'wolf_alpha', dx: -120, dy: -60 },
+  { id: 'karnak', dx: 120, dy: -60 },
+  { id: 'skeleton_chief', dx: 0, dy: 95 },
+];
 
 interface GroundDrop {
   item: ItemInstance;
@@ -169,6 +198,9 @@ export class DungeonScene extends Phaser.Scene {
   private roomClearTimerMs = 0;
   private bannerText?: string;
   private bannerExpiresAtMs = 0;
+  private isTestArena = false;
+  private testArenaWave = 1;
+  private testArenaWave2TriggerAtMs?: number;
   private runSeedCounter = 1337;
   private lootSummaryText?: string;
   private runLootResolved = false;
@@ -186,8 +218,14 @@ export class DungeonScene extends Phaser.Scene {
   public create(data?: {
     profileSnapshot?: SaveProfile;
     stageId?: CampaignStageId;
+    testArena?: boolean;
   }): void {
-    this.cameras.main.setBackgroundColor('#09090b');
+    this.isTestArena = Boolean(data?.testArena);
+    this.testArenaWave = 1;
+    this.testArenaWave2TriggerAtMs = undefined;
+    this.cameras.main.setBackgroundColor(
+      this.isTestArena ? '#000000' : '#09090b'
+    );
     this.ensureCampaignFallbackTextures();
     registerGameAnimations(this);
 
@@ -271,6 +309,9 @@ export class DungeonScene extends Phaser.Scene {
       this.lastHeroFootstepFrame = -1;
       this.bannerText = undefined;
       this.bannerExpiresAtMs = 0;
+      this.isTestArena = false;
+      this.testArenaWave = 1;
+      this.testArenaWave2TriggerAtMs = undefined;
       this.cameraRig?.destroy();
       this.cameraRig = undefined;
       this.inventoryModal?.destroy();
@@ -336,7 +377,9 @@ export class DungeonScene extends Phaser.Scene {
       this.runState.elapsedMs += clampedDelta;
 
       moveHero(this.hero, moveDir, clampedDelta, bounds);
-      this.collectNearbyDrops();
+      if (!this.isTestArena) {
+        this.collectNearbyDrops();
+      }
 
       const events = tickCombat(
         this.hero,
@@ -346,7 +389,11 @@ export class DungeonScene extends Phaser.Scene {
       );
       this.processCombatEvents(events);
       this.checkAndUpdateRoomState(nowMs);
-    } else if (this.runState.status === 'room_cleared' && this.hero.isAlive) {
+    } else if (
+      !this.isTestArena &&
+      this.runState.status === 'room_cleared' &&
+      this.hero.isAlive
+    ) {
       moveHero(this.hero, moveDir, clampedDelta, bounds);
       this.collectNearbyDrops();
       this.roomClearTimerMs -= clampedDelta;
@@ -471,12 +518,22 @@ export class DungeonScene extends Phaser.Scene {
   private startNewRun(data?: {
     profileSnapshot?: SaveProfile;
     stageId?: CampaignStageId;
+    testArena?: boolean;
   }): void {
     const width = this.scale.width || 800;
     const height = this.scale.height || 600;
 
+    this.isTestArena = Boolean(data?.testArena);
+    this.testArenaWave = 1;
+    this.testArenaWave2TriggerAtMs = undefined;
+    this.cameras.main.setBackgroundColor(
+      this.isTestArena ? '#000000' : '#09090b'
+    );
+
     this.elapsedTimeMs = 0;
     this.roomClearTimerMs = 0;
+    this.bannerText = undefined;
+    this.bannerExpiresAtMs = 0;
     this.lootSummaryText = undefined;
     this.runLootResolved = false;
     this.essencesCollected = 0;
@@ -517,7 +574,9 @@ export class DungeonScene extends Phaser.Scene {
     this.recalculateHeroGear();
 
     const heroKey: 'hero_living' | 'hero_wraith' =
-      this.activeStage.phase === 'prologue' ? 'hero_living' : 'hero_wraith';
+      this.isTestArena || this.activeStage.phase === 'prologue'
+        ? 'hero_living'
+        : 'hero_wraith';
     this.heroSpriteKey = heroKey;
     this.isHeroActionAnimPlaying = false;
     this.currentHeroActionAnim = null;
@@ -555,19 +614,21 @@ export class DungeonScene extends Phaser.Scene {
 
     this.loadCurrentRoom();
 
-    const introDialogueId =
-      this.activeStage.introDialogueIds[
-        this.activeStage.introDialogueIds.length - 1
-      ];
-    const introDialogue = introDialogueId
-      ? getDialogueLine(introDialogueId)
-      : null;
-    this.showTimedBanner(
-      introDialogue?.shortText ??
-        introDialogue?.text ??
-        dialoguesData.entries.dungeon_enter.shortText,
-      3200
-    );
+    if (!this.isTestArena) {
+      const introDialogueId =
+        this.activeStage.introDialogueIds[
+          this.activeStage.introDialogueIds.length - 1
+        ];
+      const introDialogue = introDialogueId
+        ? getDialogueLine(introDialogueId)
+        : null;
+      this.showTimedBanner(
+        introDialogue?.shortText ??
+          introDialogue?.text ??
+          dialoguesData.entries.dungeon_enter.shortText,
+        3200
+      );
+    }
     this.syncVisuals(this.elapsedTimeMs);
     this.updateHud(this.elapsedTimeMs);
   }
@@ -595,6 +656,13 @@ export class DungeonScene extends Phaser.Scene {
       x: Math.round(width / 2),
       y: Math.round(height / 2),
     };
+
+    if (this.isTestArena) {
+      this.testArenaWave = 1;
+      this.testArenaWave2TriggerAtMs = undefined;
+      this.spawnTestArenaWave(TEST_ARENA_WAVE_1, 1);
+      return;
+    }
 
     const difficultyScale =
       currentRoom.difficultyScale ?? this.activeStage?.difficultyScale ?? 1;
@@ -627,23 +695,7 @@ export class DungeonScene extends Phaser.Scene {
     });
 
     for (const monster of this.monsters) {
-      const isAbyssHerald = monster.defId === 'abyss_herald';
-      const sprite = this.add
-        .sprite(monster.position.x, monster.position.y, monster.spriteKey, 0)
-        .setScale(isAbyssHerald ? 1.75 : 1.5)
-        .setDepth(monster.type === 'boss' ? 19 : 18);
-
-      if (isAbyssHerald) {
-        sprite.setTint(0xdc2626);
-      }
-
-      const animKey = this.resolveMonsterIdleAnim(monster.spriteKey);
-      if (animKey && this.anims.exists(animKey)) {
-        sprite.play(animKey, true);
-      }
-
-      const hpBar = this.add.graphics().setDepth(25);
-      this.monsterVisuals.set(monster.instanceId, { sprite, hpBar });
+      this.createMonsterVisual(monster);
     }
 
     if (currentRoom.isBossRoom) {
@@ -666,6 +718,38 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
+  private createMonsterVisual(monster: MonsterInstance): void {
+    const isAbyssHerald = monster.defId === 'abyss_herald';
+    const isAnimatedSpritesheet = ANIMATED_SPRITESHEET_MONSTERS.has(
+      monster.spriteKey
+    );
+    const scale =
+      monster.spriteKey === 'karnak'
+        ? 1.06
+        : isAnimatedSpritesheet
+          ? 0.88
+          : isAbyssHerald
+            ? 1.75
+            : 1.5;
+
+    const sprite = this.add
+      .sprite(monster.position.x, monster.position.y, monster.spriteKey, 0)
+      .setScale(scale)
+      .setDepth(monster.type === 'boss' ? 19 : 18);
+
+    if (isAbyssHerald) {
+      sprite.setTint(0xdc2626);
+    }
+
+    const idleKey = resolveMonsterAnimKey(monster.spriteKey, 'idle');
+    if (idleKey && this.anims.exists(idleKey)) {
+      sprite.play(idleKey, true);
+    }
+
+    const hpBar = this.add.graphics().setDepth(25);
+    this.monsterVisuals.set(monster.instanceId, { sprite, hpBar });
+  }
+
   private buildArenaTilesAndLighting(
     width: number,
     height: number,
@@ -674,6 +758,11 @@ export class DungeonScene extends Phaser.Scene {
     biome?: BiomeId
   ): void {
     this.arenaLayer.removeAll(true);
+
+    if (this.isTestArena) {
+      this.lightingGraphics.clear();
+      return;
+    }
 
     const activeBiome: BiomeId =
       biome ?? this.activeStage?.biome ?? 'submundo_abyss';
@@ -949,14 +1038,55 @@ export class DungeonScene extends Phaser.Scene {
         }
 
         case 'hero_damaged': {
-          soundManager.play('hit_player');
-          this.vfx.showDamageNumber(
-            event.position.x,
-            event.position.y,
-            event.value ?? 1,
-            false,
-            true
+          if (!this.isTestArena) {
+            soundManager.play('hit_player');
+            this.vfx.showDamageNumber(
+              event.position.x,
+              event.position.y,
+              event.value ?? 1,
+              false,
+              true
+            );
+          }
+          const attacker = this.monsters.find(
+            (m) => m.instanceId === event.sourceId
           );
+          const attackerVisual = attacker
+            ? this.monsterVisuals.get(attacker.instanceId)
+            : undefined;
+          if (
+            attacker &&
+            attacker.isAlive &&
+            attackerVisual &&
+            !attackerVisual.isDying
+          ) {
+            const attackAnim = resolveMonsterAnimKey(
+              attacker.spriteKey,
+              'attack'
+            );
+            if (
+              attackAnim &&
+              attackAnim.endsWith('_attack') &&
+              this.anims.exists(attackAnim)
+            ) {
+              attackerVisual.isActionPlaying = true;
+              attackerVisual.sprite.play(attackAnim, true);
+              attackerVisual.sprite.once(
+                Phaser.Animations.Events.ANIMATION_COMPLETE,
+                () => {
+                  attackerVisual.isActionPlaying = false;
+                }
+              );
+            }
+            if (attacker.attackType === 'ranged') {
+              this.spawnRangedArrow(attacker.position, this.hero.position);
+            }
+          }
+          if (this.isTestArena) {
+            this.hero.stats.hp = this.hero.stats.maxHp;
+            this.hero.isAlive = true;
+            break;
+          }
           this.playHeroActionAnim('hit');
           if (this.heroSprite && this.hero.isAlive) {
             this.heroSprite.setTint(0xfca5a5);
@@ -970,6 +1100,11 @@ export class DungeonScene extends Phaser.Scene {
         }
 
         case 'hero_killed': {
+          if (this.isTestArena) {
+            this.hero.stats.hp = this.hero.stats.maxHp;
+            this.hero.isAlive = true;
+            return;
+          }
           this.cancelHeroActionAnim();
           this.lastHeroFootstepFrame = -1;
           this.heroSprite?.stop();
@@ -1012,7 +1147,58 @@ export class DungeonScene extends Phaser.Scene {
     );
   }
 
+  private spawnTestArenaWave(
+    spawns: ReadonlyArray<{ id: string; dx: number; dy: number }>,
+    waveNum: number
+  ): void {
+    const width = this.scale.width || 800;
+    const height = this.scale.height || 600;
+    this.monsters = [];
+    for (const spec of spawns) {
+      const def = this.monsterDefMap.get(spec.id);
+      if (!def) {
+        continue;
+      }
+      const clampedX = Math.max(
+        ARENA_PADDING,
+        Math.min(width - ARENA_PADDING, this.hero.position.x + spec.dx)
+      );
+      const clampedY = Math.max(
+        ARENA_PADDING + 24,
+        Math.min(height - ARENA_PADDING - 24, this.hero.position.y + spec.dy)
+      );
+      const monster = spawnMonster(
+        def,
+        `test_w${waveNum}_${spec.id}`,
+        { x: clampedX, y: clampedY }
+      );
+      this.monsters.push(monster);
+      this.createMonsterVisual(monster);
+    }
+  }
+
   private checkAndUpdateRoomState(nowMs: number): void {
+    if (this.isTestArena) {
+      if (this.bannerText && nowMs >= this.bannerExpiresAtMs) {
+        this.bannerText = undefined;
+      }
+      if (
+        this.testArenaWave === 1 &&
+        this.monsters.length > 0 &&
+        this.monsters.every((m) => !m.isAlive)
+      ) {
+        if (this.testArenaWave2TriggerAtMs === undefined) {
+          this.testArenaWave2TriggerAtMs = nowMs + 650;
+        } else if (nowMs >= this.testArenaWave2TriggerAtMs) {
+          this.testArenaWave = 2;
+          this.testArenaWave2TriggerAtMs = undefined;
+          this.spawnTestArenaWave(TEST_ARENA_WAVE_2, 2);
+          this.showTimedBanner('Onda 2: Bosses & Esqueleto Chefe!', 2500);
+        }
+      }
+      return;
+    }
+
     const livingMonsters = this.monsters.filter((m) => m.isAlive).length;
     const previousStatus = this.runState.status;
     const nextStatus = evaluateRoomState(
@@ -1227,14 +1413,48 @@ export class DungeonScene extends Phaser.Scene {
     // Sync Monster Sprites & Individual HP Bars
     for (const monster of this.monsters) {
       const visual = this.monsterVisuals.get(monster.instanceId);
-      if (!visual) {
+      if (!visual || visual.deathFinished) {
         continue;
       }
 
       if (!monster.isAlive || monster.hp <= 0) {
-        visual.sprite.setVisible(false);
         visual.hpBar.clear();
         visual.hpBar.setVisible(false);
+
+        if (!visual.isDying) {
+          const deathAnim = resolveMonsterAnimKey(monster.spriteKey, 'death');
+          if (
+            deathAnim &&
+            deathAnim.endsWith('_death') &&
+            this.anims.exists(deathAnim)
+          ) {
+            visual.isDying = true;
+            visual.isActionPlaying = false;
+            visual.sprite.setVisible(true);
+            visual.sprite.play(deathAnim, true);
+            visual.sprite.once(
+              Phaser.Animations.Events.ANIMATION_COMPLETE,
+              () => {
+                if (!visual.sprite.scene) {
+                  return;
+                }
+                this.tweens.add({
+                  targets: visual.sprite,
+                  alpha: 0,
+                  duration: 250,
+                  ease: 'Quad.easeOut',
+                  onComplete: () => {
+                    visual.deathFinished = true;
+                    visual.sprite.setVisible(false);
+                  },
+                });
+              }
+            );
+          } else {
+            visual.deathFinished = true;
+            visual.sprite.setVisible(false);
+          }
+        }
         continue;
       }
 
@@ -1242,10 +1462,37 @@ export class DungeonScene extends Phaser.Scene {
       visual.sprite.setPosition(monster.position.x, monster.position.y);
       visual.sprite.setFlipX(this.hero.position.x < monster.position.x);
 
+      if (!visual.isActionPlaying) {
+        const dist = distanceBetween(monster.position, this.hero.position);
+        const desiredState = dist > monster.attackRange ? 'walk' : 'idle';
+        const animKey = resolveMonsterAnimKey(monster.spriteKey, desiredState);
+        if (
+          animKey &&
+          this.anims.exists(animKey) &&
+          visual.sprite.anims.currentAnim?.key !== animKey
+        ) {
+          visual.sprite.play(animKey, true);
+        }
+      }
+
       const isBoss = monster.type === 'boss';
+      const isAnimatedSpritesheet = ANIMATED_SPRITESHEET_MONSTERS.has(
+        monster.spriteKey
+      );
       const barWidth = isBoss ? 56 : 34;
       const barHeight = isBoss ? 6 : 4;
-      const offsetY = isBoss ? 44 : 26;
+      const offsetY =
+        monster.spriteKey === 'karnak'
+          ? 56
+          : monster.spriteKey === 'wolf_alpha'
+            ? 40
+            : monster.spriteKey === 'skeleton_chief'
+              ? 38
+              : isBoss
+                ? 44
+                : isAnimatedSpritesheet
+                  ? 34
+                  : 26;
       const barX = monster.position.x - barWidth / 2;
       const barY = monster.position.y - offsetY;
       const ratio =
@@ -1749,31 +1996,59 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
-  private resolveMonsterIdleAnim(spriteKey: string): string | null {
-    switch (spriteKey) {
-      case 'abyssal_slime':
-        return 'slime_idle';
-      case 'bone_sentinel':
-        return 'sentinel_idle';
-      case 'infernal_warden':
-        return 'warden_idle';
-      case 'cave_bat':
-        return 'bat_idle';
-      default:
-        return null;
-    }
+  private spawnRangedArrow(from: Vector2D, to: Vector2D): void {
+    const angle = Math.atan2(to.y - from.y, to.x - from.x);
+    const arrow = this.add
+      .graphics({ x: from.x, y: from.y })
+      .setDepth(25)
+      .setRotation(angle);
+
+    arrow.lineStyle(2.5, 0xb45309, 1);
+    arrow.lineBetween(-9, 0, 5, 0);
+    arrow.fillStyle(0xe2e8f0, 1);
+    arrow.fillTriangle(11, 0, 4, -3.5, 4, 3.5);
+    arrow.lineStyle(1.5, 0xfef3c7, 0.9);
+    arrow.lineBetween(-9, 0, -12, -2.5);
+    arrow.lineBetween(-9, 0, -12, 2.5);
+
+    this.tweens.add({
+      targets: arrow,
+      x: to.x,
+      y: to.y,
+      duration: 160,
+      ease: 'Linear',
+      onComplete: () => {
+        arrow.destroy();
+      },
+    });
   }
 
   private ensureCampaignFallbackTextures(): void {
-    if (!this.textures.exists('cave_bat')) {
-      const gfx = this.make.graphics({ x: 0, y: 0 });
-      gfx.fillStyle(0x7c3aed, 1);
-      gfx.fillTriangle(16, 8, 4, 22, 28, 22);
-      gfx.fillStyle(0xfef08a, 1);
-      gfx.fillRect(12, 14, 2, 2);
-      gfx.fillRect(18, 14, 2, 2);
-      gfx.generateTexture('cave_bat', 32, 32);
-      gfx.destroy();
+    const fallbackSpecs: Record<string, { color: number; size: number }> = {
+      slime: { color: 0x22c55e, size: 80 },
+      cave_bat: { color: 0x7c3aed, size: 80 },
+      wolf: { color: 0x64748b, size: 80 },
+      skeleton: { color: 0xe2e8f0, size: 80 },
+      skeleton_archer: { color: 0xcbd5e1, size: 80 },
+      skeleton_chief: { color: 0xf59e0b, size: 80 },
+      wolf_alpha: { color: 0x94a3b8, size: 80 },
+      karnak: { color: 0xef4444, size: 96 },
+    };
+
+    for (const [key, spec] of Object.entries(fallbackSpecs)) {
+      if (!this.textures.exists(key)) {
+        const cx = spec.size / 2;
+        const cy = spec.size / 2 + 4;
+        const radius = spec.size >= 96 ? 22 : 18;
+        const gfx = this.make.graphics({ x: 0, y: 0 });
+        gfx.fillStyle(spec.color, 1);
+        gfx.fillCircle(cx, cy, radius);
+        gfx.fillStyle(0xfef08a, 1);
+        gfx.fillRect(cx - 6, cy - 6, 3, 3);
+        gfx.fillRect(cx + 3, cy - 6, 3, 3);
+        gfx.generateTexture(key, spec.size, spec.size);
+        gfx.destroy();
+      }
     }
   }
 
