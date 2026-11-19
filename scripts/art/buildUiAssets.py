@@ -11,12 +11,18 @@ Saidas:
   - assets/sprites_src/ui/ui_icons_64.png       (1024x64,  16 frames 64x64)
   - assets/sprites_src/ui/portraits_128.png     (1024x128,  8 frames 128x128)
   - assets/mockups/preview_m7_ui_assets.png     (prancha de aprovacao M7)
+  - public/assets/sprites/ui_icons.png          (1024x64,  16 frames 64x64)
+  - public/assets/sprites/portraits.png         (1024x128,  8 frames 128x128)
+  - public/assets/sprites/manifest.json         (entradas ui_icons e portraits)
 """
 
 from __future__ import annotations
 
+import argparse
 from collections import deque
+import json
 import math
+import shutil
 import struct
 import subprocess
 import tempfile
@@ -27,6 +33,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 ROOT = Path(__file__).resolve().parents[2]
 UI_SRC_DIR = ROOT / "assets" / "sprites_src" / "ui"
 MOCKUPS_DIR = ROOT / "assets" / "mockups"
+PUBLIC_SPRITES_DIR = ROOT / "public" / "assets" / "sprites"
 
 ICONS_RAW_JPG = UI_SRC_DIR / "ui_icons_raw.jpg"
 PORTRAITS_RAW_JPG = UI_SRC_DIR / "portraits_raw.jpg"
@@ -34,6 +41,10 @@ PORTRAITS_RAW_JPG = UI_SRC_DIR / "portraits_raw.jpg"
 ICONS_OUT_PNG = UI_SRC_DIR / "ui_icons_64.png"
 PORTRAITS_OUT_PNG = UI_SRC_DIR / "portraits_128.png"
 PREVIEW_OUT_PNG = MOCKUPS_DIR / "preview_m7_ui_assets.png"
+
+PUBLIC_ICONS_PNG = PUBLIC_SPRITES_DIR / "ui_icons.png"
+PUBLIC_PORTRAITS_PNG = PUBLIC_SPRITES_DIR / "portraits.png"
+MANIFEST_JSON = PUBLIC_SPRITES_DIR / "manifest.json"
 
 ICON_NAMES: Tuple[str, ...] = (
     "attack",
@@ -1167,52 +1178,143 @@ def build_approval_sheet(icon_frames: List[Canvas], portrait_frames: List[Canvas
 
 
 # ---------------------------------------------------------------------------
+# Publicacao Oficial em public/assets/sprites/ & Manifest
+# ---------------------------------------------------------------------------
+
+def read_png_ihdr(path: Path) -> Tuple[int, int, int, int]:
+    """Retorna (width, height, bit_depth, color_type) a partir do chunk IHDR."""
+    data = path.read_bytes()
+    if len(data) < 33 or data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
+        raise ValueError(f"PNG/IHDR invalido: {path}")
+    w, h, bit_depth, color_type = struct.unpack(">IIBB", data[16:26])
+    return (w, h, bit_depth, color_type)
+
+
+def update_manifest() -> None:
+    """Atualiza as entradas `portraits` e `ui_icons` em public/assets/sprites/manifest.json."""
+    raw_bytes = MANIFEST_JSON.read_bytes()
+    newline = "\r\n" if b"\r\n" in raw_bytes else "\n"
+    manifest = json.loads(raw_bytes.decode("utf-8"))
+    sprites = manifest.setdefault("sprites", {})
+
+    sprites["portraits"] = {
+        "key": "portraits",
+        "file": "portraits.png",
+        "width": 1024,
+        "height": 128,
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "frames": list(PORTRAIT_NAMES),
+    }
+    sprites["ui_icons"] = {
+        "key": "ui_icons",
+        "file": "ui_icons.png",
+        "width": 1024,
+        "height": 64,
+        "frameWidth": 64,
+        "frameHeight": 64,
+        "frames": list(ICON_NAMES),
+    }
+
+    serialized = json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
+    if newline == "\r\n":
+        serialized = serialized.replace("\n", "\r\n")
+    MANIFEST_JSON.write_bytes(serialized.encode("utf-8"))
+    print(f"Atualizado: {MANIFEST_JSON}")
+
+
+def publish_assets() -> None:
+    """Publica ui_icons.png (1024x64) e portraits.png (1024x128) em public/assets/sprites/."""
+    for src, dst, exp_w, exp_h in (
+        (ICONS_OUT_PNG, PUBLIC_ICONS_PNG, 1024, 64),
+        (PORTRAITS_OUT_PNG, PUBLIC_PORTRAITS_PNG, 1024, 128),
+    ):
+        if not src.exists():
+            raise FileNotFoundError(f"PNG fonte nao encontrado para publicacao: {src}")
+        w, h, bd, ct = read_png_ihdr(src)
+        if (w, h, bd, ct) != (exp_w, exp_h, 8, 6):
+            raise ValueError(
+                f"IHDR inesperado em {src}: {w}x{h} bd={bd} ct={ct} "
+                f"(esperado {exp_w}x{exp_h} bd=8 ct=6)"
+            )
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src, dst)
+        pw, ph, pbd, pct = read_png_ihdr(dst)
+        print(f"Publicado: {dst} ({pw}x{ph}, {pbd}-bit RGBA, ct={pct})")
+
+    update_manifest()
+
+
+# ---------------------------------------------------------------------------
 # Pipeline Principal
 # ---------------------------------------------------------------------------
 
-def main() -> None:
-    print("Carregando fontes JPG via PowerShell System.Drawing...")
-    icons_raw = load_jpg_as_canvas(ICONS_RAW_JPG)
-    portraits_raw = load_jpg_as_canvas(PORTRAITS_RAW_JPG)
-    print(f"  ui_icons_raw: {icons_raw.w}x{icons_raw.h}")
-    print(f"  portraits_raw: {portraits_raw.w}x{portraits_raw.h}")
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Gera e publica ui_icons.png (1024x64) e portraits.png (1024x128)."
+    )
+    parser.add_argument(
+        "--publish-only",
+        action="store_true",
+        help="Publica em public/assets/sprites/ e atualiza manifest.json a partir dos PNGs aprovados em assets/sprites_src/ui/.",
+    )
+    parser.add_argument(
+        "--no-publish",
+        action="store_true",
+        help="Gera apenas os PNGs e a prancha de aprovacao em assets/, sem publicar em public/assets/sprites/.",
+    )
+    return parser.parse_args(argv)
 
-    # 1. Processar 16 icones 64x64 -> 1024x64
-    icon_cells = split_grid_smart(icons_raw, cols=4, rows=4)
-    icon_frames: List[Canvas] = []
-    icons_sheet = Canvas(16 * 64, 64)
-    for idx, (name, cell) in enumerate(zip(ICON_NAMES, icon_cells)):
-        clean = remove_background_with_glow(
-            cell,
-            glow_spec=ICON_GLOW_SPEC[name],
-            hole_seeds=ICON_HOLE_SEEDS.get(name, ()),
-        )
-        frame = fit_centered_frame(clean, frame_size=64, max_extent=56, glow_margin=2)
-        icon_frames.append(frame)
-        icons_sheet.blit(frame, idx * 64, 0, blend=False)
-    write_png(ICONS_OUT_PNG, icons_sheet)
-    print(f"Gerado: {ICONS_OUT_PNG} ({icons_sheet.w}x{icons_sheet.h})")
 
-    # 2. Processar 8 retratos 128x128 -> 1024x128
-    portrait_cells = split_grid_smart(portraits_raw, cols=4, rows=2)
-    portrait_frames: List[Canvas] = []
-    portraits_sheet = Canvas(8 * 128, 128)
-    for idx, (name, cell) in enumerate(zip(PORTRAIT_NAMES, portrait_cells)):
-        clean = remove_background_with_glow(
-            cell,
-            glow_spec=PORTRAIT_GLOW_SPEC[name],
-            hole_seeds=PORTRAIT_HOLE_SEEDS.get(name, ()),
-        )
-        frame = fit_centered_frame(clean, frame_size=128, max_extent=118, glow_margin=3)
-        portrait_frames.append(frame)
-        portraits_sheet.blit(frame, idx * 128, 0, blend=False)
-    write_png(PORTRAITS_OUT_PNG, portraits_sheet)
-    print(f"Gerado: {PORTRAITS_OUT_PNG} ({portraits_sheet.w}x{portraits_sheet.h})")
+def main(argv: Optional[Sequence[str]] = None) -> None:
+    args = parse_args(argv)
 
-    # 3. Gerar prancha de aprovacao M7
-    preview = build_approval_sheet(icon_frames, portrait_frames)
-    write_png(PREVIEW_OUT_PNG, preview)
-    print(f"Gerado: {PREVIEW_OUT_PNG} ({preview.w}x{preview.h})")
+    if not args.publish_only:
+        print("Carregando fontes JPG via PowerShell System.Drawing...")
+        icons_raw = load_jpg_as_canvas(ICONS_RAW_JPG)
+        portraits_raw = load_jpg_as_canvas(PORTRAITS_RAW_JPG)
+        print(f"  ui_icons_raw: {icons_raw.w}x{icons_raw.h}")
+        print(f"  portraits_raw: {portraits_raw.w}x{portraits_raw.h}")
+
+        # 1. Processar 16 icones 64x64 -> 1024x64
+        icon_cells = split_grid_smart(icons_raw, cols=4, rows=4)
+        icon_frames: List[Canvas] = []
+        icons_sheet = Canvas(16 * 64, 64)
+        for idx, (name, cell) in enumerate(zip(ICON_NAMES, icon_cells)):
+            clean = remove_background_with_glow(
+                cell,
+                glow_spec=ICON_GLOW_SPEC[name],
+                hole_seeds=ICON_HOLE_SEEDS.get(name, ()),
+            )
+            frame = fit_centered_frame(clean, frame_size=64, max_extent=56, glow_margin=2)
+            icon_frames.append(frame)
+            icons_sheet.blit(frame, idx * 64, 0, blend=False)
+        write_png(ICONS_OUT_PNG, icons_sheet)
+        print(f"Gerado: {ICONS_OUT_PNG} ({icons_sheet.w}x{icons_sheet.h})")
+
+        # 2. Processar 8 retratos 128x128 -> 1024x128
+        portrait_cells = split_grid_smart(portraits_raw, cols=4, rows=2)
+        portrait_frames: List[Canvas] = []
+        portraits_sheet = Canvas(8 * 128, 128)
+        for idx, (name, cell) in enumerate(zip(PORTRAIT_NAMES, portrait_cells)):
+            clean = remove_background_with_glow(
+                cell,
+                glow_spec=PORTRAIT_GLOW_SPEC[name],
+                hole_seeds=PORTRAIT_HOLE_SEEDS.get(name, ()),
+            )
+            frame = fit_centered_frame(clean, frame_size=128, max_extent=118, glow_margin=3)
+            portrait_frames.append(frame)
+            portraits_sheet.blit(frame, idx * 128, 0, blend=False)
+        write_png(PORTRAITS_OUT_PNG, portraits_sheet)
+        print(f"Gerado: {PORTRAITS_OUT_PNG} ({portraits_sheet.w}x{portraits_sheet.h})")
+
+        # 3. Gerar prancha de aprovacao M7
+        preview = build_approval_sheet(icon_frames, portrait_frames)
+        write_png(PREVIEW_OUT_PNG, preview)
+        print(f"Gerado: {PREVIEW_OUT_PNG} ({preview.w}x{preview.h})")
+
+    if not args.no_publish:
+        publish_assets()
 
 
 if __name__ == "__main__":

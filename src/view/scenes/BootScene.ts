@@ -104,8 +104,8 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
   {
     key: 'portraits',
     file: 'assets/sprites/portraits.png',
-    frameWidth: 64,
-    frameHeight: 64,
+    frameWidth: 128,
+    frameHeight: 128,
     fallbackColor: 0x64748b,
   },
   {
@@ -177,6 +177,13 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
     frameWidth: 96,
     frameHeight: 96,
     fallbackColor: 0x991b1b,
+  },
+  {
+    key: 'ui_icons',
+    file: 'assets/sprites/ui_icons.png',
+    frameWidth: 64,
+    frameHeight: 64,
+    fallbackColor: 0x334155,
   },
 ];
 

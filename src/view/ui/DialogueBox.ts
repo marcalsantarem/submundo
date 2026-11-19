@@ -343,7 +343,7 @@ export class DialogueBox {
       this.portraitSprite
         .setPosition(portraitCenterX, portraitCenterY)
         .setFrame(frameIndex)
-        .setScale(isMobile ? 0.94 : 1.18)
+        .setDisplaySize(portraitSize - 8, portraitSize - 8)
         .setVisible(true);
       this.portraitFallbackGraphic.clear();
       this.portraitFallbackText.setVisible(false);

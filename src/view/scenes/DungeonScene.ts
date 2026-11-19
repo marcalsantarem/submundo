@@ -201,6 +201,9 @@ export class DungeonScene extends Phaser.Scene {
   private isTestArena = false;
   private testArenaWave = 1;
   private testArenaWave2TriggerAtMs?: number;
+  private autoAttackEnabled = true;
+  private manualAttackQueued = false;
+  private manualAttackReadyAtMs = 0;
   private runSeedCounter = 1337;
   private lootSummaryText?: string;
   private runLootResolved = false;
@@ -223,6 +226,9 @@ export class DungeonScene extends Phaser.Scene {
     this.isTestArena = Boolean(data?.testArena);
     this.testArenaWave = 1;
     this.testArenaWave2TriggerAtMs = undefined;
+    this.autoAttackEnabled = true;
+    this.manualAttackQueued = false;
+    this.manualAttackReadyAtMs = 0;
     this.cameras.main.setBackgroundColor(
       this.isTestArena ? '#000000' : '#09090b'
     );
@@ -249,6 +255,20 @@ export class DungeonScene extends Phaser.Scene {
       },
       onToggleInventory: () => {
         this.toggleInventoryModal();
+      },
+      onBasicAttack: () => {
+        this.handleManualBasicAttack();
+      },
+      onToggleAutoAttack: () => {
+        this.autoAttackEnabled = !this.autoAttackEnabled;
+        if (this.autoAttackEnabled && this.hero) {
+          this.hero.basicAttackReadyAtMs = Math.min(
+            this.hero.basicAttackReadyAtMs,
+            this.elapsedTimeMs
+          );
+        }
+        soundManager.play('ui_click');
+        this.updateHud(this.elapsedTimeMs);
       },
     });
 
@@ -312,6 +332,9 @@ export class DungeonScene extends Phaser.Scene {
       this.isTestArena = false;
       this.testArenaWave = 1;
       this.testArenaWave2TriggerAtMs = undefined;
+      this.autoAttackEnabled = true;
+      this.manualAttackQueued = false;
+      this.manualAttackReadyAtMs = 0;
       this.cameraRig?.destroy();
       this.cameraRig = undefined;
       this.inventoryModal?.destroy();
@@ -379,6 +402,20 @@ export class DungeonScene extends Phaser.Scene {
       moveHero(this.hero, moveDir, clampedDelta, bounds);
       if (!this.isTestArena) {
         this.collectNearbyDrops();
+      }
+
+      if (!this.autoAttackEnabled) {
+        if (this.manualAttackQueued) {
+          this.manualAttackQueued = false;
+          this.hero.basicAttackReadyAtMs = 0;
+        } else {
+          this.hero.basicAttackReadyAtMs = Math.max(
+            this.hero.basicAttackReadyAtMs,
+            nowMs + 120
+          );
+        }
+      } else {
+        this.manualAttackQueued = false;
       }
 
       const events = tickCombat(
@@ -460,6 +497,75 @@ export class DungeonScene extends Phaser.Scene {
     return events;
   }
 
+  private handleManualBasicAttack(): void {
+    if (
+      !this.hero ||
+      !this.hero.isAlive ||
+      !this.runState ||
+      this.inventoryModal?.isOpen() ||
+      this.runState.status !== 'in_progress'
+    ) {
+      return;
+    }
+
+    const nowMs = this.elapsedTimeMs;
+    if (nowMs < this.manualAttackReadyAtMs) {
+      return;
+    }
+
+    const cooldownMs = Math.max(
+      220,
+      Math.round(this.hero.stats.attackCooldownMs * 0.65)
+    );
+    this.manualAttackReadyAtMs = nowMs + cooldownMs;
+
+    const reach = this.hero.stats.attackRange + 28;
+    let nearestTarget: MonsterInstance | undefined;
+    let nearestDist = Number.POSITIVE_INFINITY;
+    for (const monster of this.monsters) {
+      if (!monster.isAlive || monster.hp <= 0) {
+        continue;
+      }
+      const dist = distanceBetween(this.hero.position, monster.position);
+      if (dist <= reach && dist < nearestDist) {
+        nearestDist = dist;
+        nearestTarget = monster;
+      }
+    }
+
+    if (nearestTarget) {
+      const dx = nearestTarget.position.x - this.hero.position.x;
+      if (
+        Math.abs(dx) > 0.5 &&
+        (!this.heroIsMoving || this.lastMoveDirX === 0)
+      ) {
+        this.heroFlipX = dx < 0;
+        this.heroSprite?.setFlipX(this.heroFlipX);
+      }
+
+      if (this.autoAttackEnabled) {
+        this.hero.basicAttackReadyAtMs = Math.min(
+          this.hero.basicAttackReadyAtMs,
+          nowMs
+        );
+      } else {
+        this.manualAttackQueued = true;
+        this.hero.basicAttackReadyAtMs = 0;
+      }
+
+      if (nearestDist <= this.hero.stats.attackRange) {
+        return;
+      }
+    }
+
+    const facingLeft = this.heroSprite?.flipX ?? this.heroFlipX;
+    soundManager.play('attack');
+    if (!this.heroIsMoving && this.currentHeroActionAnim !== 'dash') {
+      this.playHeroActionAnim('attack');
+    }
+    this.weaponRig?.playAttackSwing(facingLeft, false);
+  }
+
   public forceClearRoom(): void {
     if (!this.runState || !this.hero) {
       return;
@@ -526,6 +632,9 @@ export class DungeonScene extends Phaser.Scene {
     this.isTestArena = Boolean(data?.testArena);
     this.testArenaWave = 1;
     this.testArenaWave2TriggerAtMs = undefined;
+    this.autoAttackEnabled = true;
+    this.manualAttackQueued = false;
+    this.manualAttackReadyAtMs = 0;
     this.cameras.main.setBackgroundColor(
       this.isTestArena ? '#000000' : '#09090b'
     );
@@ -1518,10 +1627,24 @@ export class DungeonScene extends Phaser.Scene {
 
   private updateHud(nowMs: number): void {
     const currentRoom = getCurrentRoom(this.runState);
-    const bossMonster = currentRoom.isBossRoom
-      ? (this.monsters.find((m) => m.type === 'boss') ??
-        this.monsters.find((m) => m.defId === this.activeStage?.bossId))
-      : undefined;
+    const livingBosses = this.monsters.filter(
+      (m) => m.isAlive && m.hp > 0 && m.type === 'boss'
+    );
+    let bossMonster: MonsterInstance | undefined;
+    if (livingBosses.length > 0) {
+      let nearestBossDist = Number.POSITIVE_INFINITY;
+      for (const candidate of livingBosses) {
+        const dist = distanceBetween(this.hero.position, candidate.position);
+        if (dist < nearestBossDist) {
+          nearestBossDist = dist;
+          bossMonster = candidate;
+        }
+      }
+    } else if (currentRoom.isBossRoom) {
+      bossMonster =
+        this.monsters.find((m) => m.type === 'boss') ??
+        this.monsters.find((m) => m.defId === this.activeStage?.bossId);
+    }
 
     const skillCooldownsMs: Record<string, number> = {};
     for (const skill of this.skillsCatalog) {
@@ -1541,13 +1664,50 @@ export class DungeonScene extends Phaser.Scene {
       ['weapon', 'armor', 'amulet', 'ring'] as const
     ).filter((slot) => this.inventory.equipped[slot] !== null).length;
 
+    const heroLevel =
+      1 +
+      (this.activeProfile
+        ? Object.values(this.activeProfile.altarLevels).reduce(
+            (a, b) => a + b,
+            0
+          )
+        : 0);
+
+    const missionObjective = this.isTestArena
+      ? this.testArenaWave >= 2
+        ? 'Arena de Teste — Onda 2 (Bosses)'
+        : 'Arena de Teste — Onda 1 (Monstros)'
+      : `${currentRoom.roomNumber}/${this.runState.totalRooms} — ${currentRoom.title}`;
+
+    const minimap = {
+      heroX: this.hero.position.x,
+      heroY: this.hero.position.y,
+      arenaWidth: this.scale.width || 800,
+      arenaHeight: this.scale.height || 600,
+      enemies: this.monsters
+        .filter((m) => m.isAlive)
+        .map((m) => ({
+          x: m.position.x,
+          y: m.position.y,
+          isBoss: m.type === 'boss',
+        })),
+    };
+
     const snapshot: HudSnapshot = {
       hp: this.hero.stats.hp,
       maxHp: this.hero.stats.maxHp,
       souls: this.hero.souls,
+      essences: this.essencesCollected,
+      heroPortraitFrame: this.heroSpriteKey === 'hero_wraith' ? 1 : 0,
+      heroName: this.heroSpriteKey === 'hero_wraith' ? 'ESPECTRO' : 'GUERREIRO',
+      heroLevel,
+      autoAttackEnabled: this.autoAttackEnabled,
+      isTestArena: this.isTestArena,
+      missionObjective,
+      minimap,
       roomNumber: currentRoom.roomNumber,
       totalRooms: this.runState.totalRooms,
-      isBossRoom: currentRoom.isBossRoom,
+      isBossRoom: currentRoom.isBossRoom || livingBosses.length > 0,
       roomTitle: currentRoom.title,
       stageName: this.activeStage?.name,
       bossHp: bossMonster?.hp,

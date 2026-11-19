@@ -6,7 +6,6 @@ export class VirtualJoystick {
   private viewport: ViewportConfig;
   private baseGraphic: Phaser.GameObjects.Graphics;
   private thumbGraphic: Phaser.GameObjects.Graphics;
-  private hintText: Phaser.GameObjects.Text;
 
   private activePointerId: number | null = null;
   private originX = 0;
@@ -41,16 +40,6 @@ export class VirtualJoystick {
     this.thumbGraphic = scene.add.graphics();
     this.thumbGraphic.setScrollFactor(0);
     this.thumbGraphic.setDepth(1001);
-
-    this.hintText = scene.add
-      .text(0, 0, 'MOVER', {
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        color: '#9aa5b1',
-      })
-      .setOrigin(0.5, 0.5)
-      .setScrollFactor(0)
-      .setDepth(1001);
 
     this.onPointerDownBound = (
       pointer: Phaser.Input.Pointer,
@@ -91,35 +80,39 @@ export class VirtualJoystick {
 
     this.baseGraphic.destroy();
     this.thumbGraphic.destroy();
-    this.hintText.destroy();
   }
 
   private resetRestingPosition(): void {
     if (this.viewport.mode === 'mobile_portrait') {
-      this.originX = 82;
-      this.originY = this.viewport.height - 108;
+      this.originX = 72;
+      this.originY = this.viewport.height - 92;
     } else {
-      this.originX = 96;
-      this.originY = this.viewport.height - 96;
+      this.originX = 88;
+      this.originY = this.viewport.height - 88;
     }
     this.currentX = this.originX;
     this.currentY = this.originY;
   }
 
   private isEligibleTouchZone(x: number, y: number): boolean {
+    const w = this.viewport.width;
+    const h = this.viewport.height;
+
     if (this.viewport.mode === 'mobile_portrait') {
-      const inTopHeader = y < 68;
-      const inActionCluster = x > this.viewport.width * 0.52 && y > this.viewport.height - 210;
-      return !inTopHeader && !inActionCluster;
+      const inTopLeftHero = x < 204 && y < 100;
+      const inTopRightHud = x > w - 164 && y < 120;
+      const inActionCluster = x > w * 0.5 && y > h - 200;
+      return !inTopLeftHero && !inTopRightHud && !inActionCluster;
     }
 
-    const inActionClusterDesktop =
-      x > this.viewport.width - 300 && y > this.viewport.height - 140;
-    if (inActionClusterDesktop) {
+    const inTopLeftHeroDesktop = x < 260 && y < 118;
+    const inTopRightHudDesktop = x > w - 210 && y < 145;
+    const inActionClusterDesktop = x > w - 210 && y > h - 210;
+    if (inTopLeftHeroDesktop || inTopRightHudDesktop || inActionClusterDesktop) {
       return false;
     }
 
-    return x <= this.viewport.width * 0.55 || y >= this.viewport.height * 0.45;
+    return x <= w * 0.55 || y >= h * 0.45;
   }
 
   private syncActivePointer(): void {
@@ -226,22 +219,82 @@ export class VirtualJoystick {
 
   private render(): void {
     const isActive = this.activePointerId !== null;
-    const baseAlpha = isActive ? 0.55 : this.viewport.mode === 'mobile_portrait' ? 0.32 : 0.22;
-    const thumbAlpha = isActive ? 0.85 : this.viewport.mode === 'mobile_portrait' ? 0.48 : 0.32;
+    const isMobile = this.viewport.mode === 'mobile_portrait';
+    const baseFillAlpha = isActive ? 0.52 : isMobile ? 0.34 : 0.22;
+    const ringAlpha = isActive ? 0.85 : isMobile ? 0.52 : 0.34;
+    const innerRingRadius = Math.round(this.maxRadius * 0.54);
 
+    // Outer dark fantasy metallic circular D-pad base
     this.baseGraphic.clear();
-    this.baseGraphic.fillStyle(0x0b0f19, baseAlpha);
+    this.baseGraphic.fillStyle(0x090b10, baseFillAlpha);
     this.baseGraphic.fillCircle(this.originX, this.originY, this.maxRadius);
-    this.baseGraphic.lineStyle(2, 0x48cae4, baseAlpha + 0.15);
+
+    // Subtle dark metallic bevel rings
+    this.baseGraphic.lineStyle(2, isActive ? 0xc9a25e : 0x7c7468, ringAlpha);
     this.baseGraphic.strokeCircle(this.originX, this.originY, this.maxRadius);
+    this.baseGraphic.lineStyle(1, isActive ? 0x38bdf8 : 0x475569, ringAlpha * 0.72);
+    this.baseGraphic.strokeCircle(this.originX, this.originY, this.maxRadius - 3);
 
+    // Inner guide ring
+    this.baseGraphic.lineStyle(1, isActive ? 0x67e8f9 : 0x64748b, ringAlpha * 0.58);
+    this.baseGraphic.strokeCircle(this.originX, this.originY, innerRingRadius);
+
+    // 4 directional cardinal arrows (N / S / E / W)
+    const arrowDist = this.maxRadius - 10;
+    const arrowTipOffset = 5;
+    const arrowHalfBase = 4.2;
+    const dirs: ReadonlyArray<{
+      dx: number;
+      dy: number;
+      active: boolean;
+    }> = [
+      { dx: 0, dy: -1, active: isActive && this.direction.y < -0.35 }, // N
+      { dx: 0, dy: 1, active: isActive && this.direction.y > 0.35 }, // S
+      { dx: 1, dy: 0, active: isActive && this.direction.x > 0.35 }, // E
+      { dx: -1, dy: 0, active: isActive && this.direction.x < -0.35 }, // W
+    ];
+
+    for (const dir of dirs) {
+      const cx = this.originX + dir.dx * arrowDist;
+      const cy = this.originY + dir.dy * arrowDist;
+      const tipX = cx + dir.dx * arrowTipOffset;
+      const tipY = cy + dir.dy * arrowTipOffset;
+      const baseX = cx - dir.dx * 2.5;
+      const baseY = cy - dir.dy * 2.5;
+      const perpX = -dir.dy * arrowHalfBase;
+      const perpY = dir.dx * arrowHalfBase;
+
+      const arrowColor = dir.active ? 0x67e8f9 : 0x9ca3af;
+      const arrowAlpha = dir.active ? 0.92 : ringAlpha * 0.75;
+      this.baseGraphic.fillStyle(arrowColor, arrowAlpha);
+      this.baseGraphic.fillTriangle(
+        tipX,
+        tipY,
+        baseX + perpX,
+        baseY + perpY,
+        baseX - perpX,
+        baseY - perpY
+      );
+    }
+
+    // Translucent metallic/spectral thumbstick
+    const thumbRadius = 18;
+    const thumbAlpha = isActive ? 0.88 : isMobile ? 0.46 : 0.3;
     this.thumbGraphic.clear();
-    this.thumbGraphic.fillStyle(0x48cae4, thumbAlpha);
-    this.thumbGraphic.fillCircle(this.currentX, this.currentY, 20);
-    this.thumbGraphic.lineStyle(2, 0xe0fbfc, thumbAlpha);
-    this.thumbGraphic.strokeCircle(this.currentX, this.currentY, 20);
 
-    this.hintText.setPosition(this.originX, this.originY + this.maxRadius + 14);
-    this.hintText.setAlpha(isActive ? 0 : 0.65);
+    if (isActive) {
+      // Soft spectral cyan halo when actively dragging
+      this.thumbGraphic.fillStyle(0x38bdf8, 0.2);
+      this.thumbGraphic.fillCircle(this.currentX, this.currentY, thumbRadius + 5);
+    }
+
+    this.thumbGraphic.fillStyle(isActive ? 0x162436 : 0x1e2430, thumbAlpha);
+    this.thumbGraphic.fillCircle(this.currentX, this.currentY, thumbRadius);
+
+    // Metallic rim + inner specular highlight
+    this.thumbGraphic.lineStyle(2, isActive ? 0x67e8f9 : 0x94a3b8, thumbAlpha);
+    this.thumbGraphic.strokeCircle(this.currentX, this.currentY, thumbRadius);
+    this.thumbGraphic.fillStyle(isActive ? 0xbae6fd : 0xcbd5e1, thumbAlpha * 0.35);
+    this.thumbGraphic.fillCircle(this.currentX - 4, this.currentY - 4, 6);
   }
 }
