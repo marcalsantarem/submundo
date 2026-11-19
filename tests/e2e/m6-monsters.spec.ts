@@ -1,9 +1,16 @@
 import { existsSync, mkdirSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { GAME_VERSION } from '../../src/version';
+import {
+  DESKTOP_VIEWPORT,
+  MOBILE_LANDSCAPE_VIEWPORT,
+  assertLandscapeCanvas,
+  openMobileLandscapePage,
+} from './helpers/landscape';
 
-const SCREENSHOT_DIR = '/tmp/qa-m6';
+const SCREENSHOT_DIR = join(tmpdir(), 'qa-m6');
 
 const M6_MONSTER_SPECS = [
   { key: 'slime', width: 1600, height: 80, frameWidth: 80, frameHeight: 80 },
@@ -23,9 +30,11 @@ const ANIM_STATES = [
   { suffix: 'death', count: 4 },
 ] as const;
 
-test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E', () => {
-  test('validates v0.6.0 testArena boot, #000000 bg, hero_living, 8 textures (frameTotal=21), 32 anims, Wave 1 -> Wave 2 (karnak scale 1.06), PC/Mobile screenshots', async ({
+test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 & Mobile Landscape 844x390)', () => {
+  test('validates testArena boot, #000000 bg, hero_living, 8 textures (frameTotal=21), 32 anims, Wave 1 -> Wave 2 (karnak scale 1.06), PC/Mobile Landscape screenshots', async ({
     page,
+    browser,
+    baseURL,
   }) => {
     mkdirSync(SCREENSHOT_DIR, { recursive: true });
 
@@ -47,7 +56,7 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E', () => {
       }
     });
 
-    await page.setViewportSize({ width: 800, height: 600 });
+    await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto('/');
 
     await expect(page).toHaveTitle(`SUBMUNDO v${GAME_VERSION}`);
@@ -59,6 +68,8 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E', () => {
       undefined,
       { timeout: 10000 }
     );
+
+    await assertLandscapeCanvas(page, DESKTOP_VIEWPORT);
 
     const wave1AndAssets = await page.evaluate((specs) => {
       const dbg = window.__SUBMUNDO_DEBUG__!;
@@ -233,14 +244,54 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E', () => {
     expect(existsSync(pcWave2Path)).toBe(true);
     expect(statSync(pcWave2Path).size).toBeGreaterThan(1024);
 
-    // Mobile portrait viewport (360x640)
-    await page.setViewportSize({ width: 360, height: 640 });
-    await page.waitForTimeout(300);
+    // Mobile Landscape viewport (844x390, hasTouch: true)
+    const { context: mobileContext, page: mobilePage } =
+      await openMobileLandscapePage(browser, {
+        baseURL,
+        consoleErrors,
+        pageErrors,
+        notFoundUrls,
+      });
 
-    const mobileWave2Path = join(SCREENSHOT_DIR, 'm6_mobile_wave2.png');
-    await page.screenshot({ path: mobileWave2Path });
-    expect(existsSync(mobileWave2Path)).toBe(true);
-    expect(statSync(mobileWave2Path).size).toBeGreaterThan(1024);
+    try {
+      await mobilePage.goto('/');
+      await mobilePage.waitForFunction(
+        () =>
+          typeof window.__SUBMUNDO_DEBUG__ !== 'undefined' &&
+          window.__SUBMUNDO_DEBUG__.getMonsters().length === 5,
+        undefined,
+        { timeout: 10000 }
+      );
+
+      await assertLandscapeCanvas(mobilePage, MOBILE_LANDSCAPE_VIEWPORT);
+
+      await mobilePage.evaluate(() => {
+        const monsters = window.__SUBMUNDO_DEBUG__!.getMonsters();
+        for (const m of monsters) {
+          m.hp = 0;
+          m.isAlive = false;
+        }
+      });
+
+      await mobilePage.waitForFunction(
+        () => {
+          const dbg = window.__SUBMUNDO_DEBUG__;
+          if (!dbg) return false;
+          const scene = dbg.scene as unknown as { testArenaWave?: number };
+          return scene.testArenaWave === 2 && dbg.getMonsters().length === 3;
+        },
+        undefined,
+        { timeout: 5000 }
+      );
+
+      await mobilePage.waitForTimeout(200);
+      const mobileWave2Path = join(SCREENSHOT_DIR, 'm6_mobile_wave2.png');
+      await mobilePage.screenshot({ path: mobileWave2Path });
+      expect(existsSync(mobileWave2Path)).toBe(true);
+      expect(statSync(mobileWave2Path).size).toBeGreaterThan(1024);
+    } finally {
+      await mobileContext.close();
+    }
 
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);

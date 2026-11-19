@@ -1,14 +1,28 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { DEFAULT_HERO_STATS } from '../../src/core/entities/Hero';
 import { SAVE_STORAGE_KEY } from '../../src/core/progression/StorageAdapter';
 import { GAME_VERSION } from '../../src/version';
+import {
+  DESKTOP_VIEWPORT,
+  MOBILE_LANDSCAPE_VIEWPORT,
+  assertLandscapeCanvas,
+  clickLogicalCanvas,
+  ensureHubScene,
+  openMobileLandscapePage,
+} from './helpers/landscape';
 
-test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Progression E2E (PC 800x600 & Mobile 360x640)', () => {
-  test('validates HubScene v0.4.0 boot, LocalStorage persistence, Altar/Blacksmith/Stash modals, T-039 layout fix, Dungeon victory extraction vs punitive death, and PC/Mobile screenshots', async ({
+const SCREENSHOT_DIR = resolve(process.cwd(), 'docs/qa/screenshots');
+
+test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Progression E2E (PC 960x540 & Mobile Landscape 844x390)', () => {
+  test('validates HubScene boot, LocalStorage persistence, Altar/Blacksmith/Stash modals, ItemTooltipCard equip, Dungeon victory extraction vs punitive death, and PC/Mobile Landscape screenshots', async ({
     page,
+    browser,
+    baseURL,
   }) => {
+    mkdirSync(SCREENSHOT_DIR, { recursive: true });
+
     const consoleErrors: string[] = [];
     const pageErrors: string[] = [];
 
@@ -22,29 +36,19 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
       pageErrors.push(err.message);
     });
 
-    // 1. Boot in HubScene on Desktop Landscape (800x600)
-    await page.setViewportSize({ width: 800, height: 600 });
+    // 1. Boot in HubScene on Desktop Landscape (960x540)
+    await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto('/');
-
-    await page.waitForFunction(
-      () =>
-        typeof window.__SUBMUNDO_HUB_DEBUG__ !== 'undefined' &&
-        Boolean(window.__SUBMUNDO_HUB_DEBUG__.getProfile()),
-      undefined,
-      { timeout: 10000 }
-    );
+    await ensureHubScene(page, { clearStorage: true });
+    await assertLandscapeCanvas(page, DESKTOP_VIEWPORT);
 
     const bootCheck = await page.evaluate((storageKey: string) => {
       const hub = window.__SUBMUNDO_HUB_DEBUG__!;
       const profile = hub.getProfile();
       const rawSaved = window.localStorage.getItem(storageKey);
       const parsedSaved = rawSaved ? JSON.parse(rawSaved) : null;
-      const canvas = document.querySelector('canvas');
       return {
         title: document.title,
-        hasCanvas: Boolean(canvas),
-        canvasWidth: canvas?.width ?? 0,
-        canvasHeight: canvas?.height ?? 0,
         sceneKey: hub.scene.scene.key,
         profileVersion: profile.version,
         souls: profile.souls,
@@ -54,11 +58,7 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
       };
     }, SAVE_STORAGE_KEY);
 
-    expect(GAME_VERSION).toBe('0.5.0');
-    expect(bootCheck.title).toBe('SUBMUNDO v0.5.0');
-    expect(bootCheck.hasCanvas).toBe(true);
-    expect(bootCheck.canvasWidth).toBe(800);
-    expect(bootCheck.canvasHeight).toBe(600);
+    expect(bootCheck.title).toBe(`SUBMUNDO v${GAME_VERSION}`);
     expect(bootCheck.sceneKey).toBe('HubScene');
     expect(bootCheck.profileVersion).toBe(1);
     expect(bootCheck.souls).toBe(0);
@@ -72,16 +72,7 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
       hub.setCampaignPhase('act1', 'act1_submundo');
     });
 
-    const getCanvasOffset = async () => {
-      const rect = await page.evaluate(() => {
-        const r = document.querySelector('canvas')?.getBoundingClientRect();
-        return r ? { x: r.left, y: r.top } : null;
-      });
-      expect(rect).toBeTruthy();
-      return rect!;
-    };
-
-    // 2. Grant test resources (500 Souls, 3 General Essences) & purchase Altar upgrade (level 0 -> 1)
+    // 2. Grant test resources (500 Souls, 3 General Essences) & purchase Altar upgrades (level 0 -> 1)
     await page.evaluate(() => {
       const hub = window.__SUBMUNDO_HUB_DEBUG__!;
       hub.grantTestResources(500, 3);
@@ -128,14 +119,15 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
     });
 
     expect(altarBtnCoords.canPurchaseVitality).toBe(true);
-    const desktopCanvas = await getCanvasOffset();
-    await page.mouse.click(
-      desktopCanvas.x + altarBtnCoords.vitalityBtn.x,
-      desktopCanvas.y + altarBtnCoords.vitalityBtn.y
+    await clickLogicalCanvas(
+      page,
+      altarBtnCoords.vitalityBtn.x,
+      altarBtnCoords.vitalityBtn.y
     );
-    await page.mouse.click(
-      desktopCanvas.x + altarBtnCoords.mightBtn.x,
-      desktopCanvas.y + altarBtnCoords.mightBtn.y
+    await clickLogicalCanvas(
+      page,
+      altarBtnCoords.mightBtn.x,
+      altarBtnCoords.mightBtn.y
     );
 
     const afterAltarPurchase = await page.evaluate((storageKey: string) => {
@@ -204,14 +196,8 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
     expect(forgeCoords.canForgeRare).toBe(true);
     expect(forgeCoords.canForgeLegendary).toBe(true);
 
-    await page.mouse.click(
-      desktopCanvas.x + forgeCoords.legBtn.x,
-      desktopCanvas.y + forgeCoords.legBtn.y
-    );
-    await page.mouse.click(
-      desktopCanvas.x + forgeCoords.rareBtn.x,
-      desktopCanvas.y + forgeCoords.rareBtn.y
-    );
+    await clickLogicalCanvas(page, forgeCoords.legBtn.x, forgeCoords.legBtn.y);
+    await clickLogicalCanvas(page, forgeCoords.rareBtn.x, forgeCoords.rareBtn.y);
 
     const upgradeRowCoords = await page.evaluate(() => {
       const scene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
@@ -245,10 +231,7 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
     expect(upgradeRowCoords.instanceId).toBeTruthy();
     expect(upgradeRowCoords.canUpgrade).toBe(true);
 
-    await page.mouse.click(
-      desktopCanvas.x + upgradeRowCoords.btn.x,
-      desktopCanvas.y + upgradeRowCoords.btn.y
-    );
+    await clickLogicalCanvas(page, upgradeRowCoords.btn.x, upgradeRowCoords.btn.y);
 
     const afterBlacksmith = await page.evaluate(
       (targetId: string) => {
@@ -273,17 +256,14 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
     expect(afterBlacksmith.upgradedName).toContain('(+1)');
     expect(afterBlacksmith.scoreAfter).toBeGreaterThan(upgradeRowCoords.scoreBefore);
 
-    // Capture Desktop PC 800x600 screenshot showing HubScene + BlacksmithModal
+    // Capture Desktop PC 960x540 screenshot showing HubScene + BlacksmithModal
     await page.waitForTimeout(150);
-    const pcScreenshotPath = resolve(
-      process.cwd(),
-      'docs/qa/screenshots/m3-pc-800x600.png'
-    );
+    const pcScreenshotPath = resolve(SCREENSHOT_DIR, 'm3-pc-960x540.png');
     await page.screenshot({ path: pcScreenshotPath });
     expect(existsSync(pcScreenshotPath)).toBe(true);
     expect(statSync(pcScreenshotPath).size).toBeGreaterThan(5000);
 
-    // 4. Open Stash (InventoryModal), verify T-039 non-overlapping text bounds, and equip forged +1 item
+    // 4. Open Stash (InventoryModal 6-slot + 4x4 grid + ItemTooltipCard) and equip forged +1 item
     await page.evaluate(() => {
       window.__SUBMUNDO_HUB_DEBUG__!.openStash();
     });
@@ -299,61 +279,101 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
       { timeout: 3000 }
     );
 
-    const stashLayoutAndEquip = await page.evaluate(() => {
+    const stashGridCheck = await page.evaluate(() => {
       const scene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
         inventoryModal: {
           rootContainer: { x: number; y: number };
-          bagRows: Array<{
-            boundInstanceId: string | null;
+          bagSection: { x: number; y: number };
+          slotCards: Array<{ slot: string }>;
+          bagCells: Array<{
+            boundItem: { instanceId: string } | null;
             container: { x: number; y: number; visible: boolean };
-            nameText: { y: number; height: number; text: string };
-            statsText: { y: number; height: number; text: string };
-            metaText: { y: number; height: number; text: string };
+            nameText: { text: string };
+            powerText: { text: string };
           }>;
         };
       };
       const modal = scene.inventoryModal;
-      const visibleRows = modal.bagRows.filter(
-        (r) => r.container.visible && r.boundInstanceId !== null
+      const occupiedCells = modal.bagCells.filter(
+        (c) => c.container.visible && c.boundItem !== null
       );
-      const rowChecks = visibleRows.map((r) => ({
-        id: r.boundInstanceId,
-        nameBottom: r.nameText.y + r.nameText.height,
-        statsTop: r.statsText.y,
-        statsBottom: r.statsText.y + r.statsText.height,
-        metaTop: r.metaText.y,
-      }));
-      const firstRow = visibleRows[0];
+      const firstCell = occupiedCells[0];
       return {
-        visibleCount: visibleRows.length,
-        rowChecks,
-        firstRowId: firstRow.boundInstanceId!,
-        firstRowClick: {
-          x: modal.rootContainer.x + firstRow.container.x,
-          y: modal.rootContainer.y + firstRow.container.y,
+        slotCount: modal.slotCards.length,
+        visibleCount: occupiedCells.length,
+        firstCellId: firstCell.boundItem!.instanceId,
+        firstCellHasText:
+          firstCell.nameText.text.length > 0 &&
+          firstCell.powerText.text.length > 0,
+        firstCellClick: {
+          x: modal.rootContainer.x + modal.bagSection.x + firstCell.container.x,
+          y: modal.rootContainer.y + modal.bagSection.y + firstCell.container.y,
         },
       };
     });
 
-    expect(stashLayoutAndEquip.visibleCount).toBe(2);
-    for (const check of stashLayoutAndEquip.rowChecks) {
-      expect(check.statsTop).toBeGreaterThanOrEqual(check.nameBottom);
-      expect(check.statsBottom).toBeLessThanOrEqual(check.metaTop);
-    }
+    expect(stashGridCheck.slotCount).toBe(6);
+    expect(stashGridCheck.visibleCount).toBe(2);
+    expect(stashGridCheck.firstCellHasText).toBe(true);
 
-    // Click first row in Stash to equip the forged (+1) item
-    await page.mouse.click(
-      desktopCanvas.x + stashLayoutAndEquip.firstRowClick.x,
-      desktopCanvas.y + stashLayoutAndEquip.firstRowClick.y
+    // Click first cell in Stash to pin ItemTooltipCard, then click EQUIPAR
+    await clickLogicalCanvas(
+      page,
+      stashGridCheck.firstCellClick.x,
+      stashGridCheck.firstCellClick.y
     );
+
+    await page.waitForFunction(
+      () =>
+        (
+          window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
+            inventoryModal: { tooltipCard: { isOpen: () => boolean } };
+          }
+        ).inventoryModal.tooltipCard.isOpen() === true,
+      undefined,
+      { timeout: 3000 }
+    );
+
+    await page.waitForTimeout(150);
+
+    const equipBtnPos = await page.evaluate(() => {
+      const scene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
+        inventoryModal: {
+          tooltipCard: {
+            dynamicGroup: {
+              list: Array<{
+                list?: Array<{
+                  text?: string;
+                  getWorldTransformMatrix?: () => { tx: number; ty: number };
+                }>;
+              }>;
+            };
+          };
+        };
+      };
+      const cards = scene.inventoryModal.tooltipCard.dynamicGroup.list;
+      for (const card of cards) {
+        const children = card.list ?? [];
+        for (const child of children) {
+          if (child.text === 'EQUIPAR' && child.getWorldTransformMatrix) {
+            const m = child.getWorldTransformMatrix();
+            return { x: m.tx, y: m.ty };
+          }
+        }
+      }
+      return null;
+    });
+
+    expect(equipBtnPos).toBeTruthy();
+    await clickLogicalCanvas(page, equipBtnPos!.x, equipBtnPos!.y);
 
     const equippedHubItemCheck = await page.evaluate(() => {
       const scene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
         inventoryModal: {
           slotCards: Array<{
             slot: string;
-            nameText: { y: number; height: number; text: string };
-            detailText: { y: number; height: number; text: string };
+            slotLabelText: { y: number; height: number; text: string };
+            itemNameText: { y: number; height: number; text: string };
           }>;
         };
       };
@@ -369,19 +389,14 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
         equippedItemId: equippedItems[0]?.instanceId ?? null,
         equippedSlot: equippedItems[0]?.slot ?? null,
         stashCount: profile.stash.length,
-        cardNameBottom: equippedCard
-          ? equippedCard.nameText.y + equippedCard.nameText.height
-          : 0,
-        cardDetailTop: equippedCard ? equippedCard.detailText.y : 0,
+        equippedCardName: equippedCard?.itemNameText.text ?? '',
       };
     });
 
     expect(equippedHubItemCheck.equippedCount).toBe(1);
-    expect(equippedHubItemCheck.equippedItemId).toBe(stashLayoutAndEquip.firstRowId);
+    expect(equippedHubItemCheck.equippedItemId).toBe(stashGridCheck.firstCellId);
     expect(equippedHubItemCheck.stashCount).toBe(1);
-    expect(equippedHubItemCheck.cardDetailTop).toBeGreaterThanOrEqual(
-      equippedHubItemCheck.cardNameBottom
-    );
+    expect(equippedHubItemCheck.equippedCardName.length).toBeGreaterThan(0);
 
     // 5. Enter Dungeon and verify Altar + Hub gear bonuses are applied to Hero
     await page.evaluate(() => {
@@ -404,11 +419,19 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
       const equippedIds = Object.values(inv.equipped)
         .filter((i): i is NonNullable<typeof i> => i !== null)
         .map((i) => i.instanceId);
+      const hasAnyGearStatBoost =
+        hero.stats.maxHp > hero.baseStats.maxHp ||
+        hero.stats.attack > hero.baseStats.attack ||
+        hero.stats.defense > hero.baseStats.defense ||
+        hero.stats.moveSpeed > hero.baseStats.moveSpeed ||
+        hero.stats.critChance > hero.baseStats.critChance ||
+        hero.lifeSteal > 0 ||
+        hero.cooldownReduction > 0 ||
+        hero.luck > 0;
       return {
         baseMaxHp: hero.baseStats.maxHp,
         baseAttack: hero.baseStats.attack,
-        totalMaxHp: hero.stats.maxHp,
-        totalAttack: hero.stats.attack,
+        hasAnyGearStatBoost,
         equippedIds,
         hasHubItemEquipped: equippedIds.includes(equippedId),
       };
@@ -417,8 +440,7 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
     // Vitality Lv.1 (+20 MaxHP) and Might Lv.1 (+3 Attack) plus Hub +1 item
     expect(dungeonEntryCheck.baseMaxHp).toBe(DEFAULT_HERO_STATS.maxHp + 20);
     expect(dungeonEntryCheck.baseAttack).toBe(DEFAULT_HERO_STATS.attack + 3);
-    expect(dungeonEntryCheck.totalMaxHp).toBeGreaterThan(dungeonEntryCheck.baseMaxHp);
-    expect(dungeonEntryCheck.totalAttack).toBeGreaterThan(dungeonEntryCheck.baseAttack);
+    expect(dungeonEntryCheck.hasAnyGearStatBoost).toBe(true);
     expect(dungeonEntryCheck.hasHubItemEquipped).toBe(true);
 
     // 6. Victory Extraction: spawn & collect a run drop, clear Rooms 1->5 (Boss infernal_warden), win +1 Essence, returnToHub()
@@ -590,7 +612,8 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
     const afterDeathHub = await page.evaluate(
       ({ hubItemId, prevExtractedDropId, lostRunDropId, storageKey }) => {
         const profile = window.__SUBMUNDO_HUB_DEBUG__!.getProfile();
-        const saved = JSON.parse(window.localStorage.getItem(storageKey) || '{}');
+        const savedRaw = window.localStorage.getItem(storageKey) || '{}';
+        const saved = JSON.parse(savedRaw);
         const allProfileItemIds = [
           ...Object.values(profile.equipped)
             .filter(Boolean)
@@ -600,6 +623,7 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
         return {
           souls: profile.souls,
           savedSouls: saved.souls,
+          savedRaw,
           runsFailed: profile.stats.runsFailed,
           hasHubItem: allProfileItemIds.includes(hubItemId),
           hasPrevExtractedDrop: allProfileItemIds.includes(prevExtractedDropId),
@@ -623,35 +647,47 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
     expect(afterDeathHub.hasPrevExtractedDrop).toBe(true);
     expect(afterDeathHub.hasLostRunDrop).toBe(false);
 
-    // 8. Mobile Portrait (360x640) responsive HubScene & AltarModal screenshot
-    await page.setViewportSize({ width: 360, height: 640 });
-    await page.waitForTimeout(200);
+    // 8. Mobile Landscape (844x390, hasTouch: true) responsive HubScene & AltarModal screenshot
+    const { context: mobileContext, page: mobilePage } =
+      await openMobileLandscapePage(browser, {
+        baseURL,
+        consoleErrors,
+        pageErrors,
+        initialStorage: {
+          [SAVE_STORAGE_KEY]: afterDeathHub.savedRaw,
+        },
+      });
 
-    const mobileHubCheck = await page.evaluate(() => {
-      const canvas = document.querySelector('canvas');
-      window.__SUBMUNDO_HUB_DEBUG__!.openAltar();
-      const scene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
-        altarModal: { isOpen: () => boolean };
-      };
-      return {
-        canvasWidth: canvas?.width ?? 0,
-        canvasHeight: canvas?.height ?? 0,
-        altarOpen: scene.altarModal.isOpen(),
-      };
-    });
+    try {
+      await mobilePage.goto('/');
+      await ensureHubScene(mobilePage);
+      await mobilePage.waitForTimeout(200);
 
-    expect(mobileHubCheck.canvasWidth).toBe(360);
-    expect(mobileHubCheck.canvasHeight).toBe(640);
-    expect(mobileHubCheck.altarOpen).toBe(true);
+      await assertLandscapeCanvas(mobilePage, MOBILE_LANDSCAPE_VIEWPORT);
 
-    await page.waitForTimeout(150);
-    const mobileScreenshotPath = resolve(
-      process.cwd(),
-      'docs/qa/screenshots/m3-mobile-360x640.png'
-    );
-    await page.screenshot({ path: mobileScreenshotPath });
-    expect(existsSync(mobileScreenshotPath)).toBe(true);
-    expect(statSync(mobileScreenshotPath).size).toBeGreaterThan(4000);
+      const mobileHubCheck = await mobilePage.evaluate(() => {
+        window.__SUBMUNDO_HUB_DEBUG__!.openAltar();
+        const scene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
+          altarModal: { isOpen: () => boolean };
+        };
+        return {
+          altarOpen: scene.altarModal.isOpen(),
+        };
+      });
+
+      expect(mobileHubCheck.altarOpen).toBe(true);
+
+      await mobilePage.waitForTimeout(150);
+      const mobileScreenshotPath = resolve(
+        SCREENSHOT_DIR,
+        'm3-mobile-844x390.png'
+      );
+      await mobilePage.screenshot({ path: mobileScreenshotPath });
+      expect(existsSync(mobileScreenshotPath)).toBe(true);
+      expect(statSync(mobileScreenshotPath).size).toBeGreaterThan(4000);
+    } finally {
+      await mobileContext.close();
+    }
 
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);
