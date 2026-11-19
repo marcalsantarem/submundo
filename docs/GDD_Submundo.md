@@ -154,9 +154,9 @@ Todo equipamento especial e modificador de skill pertence a uma das 3 forças:
 
 ![Mockup Visual Pixel Art](C:/Users/msm/.gemini/antigravity/brain/9cc810b6-66ef-4262-a554-e083b57f966d/mockup_pixel_art_1794842399674.jpg)
 
-### Câmera Adaptativa (Mobile vs. Web Desktop)
-- **No Mobile:** Tela **Vertical (Retrato - proporção 9:16)**, permitindo segurar o celular de forma natural e alcançar o joystick e os botões de skill com o polegar.
-- **Na Web (PC/Navegador):** Canvas em modo **Paisagem com tamanho máximo controlado (ex.: `800x600`)**, centralizado na tela com moldura sombria elegante, garantindo boa visão ao redor do guerreiro sem esticar os pixels.
+### Câmera em Modo Paisagem Exclusivo (PC & Mobile 2 Mãos — Decisão #16)
+- **Resolução Base Única (`960×540`, `16:9`):** O jogo roda **exclusivamente em modo paisagem** tanto no PC quanto no Mobile, garantindo amplo campo de visão e conforto para jogar com as duas mãos no celular (joystick virtual à esquerda + botões de ataque/skills em arco à direita).
+- **Trava de Orientação no Mobile:** PWA configurado com `"orientation": "landscape"` e overlay elegante orientando o jogador a girar o celular caso esteja em retrato.
 
 ### Estilo Híbrido Inteligente
 - **Gameplay (Sprites e Tilesets):** Pixel Art 16/32-bit com iluminação dinâmica 2D (tochas tremulando, brilho de loot no chão, flashes de crítico e partículas de sangue/fogo).
