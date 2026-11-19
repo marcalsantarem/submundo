@@ -1076,7 +1076,7 @@ export class DungeonScene extends Phaser.Scene {
             }
           }
           if (this.isTestArena) {
-            this.hero.hp = this.hero.maxHp;
+            this.hero.stats.hp = this.hero.stats.maxHp;
             this.hero.isAlive = true;
             break;
           }
@@ -1094,7 +1094,7 @@ export class DungeonScene extends Phaser.Scene {
 
         case 'hero_killed': {
           if (this.isTestArena) {
-            this.hero.hp = this.hero.maxHp;
+            this.hero.stats.hp = this.hero.stats.maxHp;
             this.hero.isAlive = true;
             return;
           }
