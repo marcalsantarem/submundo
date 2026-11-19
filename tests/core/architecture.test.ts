@@ -17,8 +17,8 @@ import {
 import { GAME_VERSION } from '../../src/version';
 
 describe('Architecture & Viewport Contracts (T-001)', () => {
-  it('exports GAME_VERSION as 0.5.0', () => {
-    expect(GAME_VERSION).toBe('0.5.0');
+  it('exports GAME_VERSION as 0.6.0', () => {
+    expect(GAME_VERSION).toBe('0.6.0');
   });
 
   it('resolves desktop landscape viewport (800x600, 4:3) when windowWidth >= windowHeight', () => {
