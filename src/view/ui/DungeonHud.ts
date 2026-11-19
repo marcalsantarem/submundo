@@ -68,6 +68,7 @@ interface SkillButtonView {
   cooldownText: Phaser.GameObjects.Text;
   hotkeyBg: Phaser.GameObjects.Graphics;
   hotkeyText: Phaser.GameObjects.Text;
+  sideLabelText?: Phaser.GameObjects.Text;
   chargesBg?: Phaser.GameObjects.Graphics;
   chargesText?: Phaser.GameObjects.Text;
   hitZone: Phaser.GameObjects.Zone;
@@ -132,9 +133,10 @@ export class DungeonHud {
   private readonly hpText: Phaser.GameObjects.Text;
   private readonly secondaryBarGraphic: Phaser.GameObjects.Graphics;
 
-  // Top-Left below Hero Frame: Compact Objective / Room Tracker
+  // Top-Left below Hero Frame: Clean Open Objective / Campaign Tracker
   private readonly objectiveContainer: Phaser.GameObjects.Container;
   private readonly objectiveBg: Phaser.GameObjects.Graphics;
+  private readonly objectiveTitleText: Phaser.GameObjects.Text;
   private readonly objectiveText: Phaser.GameObjects.Text;
 
   // Top-Right: Resources (Souls & Essences)
@@ -148,14 +150,14 @@ export class DungeonHud {
   private readonly essenceFallbackGraphic: Phaser.GameObjects.Graphics;
   private readonly essenceText: Phaser.GameObjects.Text;
 
-  // Top-Right: Circular Minimap (r = 42)
+  // Top-Right: Circular Minimap (r = 46)
   private readonly minimapContainer: Phaser.GameObjects.Container;
   private readonly minimapBg: Phaser.GameObjects.Graphics;
   private readonly minimapDots: Phaser.GameObjects.Graphics;
   private readonly minimapFrame: Phaser.GameObjects.Graphics;
-  private readonly minimapRadius = 42;
+  private readonly minimapRadius = 46;
 
-  // Top-Right Utility Row (AUTO, Bag, Audio)
+  // Top-Right Utility Row (AUTO, Inventário, Áudio)
   private readonly autoBtnContainer: Phaser.GameObjects.Container;
   private readonly autoBtnBg: Phaser.GameObjects.Graphics;
   private readonly autoBtnText: Phaser.GameObjects.Text;
@@ -167,14 +169,14 @@ export class DungeonHud {
   private readonly bagBtnFallbackText: Phaser.GameObjects.Text;
   private readonly bagBadgeBg: Phaser.GameObjects.Graphics;
   private readonly bagBadgeText: Phaser.GameObjects.Text;
-  private readonly bagHotkeyText: Phaser.GameObjects.Text;
+  private readonly bagLabelText: Phaser.GameObjects.Text;
   private readonly bagBtnZone: Phaser.GameObjects.Zone;
 
   private readonly muteBtnContainer: Phaser.GameObjects.Container;
   private readonly muteBtnBg: Phaser.GameObjects.Graphics;
   private readonly muteBtnIcon: Phaser.GameObjects.Image | null;
   private readonly muteBtnFallbackText: Phaser.GameObjects.Text;
-  private readonly muteHotkeyText: Phaser.GameObjects.Text;
+  private readonly muteLabelText: Phaser.GameObjects.Text;
   private readonly muteBtnZone: Phaser.GameObjects.Zone;
 
   private readonly utilityBtnRadius = 18;
@@ -191,13 +193,14 @@ export class DungeonHud {
   private readonly bannerLabel: Phaser.GameObjects.Text;
   private lastBannerWidth = 360;
 
-  // Bottom-Right: Primary Attack Button (r = 38) + 4-Skill Arc (r = 25, orbit = 96)
+  // Bottom-Right: Primary Attack Button (r = 42) + Action Arc (Esquiva, Poção, Skills)
   private readonly attackBtnContainer: Phaser.GameObjects.Container;
   private readonly attackBtnBg: Phaser.GameObjects.Graphics;
   private readonly attackBtnIcon: Phaser.GameObjects.Image | null;
   private readonly attackBtnFallbackText: Phaser.GameObjects.Text;
+  private readonly attackBtnLabelText: Phaser.GameObjects.Text;
   private readonly attackBtnZone: Phaser.GameObjects.Zone;
-  private readonly attackBtnRadius = 38;
+  private readonly attackBtnRadius = 42;
 
   private readonly skillButtons: SkillButtonView[] = [];
   private readonly skillBySlot = new Map<SkillSlot, SkillDef>();
@@ -356,28 +359,45 @@ export class DungeonHud {
       .setDepth(1010);
 
     // -------------------------------------------------------------------------
-    // 2. TOP-LEFT: COMPACT OBJECTIVE / ROOM TRACKER
+    // 2. TOP-LEFT: CLEAN OPEN OBJECTIVE / CAMPAIGN TRACKER
     // -------------------------------------------------------------------------
     this.objectiveBg = scene.add.graphics();
-    this.objectiveText = scene.add
-      .text(0, 0, 'Sala 1/5', {
-        fontFamily: DF_FONTS.BODY,
+    this.objectiveTitleText = scene.add
+      .text(24, 10, 'Campanha', {
+        fontFamily: DF_FONTS.TITLE,
         resolution: 2,
-        fontSize: '11px',
+        fontSize: '13px',
         color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
         stroke: '#07090e',
-        strokeThickness: 2,
+        strokeThickness: 3,
       })
       .setOrigin(0, 0.5);
 
+    this.objectiveText = scene.add
+      .text(24, 22, 'Sala 1/5', {
+        fontFamily: DF_FONTS.BODY,
+        resolution: 2,
+        fontSize: '11px',
+        color: '#e2e8f0',
+        stroke: '#07090e',
+        strokeThickness: 2.5,
+        wordWrap: { width: 196 },
+        lineSpacing: 2,
+      })
+      .setOrigin(0, 0);
+
     this.objectiveContainer = scene.add
-      .container(0, 0, [this.objectiveBg, this.objectiveText])
+      .container(0, 0, [
+        this.objectiveBg,
+        this.objectiveTitleText,
+        this.objectiveText,
+      ])
       .setScrollFactor(0)
       .setDepth(1010);
 
     // -------------------------------------------------------------------------
-    // 3. TOP-RIGHT: RESOURCES (SOULS & ESSENCES)
+    // 3. TOP-RIGHT: CLEAN INLINE RESOURCES (SOULS & ESSENCES)
     // -------------------------------------------------------------------------
     this.soulsBg = scene.add.graphics();
     this.soulsFallbackGraphic = scene.add.graphics();
@@ -392,15 +412,15 @@ export class DungeonHud {
       : null;
     this.soulsText = scene.add
       .text(0, 0, '0', {
-        fontFamily: DF_FONTS.BODY,
+        fontFamily: DF_FONTS.TITLE,
         resolution: 2,
-        fontSize: '12px',
-        color: '#a5f3fc',
+        fontSize: '13px',
+        color: '#e0f2fe',
         fontStyle: 'bold',
         stroke: '#07090e',
-        strokeThickness: 2,
+        strokeThickness: 3,
       })
-      .setOrigin(1, 0.5);
+      .setOrigin(0, 0.5);
 
     this.essenceBg = scene.add.graphics();
     this.essenceFallbackGraphic = scene.add.graphics();
@@ -415,15 +435,15 @@ export class DungeonHud {
       : null;
     this.essenceText = scene.add
       .text(0, 0, '0', {
-        fontFamily: DF_FONTS.BODY,
+        fontFamily: DF_FONTS.TITLE,
         resolution: 2,
-        fontSize: '11px',
+        fontSize: '13px',
         color: DF_PALETTE.textGold,
         fontStyle: 'bold',
         stroke: '#07090e',
-        strokeThickness: 2,
+        strokeThickness: 3,
       })
-      .setOrigin(1, 0.5);
+      .setOrigin(0, 0.5);
 
     const resourceChildren: Phaser.GameObjects.GameObject[] = [
       this.soulsBg,
@@ -448,7 +468,7 @@ export class DungeonHud {
       .setDepth(1010);
 
     // -------------------------------------------------------------------------
-    // 4. TOP-RIGHT: CIRCULAR MINIMAP (r = 42)
+    // 4. TOP-RIGHT: CIRCULAR MINIMAP (r = 46)
     // -------------------------------------------------------------------------
     this.minimapBg = scene.add.graphics();
     this.minimapDots = scene.add.graphics();
@@ -460,14 +480,14 @@ export class DungeonHud {
       .setDepth(1012);
 
     // -------------------------------------------------------------------------
-    // 5. TOP-RIGHT UTILITY ROW: AUTO / BAG / AUDIO
+    // 5. TOP-RIGHT UTILITY ROW: AUTO / INVENTÁRIO / ÁUDIO
     // -------------------------------------------------------------------------
     this.autoBtnBg = scene.add.graphics();
     this.autoBtnText = scene.add
       .text(0, 0, 'AUTO', {
-        fontFamily: DF_FONTS.BODY,
+        fontFamily: DF_FONTS.TITLE,
         resolution: 2,
-        fontSize: '9px',
+        fontSize: '9.5px',
         color: DF_PALETTE.textGold,
         fontStyle: 'bold',
       })
@@ -530,15 +550,14 @@ export class DungeonHud {
         fontStyle: 'bold',
       })
       .setOrigin(0.5);
-    this.bagHotkeyText = scene.add
-      .text(0, 26, 'I', {
+    this.bagLabelText = scene.add
+      .text(0, 27, 'Inventário', {
         fontFamily: DF_FONTS.BODY,
         resolution: 2,
-        fontSize: '9px',
-        color: DF_PALETTE.textMuted,
-        fontStyle: 'bold',
+        fontSize: '9.5px',
+        color: DF_PALETTE.textParchment,
         stroke: '#07090e',
-        strokeThickness: 2,
+        strokeThickness: 2.5,
       })
       .setOrigin(0.5);
     this.bagBtnZone = scene.add
@@ -575,7 +594,7 @@ export class DungeonHud {
     bagChildren.push(
       this.bagBadgeBg,
       this.bagBadgeText,
-      this.bagHotkeyText,
+      this.bagLabelText,
       this.bagBtnZone
     );
 
@@ -603,15 +622,14 @@ export class DungeonHud {
         fontStyle: 'bold',
       })
       .setOrigin(0.5);
-    this.muteHotkeyText = scene.add
-      .text(0, 26, 'M', {
+    this.muteLabelText = scene.add
+      .text(0, 27, 'Áudio', {
         fontFamily: DF_FONTS.BODY,
         resolution: 2,
-        fontSize: '9px',
-        color: DF_PALETTE.textMuted,
-        fontStyle: 'bold',
+        fontSize: '9.5px',
+        color: DF_PALETTE.textParchment,
         stroke: '#07090e',
-        strokeThickness: 2,
+        strokeThickness: 2.5,
       })
       .setOrigin(0.5);
     this.muteBtnZone = scene.add
@@ -645,7 +663,7 @@ export class DungeonHud {
     if (this.muteBtnIcon) {
       muteChildren.push(this.muteBtnIcon);
     }
-    muteChildren.push(this.muteHotkeyText, this.muteBtnZone);
+    muteChildren.push(this.muteLabelText, this.muteBtnZone);
 
     this.muteBtnContainer = scene.add
       .container(0, 0, muteChildren)
@@ -707,7 +725,7 @@ export class DungeonHud {
       .setVisible(false);
 
     // -------------------------------------------------------------------------
-    // 8. BOTTOM-RIGHT: PRIMARY ATTACK BUTTON & SATELLITE SKILL ARC
+    // 8. BOTTOM-RIGHT: PRIMARY ATTACK BUTTON (r = 42) & COMBAT CLUSTER
     // -------------------------------------------------------------------------
     this.attackBtnBg = scene.add.graphics();
     this.attackBtnIcon = hasUiTextureFrame(
@@ -716,16 +734,27 @@ export class DungeonHud {
       DF_UI_ICON_FRAMES.attack
     )
       ? scene.add
-          .image(0, 0, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.attack)
+          .image(0, -8, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.attack)
           .setOrigin(0.5)
       : null;
     this.attackBtnFallbackText = scene.add
-      .text(0, 0, 'ATK', {
-        fontFamily: DF_FONTS.BODY,
+      .text(0, -8, 'ATK', {
+        fontFamily: DF_FONTS.TITLE,
         resolution: 2,
         fontSize: '13px',
         color: '#fff7ed',
         fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    this.attackBtnLabelText = scene.add
+      .text(0, 22, 'Ataque', {
+        fontFamily: DF_FONTS.TITLE,
+        resolution: 2,
+        fontSize: '12.5px',
+        color: '#fff7ed',
+        fontStyle: 'bold',
+        stroke: '#07090e',
+        strokeThickness: 3,
       })
       .setOrigin(0.5);
     this.attackBtnZone = scene.add
@@ -760,7 +789,7 @@ export class DungeonHud {
     if (this.attackBtnIcon) {
       attackChildren.push(this.attackBtnIcon);
     }
-    attackChildren.push(this.attackBtnZone);
+    attackChildren.push(this.attackBtnLabelText, this.attackBtnZone);
 
     this.attackBtnContainer = scene.add
       .container(0, 0, attackChildren)
@@ -1026,7 +1055,7 @@ export class DungeonHud {
       if (isOnCooldown) {
         btn.cooldownText.setVisible(true);
         btn.cooldownText.setText(
-          cdRemainingMs >= 10000
+          cdRemainingMs >= 1000
             ? `${Math.ceil(cdRemainingMs / 1000)}s`
             : `${(cdRemainingMs / 1000).toFixed(1)}s`
         );
@@ -1369,52 +1398,75 @@ export class DungeonHud {
   }
 
   private layoutObjectiveTracker(): void {
-    const x = 16;
-    const y = 89;
-    const w = 258;
-    const h = 23;
+    this.objectiveContainer.setPosition(16, 94);
+    this.objectiveTitleText.setPosition(24, 10);
+    this.objectiveText.setPosition(24, 23);
+    this.drawObjectiveDecorations();
+  }
 
-    this.objectiveContainer.setPosition(x, y);
+  private drawObjectiveDecorations(): void {
+    const dx = 10;
+    const dy = 10;
+    const outerR = 6.2;
+    const innerR = 3;
 
     this.objectiveBg.clear();
-    this.objectiveBg.fillStyle(DF_PALETTE.obsidianBg, 0.78);
-    this.objectiveBg.fillRoundedRect(0, 0, w, h, 3);
-    this.objectiveBg.fillStyle(DF_PALETTE.agedGold, 0.9);
-    this.objectiveBg.fillRect(0, 2, 2.5, h - 4);
-    this.objectiveBg.lineStyle(1, DF_PALETTE.metalBorder, 0.65);
-    this.objectiveBg.strokeRoundedRect(0, 0, w, h, 3);
 
-    // Golden diamond emblem
-    const dx = 12;
-    const dy = h / 2;
-    const dr = 4.4;
-    this.objectiveBg.fillStyle(DF_PALETTE.agedGold, 0.98);
-    this.objectiveBg.fillPoints(
-      [
-        { x: dx, y: dy - dr },
-        { x: dx + dr, y: dy },
-        { x: dx, y: dy + dr },
-        { x: dx - dr, y: dy },
-      ],
-      true
-    );
-    this.objectiveBg.lineStyle(1, DF_PALETTE.bronzeDark, 0.9);
+    // Ornate golden diamond emblem (◆) without heavy closed box
+    this.objectiveBg.lineStyle(1.4, DF_PALETTE.agedGold, 0.96);
     this.objectiveBg.strokePoints(
       [
-        { x: dx, y: dy - dr },
-        { x: dx + dr, y: dy },
-        { x: dx, y: dy + dr },
-        { x: dx - dr, y: dy },
+        { x: dx, y: dy - outerR },
+        { x: dx + outerR, y: dy },
+        { x: dx, y: dy + outerR },
+        { x: dx - outerR, y: dy },
+      ],
+      true,
+      true
+    );
+
+    this.objectiveBg.fillStyle(DF_PALETTE.bronzeDark, 0.85);
+    this.objectiveBg.fillPoints(
+      [
+        { x: dx, y: dy - outerR + 1.2 },
+        { x: dx + outerR - 1.2, y: dy },
+        { x: dx, y: dy + outerR - 1.2 },
+        { x: dx - outerR + 1.2, y: dy },
       ],
       true
     );
 
-    this.objectiveText.setPosition(23, h / 2);
+    this.objectiveBg.fillStyle(DF_PALETTE.goldBright, 0.98);
+    this.objectiveBg.fillPoints(
+      [
+        { x: dx, y: dy - innerR },
+        { x: dx + innerR, y: dy },
+        { x: dx, y: dy + innerR },
+        { x: dx - innerR, y: dy },
+      ],
+      true
+    );
+
+    // Thin divider line cleanly below the objective text
+    const bodyHeight = Math.max(14, Math.ceil(this.objectiveText.height || 14));
+    const dividerY = 23 + bodyHeight + 7;
+    const dividerW = 204;
+    this.objectiveBg.lineStyle(1, DF_PALETTE.bronzeBorder, 0.48);
+    this.objectiveBg.lineBetween(0, dividerY, dividerW, dividerY);
+    this.objectiveBg.lineStyle(1, DF_PALETTE.agedGold, 0.52);
+    this.objectiveBg.lineBetween(0, dividerY, 56, dividerY);
   }
 
   private updateObjectiveTracker(snapshot: HudSnapshot): void {
-    const maxChars = 34;
+    const rawStage = snapshot.stageName?.trim();
+    const titleBase = rawStage && rawStage.length > 0 ? rawStage : 'Campanha';
+    const title =
+      titleBase.length > 24
+        ? `${titleBase.slice(0, 23).trimEnd()}…`
+        : titleBase;
+    this.objectiveTitleText.setText(title);
 
+    const maxChars = 48;
     const rawObjective = snapshot.missionObjective?.trim();
     const fallbackRoom = snapshot.isTestArena
       ? snapshot.roomTitle || 'Arena de Combate'
@@ -1428,105 +1480,65 @@ export class DungeonHud {
       line.length > maxChars ? `${line.slice(0, maxChars - 1).trimEnd()}…` : line;
 
     this.objectiveText.setText(truncated);
+    this.drawObjectiveDecorations();
   }
 
   // ===========================================================================
-  // TOP-RIGHT: RESOURCES, CIRCULAR MINIMAP (r = 42) & UTILITY BUTTONS
+  // TOP-RIGHT: CLEAN RESOURCES, CIRCULAR MINIMAP (r = 46) & UTILITY TRIO
   // ===========================================================================
 
   private layoutMinimapAndTopRight(w: number): void {
     const mapR = this.minimapRadius;
-    const mapX = w - 56;
-    const mapY = 52;
+    const mapX = w - 60;
+    const mapY = 60;
     this.minimapContainer.setPosition(mapX, mapY);
     this.drawMinimapStaticShell(mapR);
 
-    // Souls & Essences pills cleanly left of minimap
-    const resRightX = mapX - mapR - 10;
-    const pillW = 98;
-    const pillH = 24;
-    const soulsY = 30;
-    const essenceY = 58;
+    // Clean inline Souls & Essences row to the left of the minimap (y = 26, no heavy pills)
+    const mapLeft = mapX - mapR;
+    const resY = 26;
+    const iconSize = 18;
 
     this.resourcesContainer.setPosition(0, 0);
-
-    // Souls pill
     this.soulsBg.clear();
-    this.soulsBg.fillStyle(DF_PALETTE.obsidianBg, 0.84);
-    this.soulsBg.fillRoundedRect(
-      resRightX - pillW,
-      soulsY - pillH / 2,
-      pillW,
-      pillH,
-      5
-    );
-    this.soulsBg.lineStyle(1.1, DF_PALETTE.bronzeBorder, 0.9);
-    this.soulsBg.strokeRoundedRect(
-      resRightX - pillW,
-      soulsY - pillH / 2,
-      pillW,
-      pillH,
-      5
-    );
+    this.essenceBg.clear();
 
-    const iconSize = 18;
-    const soulsIconX = resRightX - pillW + 14;
+    const soulsIconX = mapLeft - 128;
     if (this.soulsIcon) {
       this.soulsIcon
-        .setPosition(soulsIconX, soulsY)
+        .setPosition(soulsIconX, resY)
         .setDisplaySize(iconSize, iconSize);
     }
     this.soulsFallbackGraphic.clear();
     this.soulsFallbackGraphic.fillStyle(0x38bdf8, 0.95);
-    this.soulsFallbackGraphic.fillCircle(soulsIconX, soulsY, 5);
+    this.soulsFallbackGraphic.fillCircle(soulsIconX, resY, 5.5);
     this.soulsFallbackGraphic.lineStyle(1, 0xbae6fd, 0.95);
-    this.soulsFallbackGraphic.strokeCircle(soulsIconX, soulsY, 5);
+    this.soulsFallbackGraphic.strokeCircle(soulsIconX, resY, 5.5);
+    this.soulsText.setPosition(soulsIconX + 13, resY);
 
-    this.soulsText.setPosition(resRightX - 8, soulsY);
-
-    // Essences pill
-    const essH = 22;
-    this.essenceBg.clear();
-    this.essenceBg.fillStyle(DF_PALETTE.obsidianBg, 0.84);
-    this.essenceBg.fillRoundedRect(
-      resRightX - pillW,
-      essenceY - essH / 2,
-      pillW,
-      essH,
-      5
-    );
-    this.essenceBg.lineStyle(1.1, DF_PALETTE.agedGold, 0.9);
-    this.essenceBg.strokeRoundedRect(
-      resRightX - pillW,
-      essenceY - essH / 2,
-      pillW,
-      essH,
-      5
-    );
-
-    const essIconX = resRightX - pillW + 14;
+    const essIconX = mapLeft - 52;
     if (this.essenceIcon) {
       this.essenceIcon
-        .setPosition(essIconX, essenceY)
-        .setDisplaySize(iconSize - 2, iconSize - 2);
+        .setPosition(essIconX, resY)
+        .setDisplaySize(iconSize, iconSize);
     }
     this.essenceFallbackGraphic.clear();
     this.essenceFallbackGraphic.fillStyle(DF_PALETTE.agedGold, 0.96);
     this.essenceFallbackGraphic.fillPoints(
       [
-        { x: essIconX, y: essenceY - 5 },
-        { x: essIconX + 5, y: essenceY },
-        { x: essIconX, y: essenceY + 5 },
-        { x: essIconX - 5, y: essenceY },
+        { x: essIconX, y: resY - 5.5 },
+        { x: essIconX + 5.5, y: resY },
+        { x: essIconX, y: resY + 5.5 },
+        { x: essIconX - 5.5, y: resY },
       ],
       true
     );
-    this.essenceText.setPosition(resRightX - 8, essenceY);
+    this.essenceText.setPosition(essIconX + 13, resY);
 
-    // 3 Circular Utility Buttons well-spaced below the minimap (never invading center)
+    // Trio of dark metallic circular utility buttons aligned below minimap (y = 128, r = 18)
     const r = this.utilityBtnRadius;
-    const gap = 46;
-    const rowY = mapY + mapR + r + 10;
+    const gap = 50;
+    const rowY = 128;
     const rightMostX = w - 34;
 
     this.muteBtnContainer.setPosition(rightMostX, rowY);
@@ -1538,7 +1550,7 @@ export class DungeonHud {
     this.bagBtnZone.setSize(hitSize, hitSize);
     this.muteBtnZone.setSize(hitSize, hitSize);
 
-    const utilIconSize = 22;
+    const utilIconSize = 20;
     if (this.bagBtnIcon) {
       this.bagBtnIcon.setDisplaySize(utilIconSize, utilIconSize);
     }
@@ -1546,8 +1558,8 @@ export class DungeonHud {
       this.muteBtnIcon.setDisplaySize(utilIconSize, utilIconSize);
     }
 
-    this.bagHotkeyText.setPosition(0, r + 9).setVisible(true);
-    this.muteHotkeyText.setPosition(0, r + 9).setVisible(true);
+    this.bagLabelText.setPosition(0, r + 9).setVisible(true);
+    this.muteLabelText.setPosition(0, r + 9).setVisible(true);
   }
 
   private updateResources(snapshot: HudSnapshot): void {
@@ -1565,49 +1577,43 @@ export class DungeonHud {
     this.soulsFallbackGraphic.setVisible(!hasSoulsIcon);
 
     const essences = snapshot.essences ?? 0;
-    const showEssence = essences > 0;
-    this.essenceBg.setVisible(showEssence);
-    this.essenceText.setVisible(showEssence);
-    if (showEssence) {
-      this.essenceText.setText(`${essences}`);
-      const hasEssIcon =
-        this.essenceIcon !== null &&
-        hasUiTextureFrame(
-          this.scene,
-          DF_UI_ICONS_KEY,
-          DF_UI_ICON_FRAMES.essence
-        );
-      if (this.essenceIcon) {
-        this.essenceIcon.setVisible(hasEssIcon);
-        if (hasEssIcon) {
-          this.essenceIcon.setFrame(DF_UI_ICON_FRAMES.essence);
-        }
+    this.essenceText.setText(`${essences}`).setVisible(true);
+    const hasEssIcon =
+      this.essenceIcon !== null &&
+      hasUiTextureFrame(
+        this.scene,
+        DF_UI_ICONS_KEY,
+        DF_UI_ICON_FRAMES.essence
+      );
+    if (this.essenceIcon) {
+      this.essenceIcon.setVisible(hasEssIcon);
+      if (hasEssIcon) {
+        this.essenceIcon.setFrame(DF_UI_ICON_FRAMES.essence);
       }
-      this.essenceFallbackGraphic.setVisible(!hasEssIcon);
-    } else {
-      this.essenceIcon?.setVisible(false);
-      this.essenceFallbackGraphic.setVisible(false);
     }
+    this.essenceFallbackGraphic.setVisible(!hasEssIcon);
   }
 
   private drawMinimapStaticShell(r: number): void {
     this.minimapBg.clear();
-    this.minimapBg.fillStyle(DF_PALETTE.deepRecess, 0.9);
+    this.minimapBg.fillStyle(0x0b1220, 0.92);
     this.minimapBg.fillCircle(0, 0, r);
+    this.minimapBg.fillStyle(0x162238, 0.42);
+    this.minimapBg.fillCircle(0, 0, r - 6);
 
-    // Radar crosshair & inner guide ring
-    this.minimapBg.lineStyle(1, DF_PALETTE.metalDark, 0.7);
+    // Subtle radar crosshair & inner guide ring
+    this.minimapBg.lineStyle(1, 0x26354d, 0.65);
     this.minimapBg.lineBetween(-r + 5, 0, r - 5, 0);
     this.minimapBg.lineBetween(0, -r + 5, 0, r - 5);
     this.minimapBg.strokeCircle(0, 0, Math.round(r * 0.52));
 
-    // Metallic bronze/steel outer ring + North arrow
+    // Metallic dark-steel + bronze outer ring + North arrow
     this.minimapFrame.clear();
     this.minimapFrame.lineStyle(3.2, DF_PALETTE.metalDark, 0.98);
     this.minimapFrame.strokeCircle(0, 0, r + 1.2);
-    this.minimapFrame.lineStyle(2, DF_PALETTE.bronzeBorder, 0.98);
+    this.minimapFrame.lineStyle(2, DF_PALETTE.bronzeBorder, 0.96);
     this.minimapFrame.strokeCircle(0, 0, r);
-    this.minimapFrame.lineStyle(1, DF_PALETTE.metalBorder, 0.75);
+    this.minimapFrame.lineStyle(1, DF_PALETTE.metalBorder, 0.72);
     this.minimapFrame.strokeCircle(0, 0, r - 2.6);
 
     this.minimapFrame.fillStyle(DF_PALETTE.agedGold, 0.98);
@@ -1671,24 +1677,26 @@ export class DungeonHud {
     const r = this.utilityBtnRadius;
     this.autoBtnBg.clear();
     if (enabled) {
-      this.autoBtnBg.fillStyle(DF_PALETTE.agedGold, 0.16);
-      this.autoBtnBg.fillCircle(0, 0, r + 3);
+      this.autoBtnBg.fillStyle(DF_PALETTE.agedGold, 0.14);
+      this.autoBtnBg.fillCircle(0, 0, r + 2.5);
     }
     this.autoBtnBg.fillStyle(
-      enabled ? DF_PALETTE.buttonGoldFill : DF_PALETTE.obsidianBg,
-      0.94
+      enabled ? 0x241d15 : DF_PALETTE.obsidianBg,
+      0.92
     );
     this.autoBtnBg.fillCircle(0, 0, r);
+    this.autoBtnBg.lineStyle(2.4, DF_PALETTE.metalDark, 0.96);
+    this.autoBtnBg.strokeCircle(0, 0, r + 1);
     this.autoBtnBg.lineStyle(
-      1.8,
+      1.6,
       enabled ? DF_PALETTE.agedGold : DF_PALETTE.metalBorder,
-      enabled ? 1 : 0.85
+      enabled ? 0.96 : 0.82
     );
     this.autoBtnBg.strokeCircle(0, 0, r);
     this.autoBtnBg.lineStyle(
       1,
       enabled ? DF_PALETTE.bronzeBorder : DF_PALETTE.metalDark,
-      0.8
+      0.75
     );
     this.autoBtnBg.strokeCircle(0, 0, r - 2.5);
 
@@ -1700,12 +1708,14 @@ export class DungeonHud {
   private refreshBagButtonState(bagCount: number): void {
     const r = this.utilityBtnRadius;
     this.bagBtnBg.clear();
-    this.bagBtnBg.fillStyle(DF_PALETTE.innerSurface, 0.94);
+    this.bagBtnBg.fillStyle(DF_PALETTE.innerSurface, 0.92);
     this.bagBtnBg.fillCircle(0, 0, r);
+    this.bagBtnBg.lineStyle(2.4, DF_PALETTE.metalDark, 0.96);
+    this.bagBtnBg.strokeCircle(0, 0, r + 1);
     this.bagBtnBg.lineStyle(
       1.6,
-      bagCount > 0 ? DF_PALETTE.agedGold : DF_PALETTE.metalBorder,
-      0.96
+      bagCount > 0 ? DF_PALETTE.agedGold : DF_PALETTE.bronzeBorder,
+      0.95
     );
     this.bagBtnBg.strokeCircle(0, 0, r);
     this.bagBtnBg.lineStyle(1, DF_PALETTE.metalDark, 0.85);
@@ -1746,15 +1756,19 @@ export class DungeonHud {
     this.muteBtnBg.clear();
     this.muteBtnBg.fillStyle(
       muted ? DF_PALETTE.deepRecess : DF_PALETTE.innerSurface,
-      0.94
+      0.92
     );
     this.muteBtnBg.fillCircle(0, 0, r);
+    this.muteBtnBg.lineStyle(2.4, DF_PALETTE.metalDark, 0.96);
+    this.muteBtnBg.strokeCircle(0, 0, r + 1);
     this.muteBtnBg.lineStyle(
       1.6,
       muted ? DF_PALETTE.metalBorder : DF_PALETTE.bronzeBorder,
       0.95
     );
     this.muteBtnBg.strokeCircle(0, 0, r);
+    this.muteBtnBg.lineStyle(1, DF_PALETTE.metalDark, 0.85);
+    this.muteBtnBg.strokeCircle(0, 0, r - 2.5);
 
     const frame = muted
       ? DF_UI_ICON_FRAMES.audioOff
@@ -1776,7 +1790,7 @@ export class DungeonHud {
   }
 
   // ===========================================================================
-  // BOTTOM-RIGHT: ERGONOMIC 2-HAND ACTION ARC (ATTACK r=38 + 4 SKILLS r=25)
+  // BOTTOM-RIGHT: COMBAT CLUSTER (ATAQUE r=42 + ESQUIVA + POÇÃO + SKILLS ARC)
   // ===========================================================================
 
   private buildSkillButtons(): void {
@@ -1793,6 +1807,12 @@ export class DungeonHud {
       active_2: '2',
       potion: 'Q',
     };
+    const radiusBySlot: Record<SkillSlot, number> = {
+      dash: 22,
+      potion: 24,
+      active_1: 26,
+      active_2: 26,
+    };
 
     orderedSlots.forEach((slot, idx) => {
       const skill = this.skillBySlot.get(slot) ?? this.skills[idx];
@@ -1801,7 +1821,8 @@ export class DungeonHud {
       }
 
       const iconFrame = this.resolveSkillIconFrame(skill);
-      const radius = 25;
+      const radius = radiusBySlot[slot] ?? 26;
+      const isActiveSkill = slot === 'active_1' || slot === 'active_2';
       const bg = this.scene.add.graphics();
       const iconImage = hasUiTextureFrame(
         this.scene,
@@ -1824,13 +1845,13 @@ export class DungeonHud {
       const cdOverlay = this.scene.add.graphics();
       const cooldownText = this.scene.add
         .text(0, 0, '', {
-          fontFamily: DF_FONTS.BODY,
+          fontFamily: DF_FONTS.TITLE,
           resolution: 2,
-          fontSize: '13px',
-          color: DF_PALETTE.textGold,
+          fontSize: isActiveSkill ? '16px' : '13px',
+          color: '#fff7ed',
           fontStyle: 'bold',
           stroke: '#05070c',
-          strokeThickness: 3,
+          strokeThickness: 3.5,
         })
         .setOrigin(0.5)
         .setVisible(false);
@@ -1840,8 +1861,8 @@ export class DungeonHud {
         .text(0, 0, defaultHotkeys[slot], {
           fontFamily: DF_FONTS.BODY,
           resolution: 2,
-          fontSize: '9px',
-          color: DF_PALETTE.textLight,
+          fontSize: '8px',
+          color: DF_PALETTE.textMuted,
           fontStyle: 'bold',
         })
         .setOrigin(0.5);
@@ -1857,6 +1878,22 @@ export class DungeonHud {
         hotkeyBg,
         hotkeyText
       );
+
+      let sideLabelText: Phaser.GameObjects.Text | undefined;
+      if (slot === 'dash') {
+        sideLabelText = this.scene.add
+          .text(-radius - 8, 0, 'Esquiva', {
+            fontFamily: DF_FONTS.TITLE,
+            resolution: 2,
+            fontSize: '12.5px',
+            color: DF_PALETTE.textParchment,
+            fontStyle: 'bold',
+            stroke: '#07090e',
+            strokeThickness: 3,
+          })
+          .setOrigin(1, 0.5);
+        children.push(sideLabelText);
+      }
 
       let chargesBg: Phaser.GameObjects.Graphics | undefined;
       let chargesText: Phaser.GameObjects.Text | undefined;
@@ -1917,6 +1954,7 @@ export class DungeonHud {
         cooldownText,
         hotkeyBg,
         hotkeyText,
+        sideLabelText,
         chargesBg,
         chargesText,
         hitZone,
@@ -1926,36 +1964,33 @@ export class DungeonHud {
   }
 
   private layoutActionCluster(w: number, h: number): void {
-    // Primary Attack Button: r = 38 at (width - 82, height - 82)
+    // Primary Attack Button: r = 42 at (w - 92, h - 104)
     const atkR = this.attackBtnRadius;
-    const atkX = w - 82;
-    const atkY = h - 82;
+    const atkX = w - 92;
+    const atkY = h - 104;
     this.attackBtnContainer.setPosition(atkX, atkY);
     this.attackBtnZone.setSize(atkR * 2 + 8, atkR * 2 + 8);
     this.drawPrimaryAttackButton(atkR);
 
-    // 4 Satellite Action Buttons: r = 25 along ergonomic arc (~96px radius)
-    const satR = 25;
-    const orbitR = 96;
-    const angleBySlotDeg: Record<SkillSlot, number> = {
-      dash: 168,
-      active_1: 204,
-      active_2: 240,
-      potion: 276,
+    // Exact cluster layout matching ref_landscape_hud.jpg
+    const slotLayout: Record<SkillSlot, { x: number; y: number; r: number }> = {
+      dash: { x: w - 42, y: h - 38, r: 22 },
+      potion: { x: atkX - 88, y: atkY + 38, r: 24 },
+      active_1: { x: atkX - 94, y: atkY - 30, r: 26 },
+      active_2: { x: atkX - 38, y: atkY - 94, r: 26 },
     };
 
-    const iconSize = Math.round(satR * 1.38);
-
     for (const btn of this.skillButtons) {
-      btn.radius = satR;
-      const deg = angleBySlotDeg[btn.skill.slot] ?? 225;
-      const rad = Phaser.Math.DegToRad(deg);
-      const bx = Math.round(atkX + orbitR * Math.cos(rad));
-      const by = Math.round(atkY + orbitR * Math.sin(rad));
+      const cfg = slotLayout[btn.skill.slot] ?? {
+        x: atkX - 90,
+        y: atkY - 30,
+        r: 26,
+      };
+      btn.radius = cfg.r;
+      btn.container.setPosition(cfg.x, cfg.y);
+      btn.hitZone.setSize(cfg.r * 2 + 8, cfg.r * 2 + 8);
 
-      btn.container.setPosition(bx, by);
-      btn.hitZone.setSize(satR * 2 + 8, satR * 2 + 8);
-
+      const iconSize = Math.round(cfg.r * 1.38);
       if (btn.iconImage) {
         if (hasUiTextureFrame(this.scene, DF_UI_ICONS_KEY, btn.iconFrame)) {
           btn.iconImage.setFrame(btn.iconFrame);
@@ -1963,13 +1998,17 @@ export class DungeonHud {
         btn.iconImage.setDisplaySize(iconSize, iconSize);
       }
 
-      // Hotkey pill anchored on bottom rim (SPACE, 1, 2, Q)
+      if (btn.sideLabelText) {
+        btn.sideLabelText.setPosition(-cfg.r - 8, 0);
+      }
+
+      // Discreet hotkey pill tucked on the bottom rim (SPACE, 1, 2, Q)
       btn.hotkeyBg.clear();
       const label = btn.hotkeyText.text;
-      const pillW = Math.max(18, label.length * 6 + 10);
-      const pillH = 14;
-      const pillY = satR + 2;
-      btn.hotkeyBg.fillStyle(DF_PALETTE.obsidianBg, 0.94);
+      const pillW = Math.max(15, label.length * 5.2 + 8);
+      const pillH = 12;
+      const pillY = cfg.r + 1;
+      btn.hotkeyBg.fillStyle(DF_PALETTE.obsidianBg, 0.84);
       btn.hotkeyBg.fillRoundedRect(
         -pillW / 2,
         pillY - pillH / 2,
@@ -1977,7 +2016,7 @@ export class DungeonHud {
         pillH,
         3
       );
-      btn.hotkeyBg.lineStyle(1, DF_PALETTE.bronzeBorder, 0.92);
+      btn.hotkeyBg.lineStyle(1, DF_PALETTE.metalBorder, 0.72);
       btn.hotkeyBg.strokeRoundedRect(
         -pillW / 2,
         pillY - pillH / 2,
@@ -1992,25 +2031,29 @@ export class DungeonHud {
   private drawPrimaryAttackButton(r: number): void {
     this.attackBtnBg.clear();
 
-    // Ember outer halo
-    this.attackBtnBg.fillStyle(0xe85d04, 0.22);
-    this.attackBtnBg.fillCircle(0, 0, r + 6);
-    this.attackBtnBg.fillStyle(0xff7b00, 0.14);
-    this.attackBtnBg.fillCircle(0, 0, r + 3);
+    // Warm glowing ember/bronze outer halo
+    this.attackBtnBg.fillStyle(0xf97316, 0.22);
+    this.attackBtnBg.fillCircle(0, 0, r + 7);
+    this.attackBtnBg.fillStyle(0xd4a95a, 0.16);
+    this.attackBtnBg.fillCircle(0, 0, r + 3.5);
 
-    // Obsidian crimson disc
-    this.attackBtnBg.fillStyle(0x1b0e0c, 0.96);
+    // Dark crimson-obsidian metallic disc
+    this.attackBtnBg.fillStyle(0x180b09, 0.96);
     this.attackBtnBg.fillCircle(0, 0, r);
-    this.attackBtnBg.fillStyle(0x5c180b, 0.56);
+    this.attackBtnBg.fillStyle(0x5f1b0d, 0.62);
     this.attackBtnBg.fillCircle(0, 0, r - 4);
+    this.attackBtnBg.fillStyle(0x9a3412, 0.28);
+    this.attackBtnBg.fillCircle(0, 6, r - 10);
 
-    // Double metallic bronze + ember bevel rings
-    this.attackBtnBg.lineStyle(3.4, DF_PALETTE.metalDark, 0.98);
-    this.attackBtnBg.strokeCircle(0, 0, r + 1.5);
-    this.attackBtnBg.lineStyle(2.4, DF_PALETTE.agedGold, 0.98);
+    // Double dark metallic ring + bright glowing orange/bronze ring
+    this.attackBtnBg.lineStyle(3.8, DF_PALETTE.metalDark, 0.98);
+    this.attackBtnBg.strokeCircle(0, 0, r + 2);
+    this.attackBtnBg.lineStyle(2.6, DF_PALETTE.agedGold, 0.98);
     this.attackBtnBg.strokeCircle(0, 0, r);
-    this.attackBtnBg.lineStyle(1.4, 0xf97316, 0.88);
-    this.attackBtnBg.strokeCircle(0, 0, r - 3.5);
+    this.attackBtnBg.lineStyle(2, 0xf97316, 0.95);
+    this.attackBtnBg.strokeCircle(0, 0, r - 3);
+    this.attackBtnBg.lineStyle(1, 0xfdba74, 0.55);
+    this.attackBtnBg.strokeCircle(0, 0, r - 5);
 
     const hasIcon =
       this.attackBtnIcon !== null &&
@@ -2018,13 +2061,15 @@ export class DungeonHud {
     if (this.attackBtnIcon) {
       this.attackBtnIcon.setVisible(hasIcon);
       if (hasIcon) {
-        const size = Math.round(r * 1.32);
+        const size = Math.round(r * 1.06);
         this.attackBtnIcon
+          .setPosition(0, -8)
           .setFrame(DF_UI_ICON_FRAMES.attack)
           .setDisplaySize(size, size);
       }
     }
-    this.attackBtnFallbackText.setVisible(!hasIcon);
+    this.attackBtnFallbackText.setPosition(0, -8).setVisible(!hasIcon);
+    this.attackBtnLabelText.setPosition(0, 22).setVisible(true);
   }
 
   private drawSkillButtonState(
@@ -2038,34 +2083,39 @@ export class DungeonHud {
     const r = btn.radius;
 
     btn.bg.clear();
-    btn.bg.fillStyle(DF_PALETTE.obsidianBg, isReady ? 0.95 : 0.74);
+    btn.bg.fillStyle(DF_PALETTE.obsidianBg, isReady ? 0.94 : 0.78);
     btn.bg.fillCircle(0, 0, r);
-    btn.bg.fillStyle(palette.fill, isReady ? 0.58 : 0.24);
+    btn.bg.fillStyle(palette.fill, isReady ? 0.48 : 0.22);
     btn.bg.fillCircle(0, 0, r - 3);
 
-    btn.bg.lineStyle(2.6, DF_PALETTE.metalDark, 0.96);
-    btn.bg.strokeCircle(0, 0, r + 1);
+    // Dark metallic outer ring + refined bronze/force bevel
+    btn.bg.lineStyle(2.8, DF_PALETTE.metalDark, 0.98);
+    btn.bg.strokeCircle(0, 0, r + 1.2);
     btn.bg.lineStyle(
       1.8,
-      isReady ? palette.stroke : DF_PALETTE.metalBorder,
-      isReady ? 0.98 : 0.55
+      isReady ? DF_PALETTE.bronzeBorder : DF_PALETTE.metalBorder,
+      isReady ? 0.96 : 0.6
     );
     btn.bg.strokeCircle(0, 0, r);
-    btn.bg.lineStyle(1, DF_PALETTE.deepRecess, 0.8);
-    btn.bg.strokeCircle(0, 0, r - 2.5);
+    btn.bg.lineStyle(
+      1.1,
+      isReady ? palette.stroke : DF_PALETTE.deepRecess,
+      isReady ? 0.78 : 0.7
+    );
+    btn.bg.strokeCircle(0, 0, r - 2.4);
 
-    // Smooth radial cooldown sweep
+    // Smooth dark translucent radial cooldown sweep
     btn.cdOverlay.clear();
     if (cdRemainingMs > 0 && totalCooldownMs > 0) {
       const ratio = Math.min(1, cdRemainingMs / totalCooldownMs);
       const startAngle = Phaser.Math.DegToRad(-90);
       const endAngle = Phaser.Math.DegToRad(-90 + 360 * ratio);
 
-      btn.cdOverlay.fillStyle(0x04060a, 0.78);
-      btn.cdOverlay.slice(0, 0, r - 2, startAngle, endAngle, false);
+      btn.cdOverlay.fillStyle(0x04060a, 0.76);
+      btn.cdOverlay.slice(0, 0, r - 1.5, startAngle, endAngle, false);
       btn.cdOverlay.fillPath();
 
-      btn.cdOverlay.lineStyle(2.2, DF_PALETTE.agedGold, 0.95);
+      btn.cdOverlay.lineStyle(2.2, DF_PALETTE.agedGold, 0.94);
       btn.cdOverlay.beginPath();
       btn.cdOverlay.arc(0, 0, r - 1.5, startAngle, endAngle, false);
       btn.cdOverlay.strokePath();

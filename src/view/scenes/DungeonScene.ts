@@ -72,6 +72,7 @@ import {
 } from '../sprites/CombatVfx';
 import { HeroWeaponRig } from '../sprites/HeroWeaponRig';
 import { SceneCameraRig } from '../ui/CameraRig';
+import { DF_FONTS, DF_RARITY_THEME } from '../ui/DarkFantasyUiBuilder';
 import { DungeonHud, type HudSnapshot } from '../ui/DungeonHud';
 import {
   InventoryModal,
@@ -116,6 +117,9 @@ interface GroundDrop {
   position: Vector2D;
   sprite: Phaser.GameObjects.Sprite;
   glow: Phaser.GameObjects.Graphics;
+  labelContainer: Phaser.GameObjects.Container;
+  pillar?: Phaser.GameObjects.Graphics;
+  pillarTween?: Phaser.Tweens.Tween;
 }
 
 export interface SubmundoDebugApi {
@@ -143,6 +147,13 @@ const TILE_DISPLAY_SIZE = 32;
 const ARENA_PADDING = 36;
 const ROOM_CLEAR_AUTO_ADVANCE_MS = 1200;
 const DROP_PICKUP_RADIUS = 34;
+const GROUND_DROP_TAG_OFFSET_Y = 26;
+const GROUND_DROP_TAG_COLORS: Record<Rarity, string> = {
+  common: '#cbd5e1',
+  magic: '#60a5fa',
+  rare: '#facc15',
+  legendary: '#f97316',
+};
 const HERO_ATTACK_CANCEL_FRAME = 12;
 const HERO_HIT_CANCEL_FRAME = 21;
 const EQUIP_SLOTS: readonly EquipSlot[] = [
@@ -1453,11 +1464,13 @@ export class DungeonScene extends Phaser.Scene {
 
     const label = this.add
       .text(0, -28, 'Portal Espectral', {
-        fontFamily: 'monospace',
+        fontFamily: DF_FONTS.TITLE,
         fontSize: '11px',
+        fontStyle: 'bold',
         color: '#e0f2fe',
         stroke: '#09090b',
         strokeThickness: 3,
+        resolution: 2,
       })
       .setOrigin(0.5);
 
@@ -1784,6 +1797,11 @@ export class DungeonScene extends Phaser.Scene {
       );
       drop.sprite.setPosition(drop.position.x, drop.position.y);
       drop.glow.setPosition(drop.position.x, drop.position.y);
+      drop.labelContainer.setPosition(
+        drop.position.x,
+        drop.position.y - GROUND_DROP_TAG_OFFSET_Y
+      );
+      drop.pillar?.setPosition(drop.position.x, drop.position.y);
     }
 
     this.cameraRig?.resize(
@@ -1893,6 +1911,116 @@ export class DungeonScene extends Phaser.Scene {
     };
   }
 
+  private createLegendaryLootPillar(
+    x: number,
+    y: number
+  ): { pillar: Phaser.GameObjects.Graphics; tween: Phaser.Tweens.Tween } {
+    const pillar = this.add.graphics({ x, y }).setDepth(15);
+    const totalHeight = 190;
+    const segments = 10;
+    const segmentHeight = totalHeight / segments;
+
+    // Camadas verticais douradas/alaranjadas com decaimento suave de alpha
+    for (let i = 0; i < segments; i++) {
+      const t = i / segments;
+      const fade = Math.pow(1 - t, 1.55);
+      const segY = -(i + 1) * segmentHeight;
+      const overlap = 1;
+
+      const outerWidth = 26 * (1 - t * 0.42);
+      pillar.fillStyle(0xf97316, 0.22 * fade);
+      pillar.fillRect(
+        -outerWidth / 2,
+        segY,
+        outerWidth,
+        segmentHeight + overlap
+      );
+
+      const midWidth = 12 * (1 - t * 0.48);
+      pillar.fillStyle(0xfde047, 0.36 * fade);
+      pillar.fillRect(-midWidth / 2, segY, midWidth, segmentHeight + overlap);
+
+      const coreWidth = Math.max(2, 4 * (1 - t * 0.5));
+      pillar.fillStyle(0xfffbeb, 0.72 * fade);
+      pillar.fillRect(-coreWidth / 2, segY, coreWidth, segmentHeight + overlap);
+    }
+
+    // Anel radiante na base do item lendário no chão
+    pillar.fillStyle(0xf97316, 0.22);
+    pillar.fillEllipse(0, 2, 42, 16);
+    pillar.fillStyle(0xfde047, 0.34);
+    pillar.fillEllipse(0, 1, 26, 10);
+    pillar.lineStyle(1.8, 0xfde047, 0.85);
+    pillar.strokeEllipse(0, 2, 34, 13);
+    pillar.lineStyle(1.2, 0xfffbeb, 0.9);
+    pillar.strokeEllipse(0, 2, 20, 8);
+
+    const tween = this.tweens.add({
+      targets: pillar,
+      alpha: { from: 0.82, to: 1 },
+      scaleX: { from: 0.94, to: 1.06 },
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    return { pillar, tween };
+  }
+
+  private createGroundDropLabel(
+    item: ItemInstance,
+    x: number,
+    y: number,
+    rarityNum: number
+  ): Phaser.GameObjects.Container {
+    const rarityLabel = DF_RARITY_THEME[item.rarity].label;
+    const tagText = this.add
+      .text(0, 0, `[${item.name} (${rarityLabel})]`, {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: GROUND_DROP_TAG_COLORS[item.rarity],
+        stroke: '#090b10',
+        strokeThickness: 2,
+        resolution: 2,
+      })
+      .setOrigin(0.5);
+
+    const padX = 7;
+    const padY = 3;
+    const boxW = Math.ceil(tagText.width) + padX * 2;
+    const boxH = Math.ceil(tagText.height) + padY * 2;
+    const tagBg = this.add.graphics();
+    tagBg.fillStyle(0x090b10, 0.78);
+    tagBg.fillRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 4);
+    tagBg.lineStyle(
+      1,
+      item.rarity === 'legendary' ? 0xf97316 : rarityNum,
+      item.rarity === 'legendary' ? 0.65 : 0.32
+    );
+    tagBg.strokeRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 4);
+
+    return this.add
+      .container(x, y - GROUND_DROP_TAG_OFFSET_Y, [tagBg, tagText])
+      .setDepth(28);
+  }
+
+  private destroyGroundDropVisuals(drop: GroundDrop): void {
+    if (drop.pillarTween) {
+      drop.pillarTween.stop();
+      drop.pillarTween = undefined;
+    }
+    if (drop.pillar) {
+      this.tweens?.killTweensOf(drop.pillar);
+      drop.pillar.destroy();
+      drop.pillar = undefined;
+    }
+    drop.labelContainer.destroy(true);
+    drop.sprite.destroy();
+    drop.glow.destroy();
+  }
+
   private spawnGroundDrop(item: ItemInstance, rawPosition: Vector2D): void {
     const width = this.scale.width || 960;
     const height = this.scale.height || 540;
@@ -1924,6 +2052,17 @@ export class DungeonScene extends Phaser.Scene {
       .setScale(1.5)
       .setDepth(16);
 
+    const labelContainer = this.createGroundDropLabel(item, x, y, rarityNum);
+
+    // REGRA INEGOCIÁVEL: pilar de luz vertical EXCLUSIVAMENTE em itens Lendários
+    let pillar: Phaser.GameObjects.Graphics | undefined;
+    let pillarTween: Phaser.Tweens.Tween | undefined;
+    if (item.rarity === 'legendary') {
+      const created = this.createLegendaryLootPillar(x, y);
+      pillar = created.pillar;
+      pillarTween = created.tween;
+    }
+
     soundManager.play(
       item.rarity === 'legendary' ? 'loot_legendary' : 'loot_drop'
     );
@@ -1933,6 +2072,9 @@ export class DungeonScene extends Phaser.Scene {
       position: { x, y },
       sprite,
       glow,
+      labelContainer,
+      pillar,
+      pillarTween,
     });
   }
 
@@ -1964,8 +2106,7 @@ export class DungeonScene extends Phaser.Scene {
           remaining.push(drop);
           continue;
         }
-        drop.sprite.destroy();
-        drop.glow.destroy();
+        this.destroyGroundDropVisuals(drop);
         if (this.inventory.equipped[drop.item.slot] === null) {
           equipItemFromBag(this.inventory, drop.item.instanceId);
           this.recalculateHeroGear();
@@ -2004,16 +2145,14 @@ export class DungeonScene extends Phaser.Scene {
           RARITY_COLORS[drop.item.rarity]
         );
       }
-      drop.sprite.destroy();
-      drop.glow.destroy();
+      this.destroyGroundDropVisuals(drop);
     }
     this.groundDrops = [];
   }
 
   private clearGroundDrops(): void {
     for (const drop of this.groundDrops) {
-      drop.sprite.destroy();
-      drop.glow.destroy();
+      this.destroyGroundDropVisuals(drop);
     }
     this.groundDrops = [];
   }
