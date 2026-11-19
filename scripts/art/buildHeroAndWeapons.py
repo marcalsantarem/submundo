@@ -1071,6 +1071,8 @@ class HeroPose:
     speed_lines: bool = False
     flash_strength: float = 0.0
     wraith_dash_tint: bool = False
+    # Braco da arma desenhado na frente do torso/cabeca (golpe cruzando o corpo)
+    weapon_arm_front: bool = False
 
 
 def build_poses() -> List[HeroPose]:
@@ -1182,78 +1184,84 @@ def build_poses() -> List[HeroPose]:
     ]
     poses.extend(walk_specs)
 
-    # ---- 10..15: ATTACK (6 frames — antecipacao alta, corte com lunge, pico, follow-through, rec1, rec2) ----
+    # ---- 10..15: ATTACK (6 frames — T-121) ----
+    # Linha do tempo (ms, igual a HERO_ATTACK_FRAME_DURATIONS_MS no HeroWeaponRig):
+    #   attack0   0- 90  antecipacao: peso atras, tronco recua, mao da arma alta atras da cabeca
+    #   attack1  90-145  golpe: avanco do quadril, braco cruzando por cima e a frente
+    #   attack2 145-210  IMPACTO (145 ms): extensao maxima, peso no pe da frente
+    #   attack3 210-265  follow-through: mao desce cruzando a frente do cinto
+    #   attack4 265-315  recuperacao 1
+    #   attack5 315-360  recuperacao 2 (volta a guarda do idle)
+    # weapon_rot = rotacao da arma no INICIO do frame (keyframe do rig).
     attack_specs = [
-        # attack0: Antecipacao recuada, braco alto pronto para golpe
         HeroPose(
             name="attack0",
-            body_dx=-3.0, body_dy=1.0, torso_lean=-2.2,
-            head_dx=-4.4, head_dy=0.5,
-            near_ankle=(23.5, 72.0), near_foot_deg=0.0,
-            far_ankle=(45.5, 71.0), far_foot_deg=-4.0,
-            near_hand=(22.5, 46.5),
-            weapon_hand=(52.5, 17.0),     # Mao bem alta acima do ombro para cortar!
-            weapon_rot=-1.22,
-            cape_billow=1.5, cape_lift=4.5, cape_phase=0.6, skirt_sway=1.5,
+            body_dx=-2.5, body_dy=1.5, torso_lean=-2.6,
+            head_dx=-3.6, head_dy=1.0,
+            near_ankle=(22.5, 72.0), near_foot_deg=0.0,
+            far_ankle=(50.0, 71.0), far_foot_deg=-6.0,
+            near_hand=(25.5, 44.5),       # mao livre recolhida a frente do peito
+            weapon_hand=(44.5, 12.0),     # mao da arma alta, atras da cabeca
+            weapon_rot=-1.7,
+            cape_billow=1.5, cape_lift=5.0, cape_phase=0.6, skirt_sway=2.0,
+            weapon_arm_front=True,
         ),
-        # attack1: Inicio do corte com avanco (lunge)
         HeroPose(
             name="attack1",
-            body_dx=3.0, body_dy=1.0, torso_lean=3.0,
-            head_dx=5.2, head_dy=1.0,
-            near_ankle=(22.5, 72.0), near_foot_deg=14.0,
-            far_ankle=(53.5, 71.0), far_foot_deg=0.0,
-            near_hand=(22.0, 43.0),
-            weapon_hand=(63.5, 25.5),
-            weapon_rot=-0.32,
-            cape_billow=7.5, cape_lift=5.5, cape_phase=1.8, skirt_sway=-3.0,
+            body_dx=2.0, body_dy=0.5, torso_lean=2.6,
+            head_dx=3.8, head_dy=0.5,
+            near_ankle=(23.0, 72.0), near_foot_deg=10.0,
+            far_ankle=(54.5, 71.0), far_foot_deg=0.0,
+            near_hand=(22.0, 44.0),
+            weapon_hand=(60.0, 15.5),     # braco cruzando por cima, a frente
+            weapon_rot=-1.95,
+            cape_billow=7.0, cape_lift=6.0, cape_phase=1.8, skirt_sway=-2.5,
+            weapon_arm_front=True,
         ),
-        # attack2: Pico de extensao com braco totalmente estendido e tronco avancado
         HeroPose(
             name="attack2",
-            body_dx=5.5, body_dy=2.5, torso_lean=3.8,
-            head_dx=8.4, head_dy=2.5,
-            near_ankle=(21.0, 72.0), near_foot_deg=20.0,
-            far_ankle=(56.5, 71.0), far_foot_deg=0.0,
-            near_hand=(23.5, 42.0),
-            weapon_hand=(71.0, 35.5),     # Extensao maxima com braco quase reto!
+            body_dx=5.0, body_dy=3.0, torso_lean=4.0,
+            head_dx=7.6, head_dy=3.0,
+            near_ankle=(20.0, 72.0), near_foot_deg=22.0,
+            far_ankle=(58.5, 71.0), far_foot_deg=0.0,
+            near_hand=(20.5, 42.5),       # contrapeso para tras
+            weapon_hand=(70.0, 34.0),     # extensao maxima a frente
             weapon_rot=1.05,
-            cape_billow=11.0, cape_lift=8.0, cape_phase=2.9, skirt_sway=-4.0,
+            cape_billow=11.5, cape_lift=8.5, cape_phase=2.9, skirt_sway=-4.0,
+            weapon_arm_front=True,
         ),
-        # attack3: Follow-through (corte termina baixo-frente)
         HeroPose(
             name="attack3",
-            body_dx=5.0, body_dy=3.0, torso_lean=3.2,
-            head_dx=7.4, head_dy=3.0,
-            near_ankle=(21.5, 72.0), near_foot_deg=18.0,
-            far_ankle=(56.0, 71.0), far_foot_deg=0.0,
-            near_hand=(25.5, 46.0),
-            weapon_hand=(65.5, 46.5),     # Finalizacao baixa do arco
-            weapon_rot=1.52,
+            body_dx=4.5, body_dy=3.5, torso_lean=3.4,
+            head_dx=6.6, head_dy=3.5,
+            near_ankle=(20.5, 72.0), near_foot_deg=18.0,
+            far_ankle=(58.0, 71.0), far_foot_deg=0.0,
+            near_hand=(23.5, 45.5),
+            weapon_hand=(63.0, 47.0),     # follow-through baixo, cruzando a frente do cinto
+            weapon_rot=1.7,
             cape_billow=9.5, cape_lift=6.0, cape_phase=4.0, skirt_sway=-3.2,
+            weapon_arm_front=True,
         ),
-        # attack4: Recuperacao 1
         HeroPose(
             name="attack4",
-            body_dx=2.5, body_dy=1.5, torso_lean=1.5,
-            head_dx=3.6, head_dy=1.5,
-            near_ankle=(24.5, 72.0), near_foot_deg=8.0,
-            far_ankle=(52.0, 71.0), far_foot_deg=0.0,
-            near_hand=(27.5, 48.0),
-            weapon_hand=(59.5, 40.0),
-            weapon_rot=0.72,
+            body_dx=2.5, body_dy=2.0, torso_lean=1.6,
+            head_dx=3.4, head_dy=2.0,
+            near_ankle=(23.5, 72.0), near_foot_deg=8.0,
+            far_ankle=(53.0, 71.0), far_foot_deg=0.0,
+            near_hand=(27.0, 48.0),
+            weapon_hand=(58.5, 40.5),
+            weapon_rot=1.75,
             cape_billow=5.0, cape_lift=3.0, cape_phase=5.0, skirt_sway=-1.5,
         ),
-        # attack5: Recuperacao 2 (retomando guarda)
         HeroPose(
             name="attack5",
             body_dx=1.0, body_dy=0.5, torso_lean=0.5,
             head_dx=1.4, head_dy=0.5,
             near_ankle=(26.0, 72.0), near_foot_deg=2.0,
-            far_ankle=(49.5, 71.0), far_foot_deg=0.0,
+            far_ankle=(50.0, 71.0), far_foot_deg=0.0,
             near_hand=(29.0, 48.0),
             weapon_hand=(56.0, 34.5),
-            weapon_rot=0.22,
+            weapon_rot=0.75,
             cape_billow=2.2, cape_lift=1.2, cape_phase=5.8, skirt_sway=-0.5,
         ),
     ]
@@ -1422,7 +1430,8 @@ def render_core_character(
     far_arm_layer, actual_weapon_hand = draw_arm(
         far_sh, pose.weapon_hand, bend_sign=-1, theme=theme, is_far=True
     )
-    frame.composite(far_arm_layer)
+    if not pose.weapon_arm_front:
+        frame.composite(far_arm_layer)
 
     # 3. Perna distante (mais escura para leitura clara no cruzamento de passos)
     far_leg_layer, far_knee, _ = draw_leg(
@@ -1453,6 +1462,10 @@ def render_core_character(
 
     # 7. Cabeca / Capuz preservados 100% nitidos do sprite base
     frame.composite(parts.head, int(round(pose.head_dx)), int(round(pose.head_dy)))
+
+    # 7b. No golpe o braco da arma cruza a frente do corpo/cabeca
+    if pose.weapon_arm_front:
+        frame.composite(far_arm_layer)
 
     # 8. Braco proximo (na frente do torso/tunica) + Ombreira preservada
     near_arm_layer, _ = draw_arm(

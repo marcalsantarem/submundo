@@ -70,7 +70,13 @@ import {
   resolveMonsterAnimKey,
   spawnFootstepDust,
 } from '../sprites/CombatVfx';
-import { HeroWeaponRig } from '../sprites/HeroWeaponRig';
+import {
+  HERO_ATTACK_DURATION_MS,
+  HERO_ATTACK_IMPACT_MS,
+  HERO_SKILL_ATTACK_DURATION_MS,
+  HERO_SKILL_ATTACK_IMPACT_MS,
+  HeroWeaponRig,
+} from '../sprites/HeroWeaponRig';
 import { SceneCameraRig } from '../ui/CameraRig';
 import { DF_FONTS, DF_RARITY_THEME } from '../ui/DarkFantasyUiBuilder';
 import { DungeonHud, type HudSnapshot } from '../ui/DungeonHud';
@@ -228,6 +234,7 @@ const GROUND_DROP_TAG_COLORS: Record<Rarity, string> = {
 };
 const HERO_ATTACK_CANCEL_FRAME = 12;
 const HERO_HIT_CANCEL_FRAME = 21;
+const MONSTER_HIT_FLASH_MS = 70;
 const EQUIP_SLOTS: readonly EquipSlot[] = [
   'weapon',
   'armor',
@@ -277,6 +284,16 @@ export class DungeonScene extends Phaser.Scene {
   private heroFlipX = false;
   private lastMoveDirX = 0;
   private lastHeroFootstepFrame = -1;
+  /** Scene-clock (this.time.now) timeline of the current hero swing. */
+  private heroSwingEndsAtMs = 0;
+  private heroSwingImpactAtMs = 0;
+  /** Impact visuals waiting for the swing's impact moment. */
+  private pendingHeroImpacts: Array<{
+    timer: Phaser.Time.TimerEvent;
+    show: () => void;
+  }> = [];
+  /** Monsters killed by a hero hit whose death visual waits for impact. */
+  private readonly deferredDeathIds = new Set<string>();
   private readonly monsterVisuals = new Map<string, MonsterVisual>();
   private readonly minionVisuals = new Map<string, Phaser.GameObjects.Graphics>();
   private groundDrops: GroundDrop[] = [];
@@ -431,6 +448,8 @@ export class DungeonScene extends Phaser.Scene {
       this.clearGroundDrops();
       this.clearMinionVisuals();
       this.destroyPortal();
+      this.cancelHeroImpacts();
+      this.resetHeroSwing();
       this.weaponRig?.destroy();
       this.weaponRig = undefined;
       this.heroSprite = undefined;
@@ -517,7 +536,8 @@ export class DungeonScene extends Phaser.Scene {
         this.runState.status === 'room_cleared');
     this.heroIsMoving = canMove && (moveDir.x !== 0 || moveDir.y !== 0);
     this.lastMoveDirX = canMove ? moveDir.x : 0;
-    if (canMove && moveDir.x !== 0) {
+    // Facing is locked while a swing is in progress (BRF-131).
+    if (canMove && moveDir.x !== 0 && !this.isHeroSwingActive()) {
       this.heroFlipX = moveDir.x < 0;
     }
 
@@ -665,13 +685,8 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     if (nearestTarget) {
-      const dx = nearestTarget.position.x - this.hero.position.x;
-      if (
-        Math.abs(dx) > 0.5 &&
-        (!this.heroIsMoving || this.lastMoveDirX === 0)
-      ) {
-        this.heroFlipX = dx < 0;
-        this.heroSprite?.setFlipX(this.heroFlipX);
+      if (!this.isHeroSwingActive()) {
+        this.faceHeroToward(nearestTarget.position.x);
       }
 
       if (this.autoAttackEnabled) {
@@ -689,12 +704,9 @@ export class DungeonScene extends Phaser.Scene {
       }
     }
 
-    const facingLeft = this.heroSprite?.flipX ?? this.heroFlipX;
+    // Whiff swing (no target in range): same swing timeline, no impact VFX.
     soundManager.play('attack');
-    if (!this.heroIsMoving && this.currentHeroActionAnim !== 'dash') {
-      this.playHeroActionAnim('attack');
-    }
-    this.weaponRig?.playAttackSwing(facingLeft, false);
+    this.beginHeroSwing(false);
   }
 
   public forceClearRoom(): void {
@@ -882,6 +894,8 @@ export class DungeonScene extends Phaser.Scene {
     const currentRoom = getCurrentRoom(this.runState);
 
     this.destroyPortal();
+    this.cancelHeroImpacts();
+    this.resetHeroSwing();
     this.clearMonsterVisuals();
     this.clearGroundDrops();
     this.cancelHeroActionAnim();
@@ -1102,30 +1116,33 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private processCombatEvents(events: CombatEvent[]): void {
+    // Core damage is already applied; only the visuals wait for the impact
+    // moment of the swing that produced them (BRF-131).
+    let basicImpactDelayMs = 0;
+    let skillImpactDelayMs = 0;
+    // Impact delay of the hero hit on each target in this batch, so a killing
+    // blow can defer the death visuals to the same instant.
+    const heroHitDelayByTarget = new Map<string, number>();
     for (const event of events) {
       switch (event.type) {
         case 'hero_basic_attack': {
-          soundManager.play(event.isCrit ? 'crit' : 'attack');
-          const dx = event.position.x - this.hero.position.x;
-          if (
-            Math.abs(dx) > 0.5 &&
-            (!this.heroIsMoving || this.lastMoveDirX === 0)
-          ) {
-            this.heroFlipX = dx < 0;
-            this.heroSprite?.setFlipX(this.heroFlipX);
-          }
-          const facingLeft = this.heroSprite?.flipX ?? this.heroFlipX;
-          this.vfx.showSlashEffect(
-            this.hero.position.x,
-            this.hero.position.y,
-            event.position.x,
-            event.position.y,
-            this.heroSpriteKey === 'hero_wraith'
-          );
-          if (!this.heroIsMoving) {
-            this.playHeroActionAnim('attack');
-          }
-          this.weaponRig?.playAttackSwing(facingLeft, false);
+          // Single attack sound: it marks the hit, so it plays at impact.
+          const hitSound = event.isCrit ? 'crit' : 'attack';
+          basicImpactDelayMs = this.beginHeroSwing(false, event.position.x);
+          const targetId = event.targetId;
+          const fallbackPos = { ...event.position };
+          const isWraith = this.heroSpriteKey === 'hero_wraith';
+          this.scheduleHeroImpact(basicImpactDelayMs, () => {
+            soundManager.play(hitSound);
+            const targetPos = this.resolveImpactPosition(targetId, fallbackPos);
+            this.vfx.showSlashEffect(
+              this.hero.position.x,
+              this.hero.position.y,
+              targetPos.x,
+              targetPos.y,
+              isWraith
+            );
+          });
           break;
         }
 
@@ -1153,19 +1170,13 @@ export class DungeonScene extends Phaser.Scene {
             skill &&
             (skill.slot === 'active_1' || skill.slot === 'active_2')
           ) {
-            this.vfx.showSkillAreaEffect(
-              event.position.x,
-              event.position.y,
-              skill.radius ?? 80,
-              skill.force
-            );
-            if (this.currentHeroActionAnim !== 'dash') {
-              this.playHeroActionAnim('attack');
-            }
-            this.weaponRig?.playAttackSwing(
-              this.heroSprite?.flipX ?? this.heroFlipX,
-              true
-            );
+            skillImpactDelayMs = this.beginHeroSwing(true);
+            const areaPos = { ...event.position };
+            const radius = skill.radius ?? 80;
+            const force = skill.force;
+            this.scheduleHeroImpact(skillImpactDelayMs, () => {
+              this.vfx.showSkillAreaEffect(areaPos.x, areaPos.y, radius, force);
+            });
           }
           break;
         }
@@ -1180,34 +1191,50 @@ export class DungeonScene extends Phaser.Scene {
         }
 
         case 'monster_damaged': {
-          if (event.isCrit && event.skillId) {
-            soundManager.play('crit');
+          const targetId = event.targetId;
+          const fallbackPos = { ...event.position };
+          const value = event.value ?? 1;
+          const isCrit = Boolean(event.isCrit);
+          const playSkillCrit = isCrit && Boolean(event.skillId);
+          const hitDelayMs = event.skillId
+            ? skillImpactDelayMs
+            : basicImpactDelayMs;
+          if (targetId) {
+            heroHitDelayByTarget.set(targetId, hitDelayMs);
           }
-          this.vfx.showDamageNumber(
-            event.position.x,
-            event.position.y,
-            event.value ?? 1,
-            Boolean(event.isCrit),
-            false
+          this.scheduleHeroImpact(
+            hitDelayMs,
+            () => {
+              if (playSkillCrit) {
+                soundManager.play('crit');
+              }
+              const targetPos = this.resolveImpactPosition(
+                targetId,
+                fallbackPos
+              );
+              this.flashMonsterHit(targetId);
+              this.vfx.showDamageNumber(
+                targetPos.x,
+                targetPos.y,
+                value,
+                isCrit,
+                false
+              );
+            }
           );
           break;
         }
 
         case 'monster_killed': {
+          // State (souls, counters, boss flag, loot roll) follows the core
+          // immediately; only the death visuals wait for the hit's impact.
           const reward = event.value ?? 0;
           this.runState.soulsCollected += reward;
           this.runState.monstersKilled += 1;
-          this.vfx.showSoulCollectEffect(
-            event.position.x,
-            event.position.y,
-            reward
-          );
-          if (reward > 0) {
-            soundManager.play('soul_pickup');
-          }
 
+          const killedId = event.targetId;
           const killedMonster = this.monsters.find(
-            (m) => m.instanceId === event.targetId
+            (m) => m.instanceId === killedId
           );
           const isBoss =
             killedMonster?.type === 'boss' ||
@@ -1215,13 +1242,29 @@ export class DungeonScene extends Phaser.Scene {
           if (isBoss) {
             this.handleBossDefeated(event.position, killedMonster);
           }
-          if (shouldDropLoot(isBoss, Math.random, this.hero.luck)) {
-            const item = generateItemDrop({
-              luck: this.hero.luck,
-              isBoss,
-            });
-            this.spawnGroundDrop(item, event.position);
+          const droppedItem = shouldDropLoot(isBoss, Math.random, this.hero.luck)
+            ? generateItemDrop({ luck: this.hero.luck, isBoss })
+            : undefined;
+
+          const deathPos = { ...event.position };
+          const deathDelayMs = killedId
+            ? (heroHitDelayByTarget.get(killedId) ?? 0)
+            : 0;
+          if (killedId && deathDelayMs > 0) {
+            this.deferredDeathIds.add(killedId);
           }
+          this.scheduleHeroImpact(deathDelayMs, () => {
+            if (killedId) {
+              this.deferredDeathIds.delete(killedId);
+            }
+            this.vfx.showSoulCollectEffect(deathPos.x, deathPos.y, reward);
+            if (reward > 0) {
+              soundManager.play('soul_pickup');
+            }
+            if (droppedItem) {
+              this.spawnGroundDrop(droppedItem, deathPos);
+            }
+          });
           break;
         }
 
@@ -1359,6 +1402,9 @@ export class DungeonScene extends Phaser.Scene {
             this.hero.isAlive = true;
             return;
           }
+          // Hero died mid-swing: show pending hits now, at last known points.
+          this.flushHeroImpacts();
+          this.resetHeroSwing();
           this.cancelHeroActionAnim();
           this.lastHeroFootstepFrame = -1;
           this.heroSprite?.stop();
@@ -2020,6 +2066,8 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private finalizeRunOutcome(isVictory: boolean): void {
+    // Deferred kill visuals may still hold loot: land them before resolving.
+    this.flushHeroImpacts();
     if (isVictory) {
       this.collectRemainingDropsOnVictory();
     } else {
@@ -2210,6 +2258,15 @@ export class DungeonScene extends Phaser.Scene {
     for (const monster of this.monsters) {
       const visual = this.monsterVisuals.get(monster.instanceId);
       if (!visual || visual.deathFinished) {
+        continue;
+      }
+
+      if (
+        (!monster.isAlive || monster.hp <= 0) &&
+        this.deferredDeathIds.has(monster.instanceId)
+      ) {
+        // Dead in the core, but the killing swing has not landed yet: freeze
+        // the visual in place (no anim change, no attack) until impact.
         continue;
       }
 
@@ -2853,6 +2910,122 @@ export class DungeonScene extends Phaser.Scene {
       visual.hpBar.destroy();
     }
     this.monsterVisuals.clear();
+  }
+
+  private isHeroSwingActive(): boolean {
+    return this.time.now < this.heroSwingEndsAtMs;
+  }
+
+  private resetHeroSwing(): void {
+    this.heroSwingEndsAtMs = 0;
+    this.heroSwingImpactAtMs = 0;
+  }
+
+  private faceHeroToward(targetX: number): void {
+    const dx = targetX - this.hero.position.x;
+    if (Math.abs(dx) > 0.5 && (!this.heroIsMoving || this.lastMoveDirX === 0)) {
+      this.heroFlipX = dx < 0;
+      this.heroSprite?.setFlipX(this.heroFlipX);
+    }
+  }
+
+  /**
+   * Starts a hero swing (body `attack` + weapon rig) and returns the delay in
+   * ms until its impact. While a swing is in progress nothing is restarted and
+   * facing stays locked; the new hit lands on the current swing's impact.
+   */
+  private beginHeroSwing(isSkill: boolean, targetX?: number): number {
+    const now = this.time.now;
+    if (now < this.heroSwingEndsAtMs) {
+      return Math.max(0, this.heroSwingImpactAtMs - now);
+    }
+
+    if (targetX !== undefined) {
+      this.faceHeroToward(targetX);
+    }
+    const durationMs = isSkill
+      ? HERO_SKILL_ATTACK_DURATION_MS
+      : HERO_ATTACK_DURATION_MS;
+    const impactMs = isSkill ? HERO_SKILL_ATTACK_IMPACT_MS : HERO_ATTACK_IMPACT_MS;
+    this.heroSwingEndsAtMs = now + durationMs;
+    this.heroSwingImpactAtMs = now + impactMs;
+
+    // Skills drive the body even while walking; basic swings only when still.
+    if (
+      this.currentHeroActionAnim !== 'dash' &&
+      (isSkill || !this.heroIsMoving)
+    ) {
+      this.playHeroActionAnim('attack');
+    }
+    this.weaponRig?.playAttackSwing(this.heroFlipX, isSkill);
+    return impactMs;
+  }
+
+  private scheduleHeroImpact(delayMs: number, show: () => void): void {
+    if (delayMs <= 0) {
+      show();
+      return;
+    }
+    const timer = this.time.delayedCall(delayMs, () => {
+      this.pendingHeroImpacts = this.pendingHeroImpacts.filter(
+        (pending) => pending.timer !== timer
+      );
+      show();
+    });
+    this.pendingHeroImpacts.push({ timer, show });
+  }
+
+  /** Runs every pending impact visual right now (e.g. the hero died). */
+  private flushHeroImpacts(): void {
+    const pending = this.pendingHeroImpacts;
+    this.pendingHeroImpacts = [];
+    for (const entry of pending) {
+      entry.timer.remove(false);
+      entry.show();
+    }
+  }
+
+  /** Drops pending impact visuals without showing them (room/run reset). */
+  private cancelHeroImpacts(): void {
+    for (const entry of this.pendingHeroImpacts) {
+      entry.timer.remove(false);
+    }
+    this.pendingHeroImpacts = [];
+    this.deferredDeathIds.clear();
+  }
+
+  /** Current target position, or its last known point if it is gone. */
+  private resolveImpactPosition(
+    targetId: string | undefined,
+    fallback: Vector2D
+  ): Vector2D {
+    const monster = targetId
+      ? this.monsters.find((m) => m.instanceId === targetId)
+      : undefined;
+    return monster ? { ...monster.position } : fallback;
+  }
+
+  private flashMonsterHit(targetId: string | undefined): void {
+    if (!targetId) {
+      return;
+    }
+    const monster = this.monsters.find((m) => m.instanceId === targetId);
+    const visual = this.monsterVisuals.get(targetId);
+    if (!monster || !visual || visual.isDying || !visual.sprite.scene) {
+      return;
+    }
+    const sprite = visual.sprite;
+    sprite.setTintFill(0xffffff);
+    this.time.delayedCall(MONSTER_HIT_FLASH_MS, () => {
+      if (!sprite.scene) {
+        return;
+      }
+      if (monster.defId === 'abyss_herald') {
+        sprite.setTint(0xdc2626);
+      } else {
+        sprite.clearTint();
+      }
+    });
   }
 
   private playHeroActionAnim(action: 'attack' | 'dash' | 'hit'): void {
