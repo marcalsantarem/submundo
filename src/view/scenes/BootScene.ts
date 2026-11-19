@@ -187,6 +187,8 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
   },
 ];
 
+const LINEAR_TEXTURE_KEYS: readonly string[] = ['ui_icons', 'portraits'];
+
 export class BootScene extends Phaser.Scene {
   constructor() {
     super({ key: 'BootScene' });
@@ -207,6 +209,7 @@ export class BootScene extends Phaser.Scene {
 
   public create(): void {
     this.ensureFallbackTextures();
+    this.applyLinearFilterToUiTextures();
 
     const { width, height } = this.scale;
     this.cameras.main.setBackgroundColor('#09090b');
@@ -231,6 +234,14 @@ export class BootScene extends Phaser.Scene {
       this.scene.start('DungeonScene', { testArena: true });
     } else if ('HubScene' in this.scene.manager.keys) {
       this.scene.start('HubScene');
+    }
+  }
+
+  private applyLinearFilterToUiTextures(): void {
+    for (const key of LINEAR_TEXTURE_KEYS) {
+      if (this.textures.exists(key)) {
+        this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);
+      }
     }
   }
 

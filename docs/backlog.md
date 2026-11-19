@@ -107,3 +107,4 @@
 | T-103 | Registrar `skeleton_chief` em `CombatVfx.ts`, pré-carregar em `BootScene.ts` e aplicá-lo na Onda 2 da `testArena` junto com os bosses (`DungeonScene.ts`) (tam. P) | M6 | AG07 (Arquiteto) + AG01 (Gameplay) | feita |
 | T-104 | Corrigir orientação base (virado/atacando para a direita como os demais monstros) e recorte dos frames de ataque na animação 20f de **Karnak** (`scripts/art/buildMonstersSheets.py` + `public/assets/sprites/karnak.png`) (tam. P) | M6 | AG08 (Arte) | feita |
 | T-105 | Aumentar escala visual do sprite de **Karnak** em +20% (`0.88` → `1.06`) e ajustar `offsetY` da barra de HP em `src/view/scenes/DungeonScene.ts` (tam. P) | M6 | AG01 (Gameplay) | feita |
+| T-106 | Aplicar `Phaser.Textures.FilterMode.LINEAR` em `ui_icons` e `portraits` no `BootScene.ts` para preservar Arte 2D suave sem afetar o `pixelArt: true` do gameplay (tam. P) | M7 | AG07 (Arquiteto) | feita |
