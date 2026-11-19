@@ -8,10 +8,10 @@ aprovacao em assets/mockups/preview_m7_ui_assets.png.
 temporario via PowerShell System.Drawing (Windows) mantendo reproducibilidade.
 
 Saidas:
-  - assets/sprites_src/ui/ui_icons_64.png       (1024x64,  16 frames 64x64)
+  - assets/sprites_src/ui/ui_icons_64.png       (1152x64,  18 frames 64x64)
   - assets/sprites_src/ui/portraits_128.png     (1024x128,  8 frames 128x128)
   - assets/mockups/preview_m7_ui_assets.png     (prancha de aprovacao M7)
-  - public/assets/sprites/ui_icons.png          (1024x64,  16 frames 64x64)
+  - public/assets/sprites/ui_icons.png          (1152x64,  18 frames 64x64)
   - public/assets/sprites/portraits.png         (1024x128,  8 frames 128x128)
   - public/assets/sprites/manifest.json         (entradas ui_icons e portraits)
 """
@@ -36,6 +36,7 @@ MOCKUPS_DIR = ROOT / "assets" / "mockups"
 PUBLIC_SPRITES_DIR = ROOT / "public" / "assets" / "sprites"
 
 ICONS_RAW_JPG = UI_SRC_DIR / "ui_icons_raw.jpg"
+HELM_BOOTS_RAW_JPG = UI_SRC_DIR / "ui_helm_boots_raw.jpg"
 PORTRAITS_RAW_JPG = UI_SRC_DIR / "portraits_raw.jpg"
 
 ICONS_OUT_PNG = UI_SRC_DIR / "ui_icons_64.png"
@@ -63,6 +64,8 @@ ICON_NAMES: Tuple[str, ...] = (
     "slot_armor",
     "slot_amulet",
     "slot_ring",
+    "slot_helm",
+    "slot_boots",
 )
 
 PORTRAIT_NAMES: Tuple[str, ...] = (
@@ -118,6 +121,8 @@ ICON_GLOW_SPEC: Dict[str, GlowSpec] = {
     "slot_armor": ("solid", "any", 4, 0),
     "slot_amulet": ("solid", "any", 4, 0),
     "slot_ring": ("rim_glow", "warm", 26, 0),
+    "slot_helm": ("solid", "any", 4, 0),
+    "slot_boots": ("solid", "any", 4, 0),
 }
 
 PORTRAIT_GLOW_SPEC: Dict[str, GlowSpec] = {
@@ -1069,17 +1074,18 @@ def blit_circular_clipped(cv: Canvas, src: Canvas, cx: int, cy: int, clip_r: flo
 def build_approval_sheet(icon_frames: List[Canvas], portrait_frames: List[Canvas]) -> Canvas:
     """
     Prancha M7 legivel e completa:
-      Secao 1: 16 icones 64x64 em 2x (128x128) sobre xadrez de transparencia
-               (8x2 grade com rotulos + indices).
+      Secao 1: 18 icones 64x64 em 2x (128x128) sobre xadrez de transparencia
+               (9x2 grade com rotulos + indices).
       Secao 2: Faixa de simulacao em botoes circulares metalicos dark fantasy
-               (16 botoes com os icones 64x64 em tamanho real 1x).
+               (18 botoes com os icones 64x64 em tamanho real 1x).
       Secao 3: 8 retratos 128x128 em 1x sobre xadrez de transparencia com rotulos.
       Secao 4: 8 retratos em molduras circulares metalicas simulando o HUD.
     """
     margin = 24
-    # 8 colunas para icones 2x (128px + 14px gap)
-    col_w = 142
-    W = margin * 2 + 8 * col_w - 14  # ~1170 px
+    # 9 colunas para icones 2x (128px + 10px gap)
+    icon_cols = 9
+    col_w = 138
+    W = margin * 2 + icon_cols * col_w - 10  # 1280 px
     H = 980
 
     sheet = Canvas(W, H, (14, 16, 24, 255))
@@ -1090,13 +1096,13 @@ def build_approval_sheet(icon_frames: List[Canvas], portrait_frames: List[Canvas
     draw_text(sheet, margin, 14, "SUBMUNDO M7 - APROVACAO DE ICONES 2D (64X64) E RETRATOS 2D (128X128)", (238, 214, 148, 255), scale=2)
     draw_text(sheet, margin, 34, "ALPHA SUAVE + PRESERVACAO DE GLOWS + DOWNSCALE AREA PREMULTIPLIED", (156, 174, 206, 255), scale=1)
 
-    # ---- Secao 1: 16 Icones 64x64 em 2x sobre xadrez ----
+    # ---- Secao 1: 18 Icones 64x64 em 2x sobre xadrez ----
     y = 66
-    draw_text(sheet, margin, y, "1. ICONES 2D (16 FRAMES 64X64 EXIBIDOS EM 2X SOBRE FUNDO XADREZ CLARO/ESCURO)", (216, 224, 240, 255), scale=2)
+    draw_text(sheet, margin, y, "1. ICONES 2D (18 FRAMES 64X64 EXIBIDOS EM 2X SOBRE FUNDO XADREZ CLARO/ESCURO)", (216, 224, 240, 255), scale=2)
     y += 20
 
     for idx, (name, frame) in enumerate(zip(ICON_NAMES, icon_frames)):
-        r, c = divmod(idx, 8)
+        r, c = divmod(idx, icon_cols)
         bx = margin + c * col_w
         by = y + r * 156
         # Metade esquerda xadrez escuro, metade direita xadrez claro (revela halos escuros E brancos!)
@@ -1117,24 +1123,23 @@ def build_approval_sheet(icon_frames: List[Canvas], portrait_frames: List[Canvas
     draw_text(sheet, margin, y, "2. SIMULACAO IN-GAME: BOTOES CIRCULARES METALICOS DARK FANTASY (ESCALA 1X NATIVA 64X64)", (216, 224, 240, 255), scale=2)
     y += 22
 
-    # Fundo de barra HUD sombria para os 16 botoes em 1 linha
+    # Fundo de barra HUD sombria para os 18 botoes em 1 linha
     sheet.fill_rect(margin, y, W - margin * 2, 92, (20, 22, 32, 255))
     draw_border(sheet, margin, y, W - margin * 2, 92, (62, 68, 88, 255), 1)
-    # 16 botoes espacados igualmente
+    # 18 botoes espacados igualmente
     avail_w = W - margin * 2 - 24
-    step_btn = avail_w / 16.0
+    step_btn = avail_w / float(len(icon_frames))
     for idx, frame in enumerate(icon_frames):
         cx = int(round(margin + 12 + (idx + 0.5) * step_btn))
         cy = y + 46
         is_gold = idx in (2, 3, 4, 10, 11)
         draw_metallic_circle_frame(
-            sheet, cx, cy, outer_r=34, rim_w=5,
+            sheet, cx, cy, outer_r=32, rim_w=5,
             inner_col_top=(32, 36, 52), inner_col_bot=(14, 16, 26),
             rim_gold=is_gold,
         )
-        # Icone 64x64 reduzido levemente (52x52) ou 1x (64x64) dentro do botao de raio interno 29 -> 54x54 cabe com folga linda!
-        btn_icon = resize_area_premult(frame, 52, 52)
-        sheet.blit(btn_icon, cx - 26, cy - 26, blend=True)
+        btn_icon = resize_area_premult(frame, 48, 48)
+        sheet.blit(btn_icon, cx - 24, cy - 24, blend=True)
 
     # ---- Secao 3: 8 Retratos 128x128 em 1x sobre xadrez ----
     y += 108
@@ -1142,8 +1147,9 @@ def build_approval_sheet(icon_frames: List[Canvas], portrait_frames: List[Canvas
     draw_text(sheet, margin, y, "3. RETRATOS 2D (8 FRAMES 128X128 EM 1X NATIVO SOBRE XADREZ CLARO/ESCURO)", (216, 224, 240, 255), scale=2)
     y += 20
 
+    portrait_col_w = 152
     for idx, (name, frame) in enumerate(zip(PORTRAIT_NAMES, portrait_frames)):
-        bx = margin + idx * col_w
+        bx = margin + idx * portrait_col_w
         by = y
         draw_checker(sheet, bx, by, 64, 128, tile=8, c1=(32, 36, 48, 255), c2=(46, 52, 68, 255))
         draw_checker(sheet, bx + 64, by, 64, 128, tile=8, c1=(168, 174, 188, 255), c2=(204, 210, 222, 255))
@@ -1160,7 +1166,7 @@ def build_approval_sheet(icon_frames: List[Canvas], portrait_frames: List[Canvas
     y += 20
 
     for idx, (name, frame) in enumerate(zip(PORTRAIT_NAMES, portrait_frames)):
-        bx = margin + idx * col_w
+        bx = margin + idx * portrait_col_w
         cx = bx + 64
         cy = y + 66
         is_gold = idx in (1, 4, 6, 7)
@@ -1209,7 +1215,7 @@ def update_manifest() -> None:
     sprites["ui_icons"] = {
         "key": "ui_icons",
         "file": "ui_icons.png",
-        "width": 1024,
+        "width": len(ICON_NAMES) * 64,
         "height": 64,
         "frameWidth": 64,
         "frameHeight": 64,
@@ -1224,9 +1230,9 @@ def update_manifest() -> None:
 
 
 def publish_assets() -> None:
-    """Publica ui_icons.png (1024x64) e portraits.png (1024x128) em public/assets/sprites/."""
+    """Publica ui_icons.png (1152x64) e portraits.png (1024x128) em public/assets/sprites/."""
     for src, dst, exp_w, exp_h in (
-        (ICONS_OUT_PNG, PUBLIC_ICONS_PNG, 1024, 64),
+        (ICONS_OUT_PNG, PUBLIC_ICONS_PNG, len(ICON_NAMES) * 64, 64),
         (PORTRAITS_OUT_PNG, PUBLIC_PORTRAITS_PNG, 1024, 128),
     ):
         if not src.exists():
@@ -1251,7 +1257,7 @@ def publish_assets() -> None:
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Gera e publica ui_icons.png (1024x64) e portraits.png (1024x128)."
+        description="Gera e publica ui_icons.png (1152x64) e portraits.png (1024x128)."
     )
     parser.add_argument(
         "--publish-only",
@@ -1272,14 +1278,20 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     if not args.publish_only:
         print("Carregando fontes JPG via PowerShell System.Drawing...")
         icons_raw = load_jpg_as_canvas(ICONS_RAW_JPG)
+        helm_boots_raw = load_jpg_as_canvas(HELM_BOOTS_RAW_JPG)
         portraits_raw = load_jpg_as_canvas(PORTRAITS_RAW_JPG)
         print(f"  ui_icons_raw: {icons_raw.w}x{icons_raw.h}")
+        print(f"  ui_helm_boots_raw: {helm_boots_raw.w}x{helm_boots_raw.h}")
         print(f"  portraits_raw: {portraits_raw.w}x{portraits_raw.h}")
 
-        # 1. Processar 16 icones 64x64 -> 1024x64
-        icon_cells = split_grid_smart(icons_raw, cols=4, rows=4)
+        # 1. Processar 18 icones 64x64 (0..15 de ui_icons_raw + 16..17 de ui_helm_boots_raw) -> 1152x64
+        base_icon_cells = split_grid_smart(icons_raw, cols=4, rows=4)
+        extra_icon_cells = split_grid_smart(helm_boots_raw, cols=2, rows=1)
+        icon_cells = base_icon_cells + extra_icon_cells
+        if len(icon_cells) != len(ICON_NAMES):
+            raise RuntimeError(f"Contagem de celulas de icones invalida: {len(icon_cells)} != {len(ICON_NAMES)}")
         icon_frames: List[Canvas] = []
-        icons_sheet = Canvas(16 * 64, 64)
+        icons_sheet = Canvas(len(ICON_NAMES) * 64, 64)
         for idx, (name, cell) in enumerate(zip(ICON_NAMES, icon_cells)):
             clean = remove_background_with_glow(
                 cell,

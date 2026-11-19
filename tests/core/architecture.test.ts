@@ -82,7 +82,14 @@ describe('Architecture & Viewport Contracts (T-001)', () => {
   });
 
   it('provides pure M2 equipment and synergy type contracts in src/core/index.ts (T-013)', () => {
-    const slots: EquipSlot[] = ['weapon', 'armor', 'amulet', 'ring'];
+    const slots: EquipSlot[] = [
+      'weapon',
+      'armor',
+      'helm',
+      'boots',
+      'amulet',
+      'ring',
+    ];
     const rarities: Rarity[] = ['common', 'magic', 'rare', 'legendary'];
     const statuses: StatusEffectType[] = ['ember', 'bleed', 'judgment'];
     const powerIds: LegendaryPowerId[] = [
@@ -139,11 +146,13 @@ describe('Architecture & Viewport Contracts (T-001)', () => {
     const gear: EquippedGear = {
       weapon: instance,
       armor: null,
+      helm: null,
+      boots: null,
       amulet: null,
       ring: null,
     };
 
-    expect(slots).toHaveLength(4);
+    expect(slots).toHaveLength(6);
     expect(rarities).toHaveLength(4);
     expect(statuses).toHaveLength(3);
     expect(powerIds).toHaveLength(6);

@@ -31,6 +31,11 @@ interface AltarRowView {
   canPurchase: boolean;
 }
 
+const FONT_TITLE =
+  "'Cinzel', 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
+const FONT_BODY =
+  "'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif";
+
 const MAX_ROWS_PER_PAGE = 5;
 const UI_ICONS_KEY = 'ui_icons';
 const ICON_SOULS_FRAME = 10;
@@ -144,31 +149,35 @@ export class AltarModal {
     this.drawSoulsFallbackDiamond();
 
     this.titleText = scene.add.text(0, 0, 'ALTAR DE ALMAS', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_TITLE,
       fontSize: '15px',
       color: '#f0c46c',
       fontStyle: 'bold',
+      resolution: 2,
     });
 
     this.soulsText = scene.add.text(0, 0, 'Almas disponíveis: 0', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_BODY,
       fontSize: '12px',
       color: '#90e0ef',
       fontStyle: 'bold',
+      resolution: 2,
     });
 
     this.introText = scene.add.text(0, 0, dialoguesData.entries.altar_intro.shortText, {
-      fontFamily: 'monospace',
+      fontFamily: FONT_BODY,
       fontSize: '10px',
       color: '#cbd5e1',
+      resolution: 2,
     });
 
     this.emptyText = scene.add
       .text(0, 0, 'Nenhuma bênção disponível no Altar.', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '11px',
         color: '#64748b',
         align: 'center',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
 
@@ -176,10 +185,11 @@ export class AltarModal {
     this.closeBtnBg = scene.add.graphics();
     this.closeBtnText = scene.add
       .text(0, 0, 'Fechar', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '12px',
         color: '#f8e7c2',
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
     this.closeBtnZone = scene.add
@@ -214,10 +224,11 @@ export class AltarModal {
     this.prevPageBg = scene.add.graphics();
     this.prevPageText = scene.add
       .text(0, 0, '< Ant', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '11px',
         color: '#f8fafc',
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
     this.prevPageZone = scene.add
@@ -249,10 +260,11 @@ export class AltarModal {
     this.nextPageBg = scene.add.graphics();
     this.nextPageText = scene.add
       .text(0, 0, 'Próx >', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '11px',
         color: '#f8fafc',
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
     this.nextPageZone = scene.add
@@ -286,9 +298,10 @@ export class AltarModal {
 
     this.pageInfoText = scene.add
       .text(0, 0, '1/1', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '11px',
         color: '#cbd5e1',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
 
@@ -314,46 +327,52 @@ export class AltarModal {
     for (let i = 0; i < MAX_ROWS_PER_PAGE; i++) {
       const bg = scene.add.graphics();
       const nameText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_TITLE,
         fontSize: '12px',
         color: '#f8fafc',
         fontStyle: 'bold',
+        resolution: 2,
       });
       const levelText = scene.add
         .text(0, 0, '', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_BODY,
           fontSize: '11px',
           color: '#f0c46c',
           fontStyle: 'bold',
+          resolution: 2,
         })
         .setOrigin(1, 0);
       const bonusText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '10px',
         color: '#80ed99',
         fontStyle: 'bold',
+        resolution: 2,
       });
       const descText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '10px',
         color: '#94a3b8',
+        resolution: 2,
       });
       const costText = scene.add
         .text(0, 0, '', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_BODY,
           fontSize: '10px',
           color: '#90e0ef',
           fontStyle: 'bold',
+          resolution: 2,
         })
         .setOrigin(1, 0);
 
       const btnBg = scene.add.graphics();
       const btnText = scene.add
         .text(0, 0, 'Aprimorar', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_BODY,
           fontSize: '11px',
           color: '#ffffff',
           fontStyle: 'bold',
+          resolution: 2,
         })
         .setOrigin(0.5, 0.5);
       const btnZone = scene.add

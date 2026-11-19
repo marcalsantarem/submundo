@@ -145,7 +145,14 @@ const ROOM_CLEAR_AUTO_ADVANCE_MS = 1200;
 const DROP_PICKUP_RADIUS = 34;
 const HERO_ATTACK_CANCEL_FRAME = 12;
 const HERO_HIT_CANCEL_FRAME = 21;
-const EQUIP_SLOTS: readonly EquipSlot[] = ['weapon', 'armor', 'amulet', 'ring'];
+const EQUIP_SLOTS: readonly EquipSlot[] = [
+  'weapon',
+  'armor',
+  'helm',
+  'boots',
+  'amulet',
+  'ring',
+];
 
 const RARITY_DROP_FRAME: Record<Rarity, number> = {
   common: 0,
@@ -1661,7 +1668,7 @@ export class DungeonScene extends Phaser.Scene {
         : undefined;
 
     const equippedCount = (
-      ['weapon', 'armor', 'amulet', 'ring'] as const
+      ['weapon', 'armor', 'helm', 'boots', 'amulet', 'ring'] as const
     ).filter((slot) => this.inventory.equipped[slot] !== null).length;
 
     const heroLevel =

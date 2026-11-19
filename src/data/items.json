@@ -199,5 +199,108 @@
     },
     "iconKey": "icon_ring",
     "description": "Anel carregado de estática celestial que amplifica impactos críticos."
+  },
+  {
+    "id": "leather_helm",
+    "name": "Elmo de Couro",
+    "slot": "helm",
+    "force": "none",
+    "baseBonuses": {
+      "maxHp": 14,
+      "defense": 2
+    },
+    "iconKey": "icon_helm",
+    "description": "Capuz de couro curtido e reforçado que protege o crânio contra golpes diretos."
+  },
+  {
+    "id": "destroyer_helm",
+    "name": "Elmo do Destruidor",
+    "slot": "helm",
+    "force": "inferno",
+    "baseBonuses": {
+      "maxHp": 20,
+      "defense": 3,
+      "attack": 2
+    },
+    "iconKey": "icon_helm",
+    "description": "Elmo forjado em ferro vulcânico com chifres em brasa que intimidam as hostes demoníacas."
+  },
+  {
+    "id": "dark_iron_helm",
+    "name": "Elmo de Ferro Escuro",
+    "slot": "helm",
+    "force": "submundo",
+    "baseBonuses": {
+      "maxHp": 22,
+      "defense": 3,
+      "lifeSteal": 0.02
+    },
+    "iconKey": "icon_helm",
+    "description": "Casco pesado banhado na névoa do Submundo que absorve a vitalidade ao redor."
+  },
+  {
+    "id": "spectral_crown",
+    "name": "Coroa Espectral",
+    "slot": "helm",
+    "force": "empireo",
+    "baseBonuses": {
+      "maxHp": 18,
+      "defense": 4,
+      "cooldownReduction": 0.04
+    },
+    "iconKey": "icon_helm",
+    "description": "Diadema profanado do Empíreo que irradia clarões de julgamento e foco espiritual."
+  },
+  {
+    "id": "leather_boots",
+    "name": "Botas de Couro",
+    "slot": "boots",
+    "force": "none",
+    "baseBonuses": {
+      "moveSpeed": 10,
+      "defense": 1,
+      "maxHp": 8
+    },
+    "iconKey": "icon_boots",
+    "description": "Botas leves de explorador que garantem passos firmes nas pedras úmidas da masmorra."
+  },
+  {
+    "id": "ember_treads",
+    "name": "Passos da Brasa",
+    "slot": "boots",
+    "force": "inferno",
+    "baseBonuses": {
+      "moveSpeed": 14,
+      "defense": 2,
+      "maxHp": 12
+    },
+    "iconKey": "icon_boots",
+    "description": "Grevas ardentes que impulsionam o portador com explosões de cinza e calor."
+  },
+  {
+    "id": "spectral_greaves",
+    "name": "Grevas Espectrais",
+    "slot": "boots",
+    "force": "submundo",
+    "baseBonuses": {
+      "moveSpeed": 16,
+      "defense": 2,
+      "maxHp": 14
+    },
+    "iconKey": "icon_boots",
+    "description": "Calçados envoltos em sombras etéreas que deslizam silenciosamente sobre o sangue."
+  },
+  {
+    "id": "iron_greaves",
+    "name": "Grevas de Ferro",
+    "slot": "boots",
+    "force": "empireo",
+    "baseBonuses": {
+      "moveSpeed": 12,
+      "defense": 3,
+      "maxHp": 16
+    },
+    "iconKey": "icon_boots",
+    "description": "Grevas blindadas com runas celestiais que combinam marcha veloz e proteção sólida."
   }
 ]

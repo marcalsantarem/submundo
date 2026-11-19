@@ -97,6 +97,11 @@ interface HubStationView {
   hitZone: Phaser.GameObjects.Zone;
 }
 
+const FONT_TITLE =
+  "'Cinzel', 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
+const FONT_BODY =
+  "'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif";
+
 const TILE_DISPLAY_SIZE = 32;
 const ARENA_PADDING_X = 36;
 const STATION_INTERACT_RADIUS = 58;
@@ -758,7 +763,7 @@ export class HubScene extends Phaser.Scene {
   private buildBlacksmithSnapshot(): BlacksmithModalSnapshot {
     const catalog = getProgressionCatalog();
     const equippedItems = (
-      ['weapon', 'armor', 'amulet', 'ring'] as const
+      ['weapon', 'armor', 'helm', 'boots', 'amulet', 'ring'] as const
     )
       .map((slot) => this.profile.equipped[slot])
       .filter((item): item is NonNullable<typeof item> => item !== null);
@@ -788,7 +793,7 @@ export class HubScene extends Phaser.Scene {
 
   private updateHud(): void {
     const equippedCount = (
-      ['weapon', 'armor', 'amulet', 'ring'] as const
+      ['weapon', 'armor', 'helm', 'boots', 'amulet', 'ring'] as const
     ).filter((slot) => this.profile.equipped[slot] !== null).length;
 
     const nearbyStation = this.stations.find(
@@ -1040,24 +1045,26 @@ export class HubScene extends Phaser.Scene {
 
       const nameLabel = this.add
         .text(0, -34, config.label, {
-          fontFamily: 'monospace',
+          fontFamily: FONT_TITLE,
           fontSize: viewport.mode === 'mobile_portrait' ? '10px' : '11px',
           color: config.accentHex,
           fontStyle: 'bold',
           stroke: '#05070d',
           strokeThickness: 3,
           align: 'center',
+          resolution: 2,
         })
         .setOrigin(0.5);
 
       const promptLabel = this.add
         .text(0, 30, viewport.mode === 'mobile_portrait' ? '[Toque]' : '[E] Usar', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_BODY,
           fontSize: '10px',
           color: '#80ed99',
           fontStyle: 'bold',
           stroke: '#05070d',
           strokeThickness: 3,
+          resolution: 2,
         })
         .setOrigin(0.5)
         .setVisible(false);

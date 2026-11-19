@@ -77,6 +77,10 @@ interface MovementKeys {
 
 const UI_ICONS_KEY = 'ui_icons';
 const PORTRAITS_KEY = 'portraits';
+const FONT_TITLE =
+  "'Cinzel', 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
+const FONT_BODY =
+  "'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif";
 
 const ICON_FRAME = {
   ATTACK: 0,
@@ -272,7 +276,8 @@ export class DungeonHud {
 
     this.portraitFallbackText = scene.add
       .text(0, 0, 'GR', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '15px',
         color: '#f0d9a7',
         fontStyle: 'bold',
@@ -283,7 +288,8 @@ export class DungeonHud {
     this.levelBadgeBg = scene.add.graphics();
     this.levelBadgeText = scene.add
       .text(0, 0, 'Nv. 1', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '9px',
         color: '#f3e6cc',
         fontStyle: 'bold',
@@ -292,19 +298,21 @@ export class DungeonHud {
 
     this.heroNameText = scene.add
       .text(0, 0, 'GUERREIRO', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_TITLE,
         fontSize: '12px',
         color: '#f0d9a7',
         fontStyle: 'bold',
         stroke: '#07090e',
         strokeThickness: 3,
+        resolution: 2,
       })
       .setOrigin(0, 0.5);
 
     this.hpBarGraphic = scene.add.graphics();
     this.hpText = scene.add
       .text(0, 0, '100/100', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '11px',
         color: '#fff7ed',
         fontStyle: 'bold',
@@ -343,7 +351,8 @@ export class DungeonHud {
     this.objectiveBg = scene.add.graphics();
     this.objectiveText = scene.add
       .text(0, 0, 'Sala 1/5', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '11px',
         color: '#e8dfd1',
         fontStyle: 'bold',
@@ -367,7 +376,8 @@ export class DungeonHud {
       : null;
     this.soulsText = scene.add
       .text(0, 0, '0', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '12px',
         color: '#a5f3fc',
         fontStyle: 'bold',
@@ -383,7 +393,8 @@ export class DungeonHud {
       : null;
     this.essenceText = scene.add
       .text(0, 0, '0', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '11px',
         color: '#fcd34d',
         fontStyle: 'bold',
@@ -433,7 +444,8 @@ export class DungeonHud {
     this.autoBtnBg = scene.add.graphics();
     this.autoBtnText = scene.add
       .text(0, 0, 'AUTO', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '9px',
         color: '#fde68a',
         fontStyle: 'bold',
@@ -475,7 +487,8 @@ export class DungeonHud {
       : null;
     this.bagBtnFallbackText = scene.add
       .text(0, 0, 'I', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '12px',
         color: '#e8dfd1',
         fontStyle: 'bold',
@@ -484,7 +497,8 @@ export class DungeonHud {
     this.bagBadgeBg = scene.add.graphics();
     this.bagBadgeText = scene.add
       .text(0, 0, '0', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '9px',
         color: '#ffffff',
         fontStyle: 'bold',
@@ -492,7 +506,8 @@ export class DungeonHud {
       .setOrigin(0.5);
     this.bagHotkeyText = scene.add
       .text(0, 22, 'I', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '9px',
         color: '#94a3b8',
         fontStyle: 'bold',
@@ -550,7 +565,8 @@ export class DungeonHud {
       : null;
     this.muteBtnFallbackText = scene.add
       .text(0, 0, 'ON', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '9px',
         color: '#e8dfd1',
         fontStyle: 'bold',
@@ -558,7 +574,8 @@ export class DungeonHud {
       .setOrigin(0.5);
     this.muteHotkeyText = scene.add
       .text(0, 22, 'M', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '9px',
         color: '#94a3b8',
         fontStyle: 'bold',
@@ -610,17 +627,19 @@ export class DungeonHud {
     this.bossBarGraphic = scene.add.graphics();
     this.bossNameText = scene.add
       .text(0, -17, 'CARCEREIRO INFERNAL', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_TITLE,
         fontSize: '12px',
         color: '#fca5a5',
         fontStyle: 'bold',
         stroke: '#07090e',
         strokeThickness: 3,
+        resolution: 2,
       })
       .setOrigin(0.5);
     this.bossHpText = scene.add
       .text(0, 0, '0/0', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '10px',
         color: '#fff7ed',
         fontStyle: 'bold',
@@ -641,7 +660,8 @@ export class DungeonHud {
     this.bannerBg = scene.add.graphics();
     this.bannerLabel = scene.add
       .text(0, 0, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '11px',
         color: '#f1e8d6',
         align: 'center',
@@ -664,7 +684,8 @@ export class DungeonHud {
       : null;
     this.attackBtnFallbackText = scene.add
       .text(0, 0, 'ATK', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '12px',
         color: '#fff7ed',
         fontStyle: 'bold',
@@ -718,18 +739,20 @@ export class DungeonHud {
     this.modalBox = scene.add.graphics();
     this.modalTitleText = scene.add
       .text(0, -76, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_TITLE,
         fontSize: '16px',
         color: '#f0c46c',
         fontStyle: 'bold',
         align: 'center',
         wordWrap: { width: 300 },
+        resolution: 2,
       })
       .setOrigin(0.5);
 
     this.modalBodyText = scene.add
       .text(0, -18, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '12px',
         color: '#e8dfd1',
         align: 'center',
@@ -739,7 +762,8 @@ export class DungeonHud {
 
     this.modalSoulsText = scene.add
       .text(0, 34, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '13px',
         color: '#90e0ef',
         fontStyle: 'bold',
@@ -749,7 +773,8 @@ export class DungeonHud {
 
     this.modalLootText = scene.add
       .text(0, 52, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '11px',
         color: '#a5f3fc',
         align: 'center',
@@ -766,7 +791,8 @@ export class DungeonHud {
 
     this.restartBtnText = scene.add
       .text(0, 0, 'Nova Incursão', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
+        resolution: 2,
         fontSize: '14px',
         color: '#fff7ed',
         fontStyle: 'bold',
@@ -1760,7 +1786,8 @@ export class DungeonHud {
 
       const fallbackLabelText = this.scene.add
         .text(0, 0, defaultShortLabels[slot], {
-          fontFamily: 'monospace',
+          fontFamily: FONT_BODY,
+        resolution: 2,
           fontSize: '10px',
           color: '#f8fafc',
           fontStyle: 'bold',
@@ -1770,7 +1797,8 @@ export class DungeonHud {
       const cdOverlay = this.scene.add.graphics();
       const cooldownText = this.scene.add
         .text(0, 0, '', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_BODY,
+        resolution: 2,
           fontSize: '13px',
           color: '#ffd166',
           fontStyle: 'bold',
@@ -1783,7 +1811,8 @@ export class DungeonHud {
       const hotkeyBg = this.scene.add.graphics();
       const hotkeyText = this.scene.add
         .text(0, 0, defaultHotkeys[slot], {
-          fontFamily: 'monospace',
+          fontFamily: FONT_BODY,
+        resolution: 2,
           fontSize: '9px',
           color: '#e2e8f0',
           fontStyle: 'bold',
@@ -1808,7 +1837,8 @@ export class DungeonHud {
         chargesBg = this.scene.add.graphics();
         chargesText = this.scene.add
           .text(0, 0, '3', {
-            fontFamily: 'monospace',
+            fontFamily: FONT_BODY,
+        resolution: 2,
             fontSize: '10px',
             color: '#fff7ed',
             fontStyle: 'bold',

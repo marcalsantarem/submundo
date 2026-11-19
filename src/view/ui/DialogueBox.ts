@@ -7,6 +7,11 @@ import {
 } from '../../core/index';
 import { soundManager } from '../audio/SoundManager';
 
+const FONT_TITLE =
+  "'Cinzel', 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
+const FONT_BODY =
+  "'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif";
+
 const PORTRAIT_FRAME_MAP: Record<PortraitId, number> = {
   hero_living: 0,
   hero_wraith: 1,
@@ -102,10 +107,11 @@ export class DialogueBox {
     this.portraitFallbackGraphic = scene.add.graphics();
     this.portraitFallbackText = scene.add
       .text(0, 0, 'SY', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_TITLE,
         fontSize: '18px',
         color: '#f8fafc',
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5);
 
@@ -114,46 +120,52 @@ export class DialogueBox {
       : null;
 
     this.speakerText = scene.add.text(0, 0, '', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_TITLE,
       fontSize: '11px',
       color: '#90e0ef',
       fontStyle: 'bold',
+      resolution: 2,
     });
 
     this.titleText = scene.add.text(0, 0, '', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_TITLE,
       fontSize: '14px',
       color: '#ffd166',
       fontStyle: 'bold',
+      resolution: 2,
     });
 
     this.bodyText = scene.add.text(0, 0, '', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_BODY,
       fontSize: '12px',
       color: '#e2e8f0',
       lineSpacing: 5,
+      resolution: 2,
     });
 
     this.pageText = scene.add.text(0, 0, '1/1', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_BODY,
       fontSize: '11px',
       color: '#94a3b8',
       fontStyle: 'bold',
+      resolution: 2,
     });
 
     this.shortcutText = scene.add.text(0, 0, '[Enter/Espaço]', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_BODY,
       fontSize: '10px',
       color: '#64748b',
+      resolution: 2,
     });
 
     this.actionBtnBg = scene.add.graphics();
     this.actionBtnText = scene.add
       .text(0, 0, 'Continuar', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '12px',
         color: '#ffffff',
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5);
     this.actionBtnZone = scene.add

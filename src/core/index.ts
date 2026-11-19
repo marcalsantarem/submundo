@@ -82,7 +82,7 @@ export function resolveViewportConfig(
   };
 }
 
-export type EquipSlot = 'weapon' | 'armor' | 'amulet' | 'ring';
+export type EquipSlot = 'weapon' | 'armor' | 'helm' | 'boots' | 'amulet' | 'ring';
 
 export type Rarity = 'common' | 'magic' | 'rare' | 'legendary';
 

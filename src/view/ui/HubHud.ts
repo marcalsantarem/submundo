@@ -51,6 +51,11 @@ export interface HubHudCallbacks {
   onResetSave?: () => void;
 }
 
+const FONT_TITLE =
+  "'Cinzel', 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
+const FONT_BODY =
+  "'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif";
+
 const UI_ICONS_KEY = 'ui_icons';
 
 const ICON_FRAME = {
@@ -137,10 +142,11 @@ export class HubHud {
 
     this.locationText = scene.add
       .text(0, 0, 'Refúgio do Submundo', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_TITLE,
         fontSize: '13px',
         color: '#f0c46c',
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setScrollFactor(0)
       .setDepth(1012);
@@ -161,10 +167,11 @@ export class HubHud {
 
     this.soulsText = scene.add
       .text(0, 0, 'Almas: 0', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '12px',
         color: '#90e0ef',
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setScrollFactor(0)
       .setDepth(1012);
@@ -185,19 +192,21 @@ export class HubHud {
 
     this.essencesText = scene.add
       .text(0, 0, 'Essências: 0', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '12px',
         color: '#f4a261',
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setScrollFactor(0)
       .setDepth(1012);
 
     this.gearText = scene.add
-      .text(0, 0, 'Equip: 0/4 | Baú: 0', {
-        fontFamily: 'monospace',
+      .text(0, 0, 'Equip: 0/6 | Baú: 0', {
+        fontFamily: FONT_BODY,
         fontSize: '11px',
         color: '#cbd5e1',
+        resolution: 2,
       })
       .setOrigin(1, 0)
       .setScrollFactor(0)
@@ -207,10 +216,11 @@ export class HubHud {
     this.bannerBg = scene.add.graphics();
     this.bannerLabel = scene.add
       .text(0, 0, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '11px',
         color: '#e9ecef',
         align: 'center',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
     this.bannerContainer = scene.add
@@ -366,7 +376,7 @@ export class HubHud {
     this.essencesText.setText(`Essências: ${snap.generalEssences}`);
     this.syncResourceIcons();
 
-    this.gearText.setText(`Equip: ${snap.equippedCount}/4 | Baú: ${snap.stashCount}`);
+    this.gearText.setText(`Equip: ${snap.equippedCount}/6 | Baú: ${snap.stashCount}`);
     this.stashBtn.label.setText(`Baú (${snap.stashCount})`);
     this.altarBtn.label.setText(isPrologue ? 'Santuário' : 'Altar');
     this.enterBtn.label.setText(
@@ -583,10 +593,11 @@ export class HubHud {
 
     const label = this.scene.add
       .text(0, 0, text, {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '12px',
         color: textColor,
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
     const zone = this.scene.add

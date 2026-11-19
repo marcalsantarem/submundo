@@ -8,7 +8,14 @@ import type {
   StatBonus,
 } from '../index';
 
-const EQUIP_SLOTS: readonly EquipSlot[] = ['weapon', 'armor', 'amulet', 'ring'];
+const EQUIP_SLOTS: readonly EquipSlot[] = [
+  'weapon',
+  'armor',
+  'helm',
+  'boots',
+  'amulet',
+  'ring',
+];
 const DEFAULT_MAX_BAG_SIZE = 20;
 
 export interface RunInventoryState {
@@ -26,6 +33,8 @@ export function createRunInventory(
     equipped: {
       weapon: null,
       armor: null,
+      helm: null,
+      boots: null,
       amulet: null,
       ring: null,
     },

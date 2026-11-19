@@ -52,9 +52,16 @@ interface ForgeCardView {
   canForge: boolean;
 }
 
+const FONT_TITLE =
+  "'Cinzel', 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
+const FONT_BODY =
+  "'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif";
+
 const SLOT_LABELS: Record<EquipSlot, string> = {
   weapon: 'Arma',
   armor: 'Armadura',
+  helm: 'Elmo',
+  boots: 'Bota',
   amulet: 'Amuleto',
   ring: 'Anel',
 };
@@ -64,6 +71,8 @@ const SLOT_ICON_FRAME: Record<EquipSlot, number> = {
   armor: 13,
   amulet: 14,
   ring: 15,
+  helm: 16,
+  boots: 17,
 };
 
 const UI_ICONS_KEY = 'ui_icons';
@@ -209,38 +218,43 @@ export class BlacksmithModal {
       : null;
 
     this.titleText = scene.add.text(0, 0, 'FERREIRO ESPIRITUAL', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_TITLE,
       fontSize: '15px',
       color: '#f0c46c',
       fontStyle: 'bold',
+      resolution: 2,
     });
 
     this.soulsBalanceText = scene.add.text(0, 0, 'Almas: 0', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_BODY,
       fontSize: '11px',
       color: '#90e0ef',
       fontStyle: 'bold',
+      resolution: 2,
     });
 
     this.essenceBalanceText = scene.add.text(0, 0, 'Essências de General: 0', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_BODY,
       fontSize: '11px',
       color: '#f4a261',
       fontStyle: 'bold',
+      resolution: 2,
     });
 
     this.itemsHeaderText = scene.add.text(0, 0, 'APRIMORAR ITENS (0)', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_TITLE,
       fontSize: '11px',
       color: '#cbd5e1',
       fontStyle: 'bold',
+      resolution: 2,
     });
 
     this.forgeHeaderText = scene.add.text(0, 0, 'FORJAR RELÍQUIAS', {
-      fontFamily: 'monospace',
+      fontFamily: FONT_TITLE,
       fontSize: '11px',
       color: '#f0c46c',
       fontStyle: 'bold',
+      resolution: 2,
     });
 
     this.emptyItemsText = scene.add
@@ -249,10 +263,11 @@ export class BlacksmithModal {
         0,
         'Nenhum item equipado ou no baú.\nForje um equipamento ou explore a Fenda.',
         {
-          fontFamily: 'monospace',
+          fontFamily: FONT_BODY,
           fontSize: '10px',
           color: '#64748b',
           align: 'center',
+          resolution: 2,
         }
       )
       .setOrigin(0.5, 0.5);
@@ -262,9 +277,10 @@ export class BlacksmithModal {
       0,
       dialoguesData.entries.blacksmith_intro.shortText,
       {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '10px',
         color: '#cbd5e1',
+        resolution: 2,
       }
     );
 
@@ -272,10 +288,11 @@ export class BlacksmithModal {
     this.closeBtnBg = scene.add.graphics();
     this.closeBtnText = scene.add
       .text(0, 0, 'Fechar', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '12px',
         color: '#f8e7c2',
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
     this.closeBtnZone = scene.add
@@ -308,10 +325,11 @@ export class BlacksmithModal {
     this.prevPageBg = scene.add.graphics();
     this.prevPageText = scene.add
       .text(0, 0, '< Ant', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '11px',
         color: '#f8fafc',
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
     this.prevPageZone = scene.add
@@ -343,10 +361,11 @@ export class BlacksmithModal {
     this.nextPageBg = scene.add.graphics();
     this.nextPageText = scene.add
       .text(0, 0, 'Próx >', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '11px',
         color: '#f8fafc',
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
     this.nextPageZone = scene.add
@@ -380,9 +399,10 @@ export class BlacksmithModal {
 
     this.pageInfoText = scene.add
       .text(0, 0, '1/1', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '11px',
         color: '#cbd5e1',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
 
@@ -418,38 +438,43 @@ export class BlacksmithModal {
         ? scene.add.image(0, 0, UI_ICONS_KEY, SLOT_ICON_FRAME.weapon).setOrigin(0.5)
         : null;
       const nameText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_TITLE,
         fontSize: '11px',
         color: '#f8fafc',
         fontStyle: 'bold',
+        resolution: 2,
       });
       const levelText = scene.add
         .text(0, 0, '', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_BODY,
           fontSize: '10px',
           color: '#f0c46c',
           fontStyle: 'bold',
+          resolution: 2,
         })
         .setOrigin(1, 0);
       const statsText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '10px',
         color: '#cbd5e1',
+        resolution: 2,
       });
       const costText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '10px',
         color: '#90e0ef',
         fontStyle: 'bold',
+        resolution: 2,
       });
 
       const btnBg = scene.add.graphics();
       const btnText = scene.add
         .text(0, 0, 'Aprimorar', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_BODY,
           fontSize: '10px',
           color: '#ffffff',
           fontStyle: 'bold',
+          resolution: 2,
         })
         .setOrigin(0.5, 0.5);
       const btnZone = scene.add
@@ -514,30 +539,34 @@ export class BlacksmithModal {
         ? scene.add.image(0, 0, UI_ICONS_KEY, ICON_ESSENCE_FRAME).setOrigin(0.5)
         : null;
       const titleText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_TITLE,
         fontSize: '11px',
         color: '#facc15',
         fontStyle: 'bold',
+        resolution: 2,
       });
       const descText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '9px',
         color: '#cbd5e1',
+        resolution: 2,
       });
       const costText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
+        fontFamily: FONT_BODY,
         fontSize: '10px',
         color: '#f4a261',
         fontStyle: 'bold',
+        resolution: 2,
       });
 
       const btnBg = scene.add.graphics();
       const btnText = scene.add
         .text(0, 0, 'Forjar', {
-          fontFamily: 'monospace',
+          fontFamily: FONT_BODY,
           fontSize: '10px',
           color: '#ffffff',
           fontStyle: 'bold',
+          resolution: 2,
         })
         .setOrigin(0.5, 0.5);
       const btnZone = scene.add

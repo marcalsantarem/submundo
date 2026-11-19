@@ -119,11 +119,13 @@ Todo equipamento especial e modificador de skill pertence a uma das 3 forças:
 
 ## 5. Sistema de Loot, Equipamentos e Progressão
 
-### Os 4 Slots de Equipamento (Expansível no Futuro)
-1. **Arma:** Define velocidade, alcance e formato do ataque básico.
-2. **Armadura Espectral:** Define Vida Máxima, Defesa e Resistência.
-3. **Amuleto / Selo:** Focado em Cooldown e modificadores das Skills Ativas.
-4. **Anel de Alma:** Focado em Chance Crítica, Dano Crítico, Velocidade e Sorte.
+### Os 6 Slots de Equipamento (Grade 2×3)
+1. **Arma (`weapon`):** Define poder de ataque, velocidade, alcance e formato do ataque básico.
+2. **Armadura (`armor`):** Define Vida Máxima, Armadura/Defesa e Resistência.
+3. **Elmo (`helm`):** Focado em Armadura, Vitalidade e Chance Crítica.
+4. **Bota (`boots`):** Focada em Armadura, Velocidade de Movimento e Redução de Cooldown.
+5. **Amuleto / Selo (`amulet`):** Focado em Vida Máxima, Cooldown e modificadores das Skills Ativas.
+6. **Anel de Alma (`ring`):** Focado em Chance Crítica, Dano Crítico, Roubo de Vida e Sorte.
 
 ### Raridades (Geradas via JSON)
 - ⚪ **Comum:** Apenas atributo base.
@@ -158,7 +160,7 @@ Todo equipamento especial e modificador de skill pertence a uma das 3 forças:
 
 ### Estilo Híbrido Inteligente
 - **Gameplay (Sprites e Tilesets):** Pixel Art 16/32-bit com iluminação dinâmica 2D (tochas tremulando, brilho de loot no chão, flashes de crítico e partículas de sangue/fogo).
-- **Retratos de História e Ícones de Itens:** Arte 2D estilizada de alta definição, trazendo impacto visual digno de grande estúdio nas caixas de diálogo e no inventário.
+- **Telas de UI, Modais, Inventário, Cards de Item e Retratos de História:** Arte 2D estilizada Dark Fantasy de alta definição (não-pixelart), com tipografia serifada clássica nos títulos, molduras ornamentadas de raridade e ícones 2D suaves.
 
 ### Pipeline de Assets e Áudio (100% via Código no Início)
 - **Fase Inicial (Autonomia Total via Código):**
