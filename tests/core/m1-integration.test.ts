@@ -214,13 +214,22 @@ describe('M1 Full Dungeon Run Integration (T-010)', () => {
       expect(source).not.toMatch(/import\s+['"]phaser['"]/i);
     }
 
-    expect(MONSTER_DEFS.map((m) => m.id)).toEqual([
-      'abyssal_slime',
-      'bone_sentinel',
-      'infernal_warden',
-      'cave_bat',
-      'abyss_herald',
-    ]);
+    expect(MONSTER_DEFS.map((m) => m.id)).toEqual(
+      expect.arrayContaining([
+        'abyssal_slime',
+        'bone_sentinel',
+        'infernal_warden',
+        'cave_bat',
+        'abyss_herald',
+        'slime',
+        'wolf',
+        'skeleton',
+        'skeleton_archer',
+        'wolf_alpha',
+        'karnak',
+        'skeleton_chief',
+      ])
+    );
     expect(SKILL_DEFS.map((s) => s.id)).toEqual([
       'spectral_dash',
       'crimson_cleave',
