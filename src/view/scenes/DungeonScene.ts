@@ -98,19 +98,91 @@ const ANIMATED_SPRITESHEET_MONSTERS = new Set<string>([
   'karnak',
 ]);
 
+// Offsets relative to the Masmorra Básica room center (T-118); clamped to the
+// walkable floor and pushed out of prop obstacles on spawn.
 const TEST_ARENA_WAVE_1: ReadonlyArray<{ id: string; dx: number; dy: number }> = [
-  { id: 'slime', dx: -160, dy: -110 },
-  { id: 'cave_bat', dx: 160, dy: -110 },
-  { id: 'wolf', dx: -185, dy: 20 },
-  { id: 'skeleton', dx: 185, dy: 20 },
-  { id: 'skeleton_archer', dx: -120, dy: 135 },
+  { id: 'slime', dx: -150, dy: -86 },
+  { id: 'cave_bat', dx: 150, dy: -86 },
+  { id: 'wolf', dx: -200, dy: 20 },
+  { id: 'skeleton', dx: 200, dy: 20 },
+  { id: 'skeleton_archer', dx: -110, dy: 110 },
 ];
 
+// Karnak left the test arena (owner decision, T-118); assets/data stay intact.
 const TEST_ARENA_WAVE_2: ReadonlyArray<{ id: string; dx: number; dy: number }> = [
-  { id: 'wolf_alpha', dx: -120, dy: -60 },
-  { id: 'karnak', dx: 120, dy: -60 },
-  { id: 'skeleton_chief', dx: 0, dy: 95 },
+  { id: 'wolf_alpha', dx: -150, dy: -40 },
+  { id: 'skeleton_chief', dx: 150, dy: -40 },
 ];
+
+const TEST_ARENA_WAVE_2_BANNER = 'Onda 2: Chefe da Matilha & Esqueleto Chefe!';
+const TEST_ARENA_FINISHED_TEXT = 'Teste finalizado';
+const TEST_ARENA_FINISH_DELAY_MS = 800;
+
+// --- Masmorra Básica 2.5D room (Decision #17, BRF-128) ---------------------
+const DUNGEON_BASIC_TILES_KEY = 'dungeon_basic_tiles';
+const DUNGEON_BASIC_PROPS_KEY = 'dungeon_basic_props';
+const DUNGEON_BASIC_TALL_KEY = 'dungeon_basic_props_tall';
+const DUNGEON_BASIC_TORCH_ANIM = 'dungeon_basic_torch';
+const DUNGEON_BASIC_TILE_FRAMES = [
+  'floor_0', 'floor_1', 'floor_2', 'floor_cracked', 'floor_moss', 'floor_blood',
+  'wall_top', 'wall_top_s', 'wall_side_l', 'wall_side_r', 'wall_bottom',
+  'corner_in_tl', 'corner_in_tr', 'corner_in_bl', 'corner_in_br',
+  'corner_out_tl', 'corner_out_tr', 'corner_out_bl', 'corner_out_br',
+  'wall_face_upper', 'wall_face_lower', 'wall_face_upper_cracked',
+  'wall_face_lower_grate', 'door_arch_l', 'door_arch_r', 'door_open_l',
+  'door_open_r', 'door_threshold_l', 'door_threshold_r', 'shadow_s',
+  'shadow_l', 'shadow_r', 'shadow_corner_l', 'shadow_corner_r',
+] as const;
+type DungeonBasicTile = (typeof DUNGEON_BASIC_TILE_FRAMES)[number];
+const DUNGEON_BASIC_PROP_FRAMES = [
+  'torch_0', 'torch_1', 'torch_2', 'torch_3', 'chest_closed', 'barrel', 'urn',
+  'bones', 'rubble', 'chain', 'skulls_candle',
+] as const;
+type DungeonBasicProp = (typeof DUNGEON_BASIC_PROP_FRAMES)[number];
+const TEST_ROOM_COLS = 20;
+const TEST_ROOM_ROWS = 12;
+const TEST_ROOM_DOOR_COLS = [9, 10] as const;
+const TEST_ROOM_TORCH_COLS = [6, 8, 11, 13] as const;
+/** Distance from an actor's center (sprite origin) to its feet, in world px. */
+const ACTOR_FEET_OFFSET = 30;
+/** Room-local floor props (top-left like the approved mockup). */
+const TEST_ROOM_FLOOR_PROPS: ReadonlyArray<{ name: DungeonBasicProp; x: number; y: number }> = [
+  { name: 'skulls_candle', x: 40, y: 104 },
+  { name: 'rubble', x: 520, y: 106 },
+  { name: 'barrel', x: 548, y: 118 },
+  { name: 'urn', x: 576, y: 124 },
+  { name: 'bones', x: 150, y: 300 },
+  { name: 'chest_closed', x: 440, y: 316 },
+  { name: 'rubble', x: 300, y: 330 },
+];
+/** Room-local tall props (top-left of the 32x64 frame). */
+const TEST_ROOM_TALL_PROPS: ReadonlyArray<{ frame: number; x: number; y: number }> = [
+  { frame: 0, x: 96, y: 98 },
+  { frame: 0, x: 512, y: 98 },
+  { frame: 1, x: 64, y: 262 },
+];
+/** Room-local obstacle rects in feet space (already padded by the actor half width). */
+const TEST_ROOM_OBSTACLES: ReadonlyArray<{ x: number; y: number; w: number; h: number }> = [
+  { x: 88, y: 136, w: 48, h: 30 }, // pillar L
+  { x: 504, y: 136, w: 48, h: 30 }, // pillar R
+  { x: 56, y: 298, w: 48, h: 30 }, // broken pillar
+  { x: 538, y: 128, w: 84, h: 32 }, // barrel + urn
+  { x: 432, y: 328, w: 48, h: 26 }, // chest
+];
+
+interface TestArenaRoomGeometry {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Walkable range for actor centers (feet stay on the floor). */
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  centerX: number;
+  centerY: number;
+}
 
 interface GroundDrop {
   item: ItemInstance;
@@ -219,6 +291,22 @@ export class DungeonScene extends Phaser.Scene {
   private isTestArena = false;
   private testArenaWave = 1;
   private testArenaWave2TriggerAtMs?: number;
+  /** True once Wave 2 of the testArena is cleared ("Teste finalizado"). */
+  public testArenaFinished = false;
+  private testArenaFinishAtMs?: number;
+  private testArenaRoom?: TestArenaRoomGeometry;
+  private testArenaObjects: Phaser.GameObjects.GameObject[] = [];
+  private testArenaTallProps: Array<{
+    image: Phaser.GameObjects.Image;
+    baseY: number;
+  }> = [];
+  private testArenaLights: Array<{
+    image: Phaser.GameObjects.Image;
+    baseAlpha: number;
+  }> = [];
+  private actorShadows?: Phaser.GameObjects.Graphics;
+  private testArenaFinishOverlay?: Phaser.GameObjects.Container;
+  private testArenaRestartKeyHandler?: () => void;
   private autoAttackEnabled = true;
   private manualAttackQueued = false;
   private manualAttackReadyAtMs = 0;
@@ -244,6 +332,12 @@ export class DungeonScene extends Phaser.Scene {
     this.isTestArena = Boolean(data?.testArena);
     this.testArenaWave = 1;
     this.testArenaWave2TriggerAtMs = undefined;
+    this.testArenaFinished = false;
+    this.testArenaFinishAtMs = undefined;
+    this.testArenaObjects = [];
+    this.testArenaTallProps = [];
+    this.testArenaLights = [];
+    this.testArenaFinishOverlay = undefined;
     this.autoAttackEnabled = true;
     this.manualAttackQueued = false;
     this.manualAttackReadyAtMs = 0;
@@ -261,6 +355,7 @@ export class DungeonScene extends Phaser.Scene {
 
     this.arenaLayer = this.add.container(0, 0).setDepth(1);
     this.lightingGraphics = this.add.graphics().setDepth(5);
+    this.actorShadows = this.add.graphics().setDepth(7);
     this.heroAura = this.add.graphics().setDepth(19);
 
     this.vfx = new CombatVfxManager(this);
@@ -350,6 +445,9 @@ export class DungeonScene extends Phaser.Scene {
       this.isTestArena = false;
       this.testArenaWave = 1;
       this.testArenaWave2TriggerAtMs = undefined;
+      this.testArenaFinishAtMs = undefined;
+      this.destroyTestArenaFinishOverlay();
+      this.clearTestArenaRoom();
       this.autoAttackEnabled = true;
       this.manualAttackQueued = false;
       this.manualAttackReadyAtMs = 0;
@@ -393,6 +491,15 @@ export class DungeonScene extends Phaser.Scene {
       return;
     }
 
+    if (this.isTestArena && this.testArenaFinished) {
+      // Combat and input are paused behind the "Teste finalizado" screen.
+      this.heroIsMoving = false;
+      this.lastMoveDirX = 0;
+      this.syncVisuals(this.elapsedTimeMs);
+      this.cameraRig?.syncLayers();
+      return;
+    }
+
     const clampedDelta = Math.min(Math.max(0, delta), 100);
     this.elapsedTimeMs += clampedDelta;
     const nowMs = this.elapsedTimeMs;
@@ -420,6 +527,8 @@ export class DungeonScene extends Phaser.Scene {
       moveHero(this.hero, moveDir, clampedDelta, bounds);
       if (!this.isTestArena) {
         this.collectNearbyDrops();
+      } else {
+        this.constrainActorsToTestArenaRoom();
       }
 
       if (!this.autoAttackEnabled) {
@@ -442,6 +551,7 @@ export class DungeonScene extends Phaser.Scene {
         clampedDelta,
         nowMs
       );
+      this.constrainActorsToTestArenaRoom();
       this.processCombatEvents(events);
       this.checkAndUpdateRoomState(nowMs);
     } else if (
@@ -473,6 +583,7 @@ export class DungeonScene extends Phaser.Scene {
       !this.hero ||
       !this.hero.isAlive ||
       this.inventoryModal?.isOpen() ||
+      (this.isTestArena && this.testArenaFinished) ||
       this.runState.status === 'victory' ||
       this.runState.status === 'defeat'
     ) {
@@ -502,6 +613,7 @@ export class DungeonScene extends Phaser.Scene {
     );
 
     if (events.length > 0) {
+      this.constrainActorsToTestArenaRoom();
       // Show dash trail from previous position if dash occurred
       if (events.some((e) => e.type === 'hero_dash')) {
         this.vfx.showDashTrail(prevHeroPos.x, prevHeroPos.y);
@@ -521,6 +633,7 @@ export class DungeonScene extends Phaser.Scene {
       !this.hero.isAlive ||
       !this.runState ||
       this.inventoryModal?.isOpen() ||
+      (this.isTestArena && this.testArenaFinished) ||
       this.runState.status !== 'in_progress'
     ) {
       return;
@@ -650,6 +763,9 @@ export class DungeonScene extends Phaser.Scene {
     this.isTestArena = Boolean(data?.testArena);
     this.testArenaWave = 1;
     this.testArenaWave2TriggerAtMs = undefined;
+    this.testArenaFinished = false;
+    this.testArenaFinishAtMs = undefined;
+    this.destroyTestArenaFinishOverlay();
     this.autoAttackEnabled = true;
     this.manualAttackQueued = false;
     this.manualAttackReadyAtMs = 0;
@@ -785,8 +901,15 @@ export class DungeonScene extends Phaser.Scene {
     };
 
     if (this.isTestArena) {
+      if (this.testArenaRoom) {
+        this.hero.position = {
+          x: this.testArenaRoom.centerX,
+          y: this.testArenaRoom.centerY,
+        };
+      }
       this.testArenaWave = 1;
       this.testArenaWave2TriggerAtMs = undefined;
+      this.testArenaFinishAtMs = undefined;
       this.spawnTestArenaWave(TEST_ARENA_WAVE_1, 1);
       return;
     }
@@ -885,11 +1008,15 @@ export class DungeonScene extends Phaser.Scene {
     biome?: BiomeId
   ): void {
     this.arenaLayer.removeAll(true);
+    this.clearTestArenaRoom();
 
     if (this.isTestArena) {
       this.lightingGraphics.clear();
+      this.buildTestArenaRoom(width, height);
       return;
     }
+
+    this.cameras.main.setBounds(0, 0, width, height);
 
     const activeBiome: BiomeId =
       biome ?? this.activeStage?.biome ?? 'submundo_abyss';
@@ -1280,28 +1407,557 @@ export class DungeonScene extends Phaser.Scene {
   ): void {
     const width = this.scale.width || 960;
     const height = this.scale.height || 540;
+    const room = this.testArenaRoom;
     this.monsters = [];
     for (const spec of spawns) {
       const def = this.monsterDefMap.get(spec.id);
       if (!def) {
         continue;
       }
-      const clampedX = Math.max(
-        ARENA_PADDING,
-        Math.min(width - ARENA_PADDING, this.hero.position.x + spec.dx)
-      );
-      const clampedY = Math.max(
-        ARENA_PADDING + 24,
-        Math.min(height - ARENA_PADDING - 24, this.hero.position.y + spec.dy)
-      );
+      let spawnPos: Vector2D;
+      if (room) {
+        spawnPos = { x: room.centerX + spec.dx, y: room.centerY + spec.dy };
+        this.constrainPositionToTestArenaRoom(spawnPos);
+      } else {
+        spawnPos = {
+          x: Math.max(
+            ARENA_PADDING,
+            Math.min(width - ARENA_PADDING, this.hero.position.x + spec.dx)
+          ),
+          y: Math.max(
+            ARENA_PADDING + 24,
+            Math.min(height - ARENA_PADDING - 24, this.hero.position.y + spec.dy)
+          ),
+        };
+      }
       const monster = spawnMonster(
         def,
         `test_w${waveNum}_${spec.id}`,
-        { x: clampedX, y: clampedY }
+        spawnPos
       );
       this.monsters.push(monster);
       this.createMonsterVisual(monster);
     }
+  }
+
+  // ===========================================================================
+  // TEST ARENA: Masmorra Básica 2.5D room (Decision #17, T-118 / BRF-128)
+  // ===========================================================================
+
+  private computeTestArenaRoom(
+    width: number,
+    height: number
+  ): TestArenaRoomGeometry {
+    const roomW = TEST_ROOM_COLS * TILE_DISPLAY_SIZE;
+    const roomH = TEST_ROOM_ROWS * TILE_DISPLAY_SIZE;
+    const x = Math.round((width - roomW) / 2);
+    const y = Math.round((height - roomH) / 2);
+    const sideMargin = 14;
+    // Feet must stay on the floor: below the 2-tile wall face (rows 1-2), above
+    // the bottom wall row and inside the side wall columns.
+    const floorTop = y + TILE_DISPLAY_SIZE * 3;
+    const floorBottom = y + roomH - TILE_DISPLAY_SIZE;
+    const minY = floorTop + 8 - ACTOR_FEET_OFFSET;
+    const maxY = floorBottom - 6 - ACTOR_FEET_OFFSET;
+    return {
+      x,
+      y,
+      width: roomW,
+      height: roomH,
+      minX: x + TILE_DISPLAY_SIZE + sideMargin,
+      maxX: x + roomW - TILE_DISPLAY_SIZE - sideMargin,
+      minY,
+      maxY,
+      centerX: x + roomW / 2,
+      centerY: Math.round((minY + maxY) / 2),
+    };
+  }
+
+  private buildTestArenaRoom(width: number, height: number): void {
+    const room = this.computeTestArenaRoom(width, height);
+    this.testArenaRoom = room;
+    const T = TILE_DISPLAY_SIZE;
+    const ox = room.x;
+    const oy = room.y;
+
+    const hasTiles =
+      this.textures.exists(DUNGEON_BASIC_TILES_KEY) &&
+      this.textures
+        .get(DUNGEON_BASIC_TILES_KEY)
+        .has(String(DUNGEON_BASIC_TILE_FRAMES.length - 1));
+    const hasProps =
+      this.textures.exists(DUNGEON_BASIC_PROPS_KEY) &&
+      this.textures
+        .get(DUNGEON_BASIC_PROPS_KEY)
+        .has(String(DUNGEON_BASIC_PROP_FRAMES.length - 1));
+    const hasTall =
+      this.textures.exists(DUNGEON_BASIC_TALL_KEY) &&
+      this.textures.get(DUNGEON_BASIC_TALL_KEY).has('1');
+
+    const track = <O extends Phaser.GameObjects.GameObject>(obj: O): O => {
+      this.testArenaObjects.push(obj);
+      return obj;
+    };
+
+    if (!hasTiles) {
+      // Fallback (textures not loaded): flat blocks with the same geometry.
+      const g = track(this.add.graphics().setDepth(1));
+      g.fillStyle(0x111318, 1);
+      g.fillRect(ox, oy, room.width, room.height);
+      g.fillStyle(0x262d3a, 1);
+      g.fillRect(ox, oy, room.width, T);
+      g.fillRect(ox, oy + room.height - T, room.width, T);
+      g.fillRect(ox, oy, T, room.height);
+      g.fillRect(ox + room.width - T, oy, T, room.height);
+      g.fillStyle(0x1b2029, 1);
+      g.fillRect(ox + T, oy + T, room.width - T * 2, T * 2);
+    } else {
+      const tile = (name: DungeonBasicTile, col: number, row: number, depth: number) => {
+        track(
+          this.add
+            .image(
+              ox + col * T,
+              oy + row * T,
+              DUNGEON_BASIC_TILES_KEY,
+              DUNGEON_BASIC_TILE_FRAMES.indexOf(name)
+            )
+            .setOrigin(0, 0)
+            .setDepth(depth)
+        );
+      };
+      const floorCycle: DungeonBasicTile[] = [
+        'floor_0', 'floor_1', 'floor_2', 'floor_0', 'floor_1', 'floor_2', 'floor_1',
+      ];
+      const special = new Map<string, DungeonBasicTile>([
+        ['1,4', 'floor_moss'],
+        ['18,7', 'floor_moss'],
+        ['17,8', 'floor_moss'],
+        ['5,9', 'floor_blood'],
+        ['12,6', 'floor_cracked'],
+        ['6,5', 'floor_cracked'],
+        ['14,9', 'floor_blood'],
+      ]);
+      const [doorL, doorR] = TEST_ROOM_DOOR_COLS;
+      const lastC = TEST_ROOM_COLS - 1;
+      const lastR = TEST_ROOM_ROWS - 1;
+      for (let r = 0; r < TEST_ROOM_ROWS; r++) {
+        for (let c = 0; c < TEST_ROOM_COLS; c++) {
+          let name: DungeonBasicTile;
+          if (r === 0) {
+            name = c === 0 ? 'corner_in_tl' : c === lastC ? 'corner_in_tr' : 'wall_top_s';
+          } else if (r === lastR) {
+            name = c === 0 ? 'corner_in_bl' : c === lastC ? 'corner_in_br' : 'wall_bottom';
+          } else if (c === 0) {
+            name = 'wall_side_l';
+          } else if (c === lastC) {
+            name = 'wall_side_r';
+          } else if (r === 1) {
+            name =
+              c === doorL ? 'door_arch_l'
+              : c === doorR ? 'door_arch_r'
+              : c === 4 || c === 15 ? 'wall_face_upper_cracked'
+              : 'wall_face_upper';
+          } else if (r === 2) {
+            name =
+              c === doorL ? 'door_open_l'
+              : c === doorR ? 'door_open_r'
+              : c === 3 || c === 16 ? 'wall_face_lower_grate'
+              : 'wall_face_lower';
+          } else if (r === 3 && (c === doorL || c === doorR)) {
+            name = c === doorL ? 'door_threshold_l' : 'door_threshold_r';
+          } else {
+            // Deterministic floor variation (same formula as the approved mockup).
+            name =
+              special.get(`${c},${r}`) ??
+              floorCycle[
+                (c * 7 + r * 3) % 5 !== 0 ? (c * 31 + r * 17 + 13) % 7 : 0
+              ];
+          }
+          tile(name, c, r, 1);
+        }
+      }
+      // Wall shadows cast over the floor.
+      for (let c = 1; c < lastC; c++) {
+        tile(
+          c === 1 ? 'shadow_corner_l' : c === lastC - 1 ? 'shadow_corner_r' : 'shadow_s',
+          c,
+          3,
+          1.1
+        );
+      }
+      for (let r = 4; r < lastR; r++) {
+        tile('shadow_l', 1, r, 1.1);
+        tile('shadow_r', lastC - 1, r, 1.1);
+      }
+    }
+
+    // Wall props: chains + 4 animated torches on the upper wall face.
+    if (hasProps) {
+      const propFrame = (name: DungeonBasicProp) =>
+        DUNGEON_BASIC_PROP_FRAMES.indexOf(name);
+      for (const c of [2, 17]) {
+        track(
+          this.add
+            .image(ox + c * T, oy + T + 2, DUNGEON_BASIC_PROPS_KEY, propFrame('chain'))
+            .setOrigin(0, 0)
+            .setDepth(1.2)
+        );
+      }
+      TEST_ROOM_TORCH_COLS.forEach((c, i) => {
+        const torch = track(
+          this.add
+            .sprite(ox + c * T, oy + T, DUNGEON_BASIC_PROPS_KEY, i % 4)
+            .setOrigin(0, 0)
+            .setDepth(1.2)
+        );
+        if (this.anims.exists(DUNGEON_BASIC_TORCH_ANIM)) {
+          torch.play({ key: DUNGEON_BASIC_TORCH_ANIM, startFrame: [0, 2, 1, 3][i] });
+        }
+      });
+      const floorProps = [...TEST_ROOM_FLOOR_PROPS].sort((a, b) => a.y - b.y);
+      floorProps.forEach((p, i) => {
+        track(
+          this.add
+            .image(ox + p.x, oy + p.y, DUNGEON_BASIC_PROPS_KEY, propFrame(p.name))
+            .setOrigin(0, 0)
+            .setDepth(1.3 + i * 0.01)
+        );
+      });
+    }
+
+    if (hasTall) {
+      for (const p of TEST_ROOM_TALL_PROPS) {
+        const baseY = oy + p.y + 61;
+        const image = track(
+          this.add
+            .image(ox + p.x + 16, oy + p.y + 64 * 0.95, DUNGEON_BASIC_TALL_KEY, p.frame)
+            .setOrigin(0.5, 0.95)
+            .setDepth(4.5)
+        );
+        this.testArenaTallProps.push({ image, baseY });
+      }
+    }
+
+    // Cold ambient + edge vignette (normal blend, under the actors).
+    const lg = this.lightingGraphics;
+    lg.fillStyle(0x05070d, 0.14);
+    lg.fillRect(ox, oy, room.width, room.height);
+    for (let i = 0; i < 4; i++) {
+      lg.lineStyle(10, 0x020306, 0.16 - i * 0.03);
+      lg.strokeRect(
+        ox + T + 5 + i * 10,
+        oy + T * 3 + 5 + i * 10,
+        room.width - T * 2 - 10 - i * 20,
+        room.height - T * 4 - 10 - i * 20
+      );
+    }
+
+    // Warm torch halos (additive radial gradients) — #f59e0b / #fde047.
+    const lightKey = this.ensureRadialLightTexture();
+    const light = (
+      x: number,
+      y: number,
+      w: number,
+      h: number,
+      tint: number,
+      alpha: number,
+      flicker: boolean
+    ) => {
+      const img = track(
+        this.add
+          .image(x, y, lightKey)
+          .setDisplaySize(w, h)
+          .setTint(tint)
+          .setAlpha(alpha)
+          .setBlendMode(Phaser.BlendModes.ADD)
+          .setDepth(6)
+      );
+      if (flicker) {
+        this.testArenaLights.push({ image: img, baseAlpha: alpha });
+      }
+    };
+    for (const c of TEST_ROOM_TORCH_COLS) {
+      const fx = ox + c * T + 15.5;
+      const fy = oy + T + 9;
+      light(fx, fy + 34, 230, 190, 0xf59e0b, 0.34, true);
+      light(fx, oy + T * 3 + 18, 120, 48, 0xf59e0b, 0.22, true);
+      light(fx, fy, 34, 34, 0xfde047, 0.55, true);
+    }
+    // Rune arch (cold) and skull candle.
+    light(ox + room.width / 2, oy + T * 2 + 4, 90, 90, 0x38bdf8, 0.16, false);
+    light(ox + 56, oy + 112, 48, 48, 0xf59e0b, 0.35, true);
+
+    this.applyTestArenaCameraBounds();
+  }
+
+  /** Soft white radial gradient used (tinted, additive) for torch halos. */
+  private ensureRadialLightTexture(): string {
+    const key = 'test_arena_radial_light';
+    if (this.textures.exists(key)) {
+      return key;
+    }
+    const size = 128;
+    const tex = this.textures.createCanvas(key, size, size);
+    const ctx = tex?.getContext();
+    if (tex && ctx) {
+      const r = size / 2;
+      const grad = ctx.createRadialGradient(r, r, 0, r, r, r);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(0.25, 'rgba(255,255,255,0.6)');
+      grad.addColorStop(0.55, 'rgba(255,255,255,0.22)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, size, size);
+      tex.refresh();
+    }
+    return key;
+  }
+
+  private clearTestArenaRoom(): void {
+    for (const obj of this.testArenaObjects) {
+      obj.destroy();
+    }
+    this.testArenaObjects = [];
+    this.testArenaTallProps = [];
+    this.testArenaLights = [];
+    this.testArenaRoom = undefined;
+    this.actorShadows?.clear();
+  }
+
+  /** Limits the world camera to the room (centered when narrower than the view). */
+  private applyTestArenaCameraBounds(): void {
+    const room = this.testArenaRoom;
+    if (!this.isTestArena || !room) {
+      return;
+    }
+    const zoom = this.getWorldZoom();
+    const viewW = (this.viewport.width || this.scale.width || 960) / zoom;
+    const viewH = (this.viewport.height || this.scale.height || 540) / zoom;
+    const padX = Math.max(0, (viewW - room.width) / 2);
+    const padY = Math.max(0, (viewH - room.height) / 2);
+    this.cameras.main.setBounds(
+      room.x - padX,
+      room.y - padY,
+      room.width + padX * 2,
+      room.height + padY * 2
+    );
+  }
+
+  private constrainPositionToTestArenaRoom(pos: Vector2D): void {
+    const room = this.testArenaRoom;
+    if (!room) {
+      return;
+    }
+    pos.x = Math.min(room.maxX, Math.max(room.minX, pos.x));
+    pos.y = Math.min(room.maxY, Math.max(room.minY, pos.y));
+
+    // Push the feet out of prop obstacles along the axis of least penetration.
+    for (const o of TEST_ROOM_OBSTACLES) {
+      const left = room.x + o.x;
+      const top = room.y + o.y;
+      const right = left + o.w;
+      const bottom = top + o.h;
+      const fx = pos.x;
+      const fy = pos.y + ACTOR_FEET_OFFSET;
+      if (fx <= left || fx >= right || fy <= top || fy >= bottom) {
+        continue;
+      }
+      const pushes = [
+        { d: fx - left, x: left - 0.5, y: fy },
+        { d: right - fx, x: right + 0.5, y: fy },
+        { d: fy - top, x: fx, y: top - 0.5 },
+        { d: bottom - fy, x: fx, y: bottom + 0.5 },
+      ].sort((a, b) => a.d - b.d);
+      for (const p of pushes) {
+        const cy = p.y - ACTOR_FEET_OFFSET;
+        if (p.x >= room.minX && p.x <= room.maxX && cy >= room.minY && cy <= room.maxY) {
+          pos.x = p.x;
+          pos.y = cy;
+          break;
+        }
+      }
+    }
+  }
+
+  private constrainActorsToTestArenaRoom(): void {
+    if (!this.isTestArena || !this.testArenaRoom) {
+      return;
+    }
+    if (this.hero) {
+      this.constrainPositionToTestArenaRoom(this.hero.position);
+    }
+    for (const monster of this.monsters) {
+      if (monster.isAlive) {
+        this.constrainPositionToTestArenaRoom(monster.position);
+      }
+    }
+  }
+
+  /** Per-frame room visuals: contact shadows, tall-prop depth and torch flicker. */
+  private syncTestArenaRoomVisuals(nowMs: number): void {
+    const shadows = this.actorShadows;
+    if (!shadows) {
+      return;
+    }
+    shadows.clear();
+    if (!this.isTestArena || !this.testArenaRoom) {
+      return;
+    }
+
+    const drawShadow = (x: number, y: number, w: number, h: number, a: number) => {
+      shadows.fillStyle(0x000000, a * 0.55);
+      shadows.fillEllipse(x, y, w, h);
+      shadows.fillStyle(0x000000, a);
+      shadows.fillEllipse(x, y, w * 0.62, h * 0.6);
+    };
+
+    if (this.hero?.isAlive) {
+      drawShadow(this.hero.position.x, this.hero.position.y + ACTOR_FEET_OFFSET, 38, 10, 0.32);
+    }
+    for (const monster of this.monsters) {
+      const visual = this.monsterVisuals.get(monster.instanceId);
+      if (!visual || !monster.isAlive || visual.isDying || !visual.sprite.visible) {
+        continue;
+      }
+      const sprite = visual.sprite;
+      const isFlyer = monster.spriteKey === 'cave_bat';
+      const w = Math.min(64, Math.max(20, sprite.displayWidth * 0.42));
+      const feetY = monster.position.y + sprite.displayHeight * 0.4;
+      drawShadow(
+        monster.position.x,
+        feetY + (isFlyer ? 14 : 0),
+        isFlyer ? w * 0.6 : w,
+        isFlyer ? 7 : 10,
+        isFlyer ? 0.2 : 0.32
+      );
+    }
+
+    // Tall props occlude the hero when he walks behind them.
+    const heroFeetY = (this.hero?.position.y ?? 0) + ACTOR_FEET_OFFSET;
+    for (const prop of this.testArenaTallProps) {
+      prop.image.setDepth(heroFeetY < prop.baseY ? 20.5 : 4.5);
+    }
+
+    this.testArenaLights.forEach((light, i) => {
+      const flicker =
+        0.9 +
+        Math.sin(nowMs * 0.011 + i * 1.7) * 0.05 +
+        Math.sin(nowMs * 0.027 + i * 0.9) * 0.05;
+      light.image.setAlpha(light.baseAlpha * flicker);
+    });
+  }
+
+  private finishTestArena(): void {
+    if (this.testArenaFinished) {
+      return;
+    }
+    this.testArenaFinished = true;
+    this.testArenaFinishAtMs = undefined;
+    this.heroIsMoving = false;
+    this.lastMoveDirX = 0;
+    this.manualAttackQueued = false;
+    this.bannerText = undefined;
+    this.bannerExpiresAtMs = 0;
+    if (this.inventoryModal?.isOpen()) {
+      this.inventoryModal.close();
+    }
+    soundManager.play('victory');
+    this.showTestArenaFinishOverlay(true);
+    this.updateHud(this.elapsedTimeMs);
+    this.cameraRig?.syncLayers();
+  }
+
+  private showTestArenaFinishOverlay(animate: boolean): void {
+    this.destroyTestArenaFinishOverlay();
+    const w = this.scale.width || 960;
+    const h = this.scale.height || 540;
+
+    const backdrop = this.add
+      .rectangle(0, 0, w, h, 0x05060a, 0.86)
+      .setOrigin(0, 0)
+      .setInteractive();
+    backdrop.on('pointerdown', () => this.restartTestArena());
+
+    const ornament = this.add.graphics();
+    ornament.lineStyle(1.5, 0xd4a95a, 0.85);
+    ornament.lineBetween(w / 2 - 190, h / 2 - 42, w / 2 + 190, h / 2 - 42);
+    ornament.lineBetween(w / 2 - 190, h / 2 + 30, w / 2 + 190, h / 2 + 30);
+    ornament.fillStyle(0xf1d28a, 0.95);
+    for (const y of [h / 2 - 42, h / 2 + 30]) {
+      ornament.fillTriangle(w / 2, y - 5, w / 2 + 5, y, w / 2, y + 5);
+      ornament.fillTriangle(w / 2, y - 5, w / 2 - 5, y, w / 2, y + 5);
+    }
+
+    const title = this.add
+      .text(w / 2, h / 2 - 6, TEST_ARENA_FINISHED_TEXT, {
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '44px',
+        fontStyle: 'bold',
+        color: '#f1d28a',
+        stroke: '#120d06',
+        strokeThickness: 6,
+        resolution: 2,
+      })
+      .setOrigin(0.5)
+      .setShadow(0, 3, '#000000', 8, true, true);
+
+    const hint = this.add
+      .text(w / 2, h / 2 + 58, 'Toque ou pressione Enter para reiniciar', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '16px',
+        color: '#cbd5e1',
+        stroke: '#05060a',
+        strokeThickness: 3,
+        resolution: 2,
+      })
+      .setOrigin(0.5);
+
+    const overlay = this.add
+      .container(0, 0, [backdrop, ornament, title, hint])
+      .setDepth(3000);
+    this.testArenaFinishOverlay = overlay;
+
+    if (animate) {
+      overlay.setAlpha(0);
+      this.tweens.add({ targets: overlay, alpha: 1, duration: 280, ease: 'Quad.easeOut' });
+    }
+    this.tweens.add({
+      targets: hint,
+      alpha: 0.45,
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    const onEnter = () => this.restartTestArena();
+    this.testArenaRestartKeyHandler = onEnter;
+    this.input.keyboard?.on('keydown-ENTER', onEnter);
+    this.cameraRig?.syncLayers();
+  }
+
+  private destroyTestArenaFinishOverlay(): void {
+    if (this.testArenaRestartKeyHandler) {
+      this.input.keyboard?.off('keydown-ENTER', this.testArenaRestartKeyHandler);
+      this.testArenaRestartKeyHandler = undefined;
+    }
+    if (this.testArenaFinishOverlay) {
+      this.tweens.killTweensOf(this.testArenaFinishOverlay);
+      this.testArenaFinishOverlay.each((child: Phaser.GameObjects.GameObject) => {
+        this.tweens.killTweensOf(child);
+      });
+      this.testArenaFinishOverlay.destroy();
+      this.testArenaFinishOverlay = undefined;
+    }
+  }
+
+  private restartTestArena(): void {
+    if (!this.isTestArena || !this.testArenaFinished) {
+      return;
+    }
+    soundManager.play('ui_click');
+    this.destroyTestArenaFinishOverlay();
+    this.scene.restart({ testArena: true });
   }
 
   private checkAndUpdateRoomState(nowMs: number): void {
@@ -1320,7 +1976,18 @@ export class DungeonScene extends Phaser.Scene {
           this.testArenaWave = 2;
           this.testArenaWave2TriggerAtMs = undefined;
           this.spawnTestArenaWave(TEST_ARENA_WAVE_2, 2);
-          this.showTimedBanner('Onda 2: Bosses & Esqueleto Chefe!', 2500);
+          this.showTimedBanner(TEST_ARENA_WAVE_2_BANNER, 2500);
+        }
+      } else if (
+        this.testArenaWave === 2 &&
+        !this.testArenaFinished &&
+        this.monsters.length > 0 &&
+        this.monsters.every((m) => !m.isAlive)
+      ) {
+        if (this.testArenaFinishAtMs === undefined) {
+          this.testArenaFinishAtMs = nowMs + TEST_ARENA_FINISH_DELAY_MS;
+        } else if (nowMs >= this.testArenaFinishAtMs) {
+          this.finishTestArena();
         }
       }
       return;
@@ -1643,6 +2310,8 @@ export class DungeonScene extends Phaser.Scene {
         barHeight
       );
     }
+
+    this.syncTestArenaRoomVisuals(nowMs);
   }
 
   private updateHud(nowMs: number): void {
@@ -1694,9 +2363,11 @@ export class DungeonScene extends Phaser.Scene {
         : 0);
 
     const missionObjective = this.isTestArena
-      ? this.testArenaWave >= 2
-        ? 'Arena de Teste — Onda 2 (Bosses)'
-        : 'Arena de Teste — Onda 1 (Monstros)'
+      ? this.testArenaFinished
+        ? `Arena de Teste — ${TEST_ARENA_FINISHED_TEXT}`
+        : this.testArenaWave >= 2
+          ? 'Arena de Teste — Onda 2 (Chefes)'
+          : 'Arena de Teste — Onda 1 (Monstros)'
       : `${currentRoom.roomNumber}/${this.runState.totalRooms} — ${currentRoom.title}`;
 
     const minimap = {
@@ -1804,6 +2475,8 @@ export class DungeonScene extends Phaser.Scene {
       drop.pillar?.setPosition(drop.position.x, drop.position.y);
     }
 
+    this.constrainActorsToTestArenaRoom();
+
     this.cameraRig?.resize(
       viewport.width,
       viewport.height,
@@ -1811,7 +2484,11 @@ export class DungeonScene extends Phaser.Scene {
       viewport.width,
       viewport.height
     );
+    this.applyTestArenaCameraBounds();
     this.hud.resize(viewport);
+    if (this.testArenaFinishOverlay) {
+      this.showTestArenaFinishOverlay(false);
+    }
     this.inventoryModal?.resize(viewport);
     this.syncVisuals(this.elapsedTimeMs);
     this.updateHud(this.elapsedTimeMs);
@@ -1822,6 +2499,7 @@ export class DungeonScene extends Phaser.Scene {
     if (
       !this.inventoryModal ||
       !this.runState ||
+      (this.isTestArena && this.testArenaFinished) ||
       this.runState.status === 'victory' ||
       this.runState.status === 'defeat'
     ) {

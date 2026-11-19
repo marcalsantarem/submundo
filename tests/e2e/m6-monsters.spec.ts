@@ -23,6 +23,14 @@ const M6_MONSTER_SPECS = [
   { key: 'karnak', width: 1920, height: 96, frameWidth: 96, frameHeight: 96 },
 ] as const;
 
+// Masmorra Básica 2.5D (Decision #17, T-118): 32x32 tiles/props, 32x64 tall props.
+// Phaser's frameTotal includes the implicit __BASE frame (+1).
+const DUNGEON_BASIC_SPECS = [
+  { key: 'dungeon_basic_tiles', frames: 34, frameWidth: 32, frameHeight: 32 },
+  { key: 'dungeon_basic_props', frames: 11, frameWidth: 32, frameHeight: 32 },
+  { key: 'dungeon_basic_props_tall', frames: 2, frameWidth: 32, frameHeight: 64 },
+] as const;
+
 const ANIM_STATES = [
   { suffix: 'idle', count: 4 },
   { suffix: 'walk', count: 6 },
@@ -31,7 +39,7 @@ const ANIM_STATES = [
 ] as const;
 
 test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 & Mobile Landscape 844x390)', () => {
-  test('validates testArena boot, #000000 bg, hero_living, 8 textures (frameTotal=21), 32 anims, Wave 1 -> Wave 2 (karnak scale 1.06), PC/Mobile Landscape screenshots', async ({
+  test('validates testArena boot, tiled room bg, hero_living, 8 textures (frameTotal=21), 32 anims, dungeon_basic_* textures, Wave 1 -> Wave 2 (wolf_alpha + skeleton_chief), PC/Mobile Landscape screenshots', async ({
     page,
     browser,
     baseURL,
@@ -71,7 +79,7 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 &
 
     await assertLandscapeCanvas(page, DESKTOP_VIEWPORT);
 
-    const wave1AndAssets = await page.evaluate((specs) => {
+    const wave1AndAssets = await page.evaluate(([specs, dungeonSpecs]) => {
       const dbg = window.__SUBMUNDO_DEBUG__!;
       const scene = dbg.scene as unknown as {
         isTestArena: boolean;
@@ -82,11 +90,14 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 &
           };
         };
         heroSprite?: { texture: { key: string } };
+        testArenaRoom?: { x: number; y: number; width: number; height: number };
+        testArenaObjects?: unknown[];
         textures: {
           exists: (k: string) => boolean;
           get: (k: string) => {
             source: Array<{ width: number; height: number }>;
             frameTotal: number;
+            has: (frame: string) => boolean;
             get: (frame: number) => { width: number; height: number };
           };
         };
@@ -114,6 +125,25 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 &
         };
       });
 
+      const dungeonTextures = dungeonSpecs.map((s) => {
+        if (!scene.textures.exists(s.key)) {
+          return { key: s.key, exists: false };
+        }
+        const tex = scene.textures.get(s.key);
+        const f0 = tex.get(0);
+        return {
+          key: s.key,
+          exists: true,
+          frames: tex.frameTotal - 1,
+          hasLastFrame: tex.has(String(s.frames - 1)),
+          frameWidth: f0?.width ?? 0,
+          frameHeight: f0?.height ?? 0,
+        };
+      });
+      const torchAnimFrames = scene.anims.exists('dungeon_basic_torch')
+        ? scene.anims.get('dungeon_basic_torch')?.frames.length ?? 0
+        : -1;
+
       const animLengths: Record<string, number> = {};
       for (const s of specs) {
         for (const st of ['idle', 'walk', 'attack', 'death']) {
@@ -135,15 +165,79 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 &
         bgRgb: [bg.red, bg.green, bg.blue],
         heroTextureKey: scene.heroSprite?.texture.key ?? '',
         textures,
+        dungeonTextures,
+        torchAnimFrames,
+        room: scene.testArenaRoom
+          ? {
+              x: scene.testArenaRoom.x,
+              y: scene.testArenaRoom.y,
+              width: scene.testArenaRoom.width,
+              height: scene.testArenaRoom.height,
+            }
+          : null,
+        roomObjectCount: scene.testArenaObjects?.length ?? 0,
         animLengths,
         wave1Monsters,
       };
-    }, M6_MONSTER_SPECS);
+    }, [M6_MONSTER_SPECS, DUNGEON_BASIC_SPECS] as const);
 
     expect(wave1AndAssets.isTestArena).toBe(true);
     expect(wave1AndAssets.testArenaWave).toBe(1);
+    // Camera clear color stays #000000; the tiled room now covers the centre.
     expect(wave1AndAssets.bgRgb).toEqual([0, 0, 0]);
     expect(wave1AndAssets.heroTextureKey).toBe('hero_living');
+
+    for (const spec of DUNGEON_BASIC_SPECS) {
+      expect(
+        wave1AndAssets.dungeonTextures.find((t) => t.key === spec.key)
+      ).toEqual({
+        key: spec.key,
+        exists: true,
+        frames: spec.frames,
+        hasLastFrame: true,
+        frameWidth: spec.frameWidth,
+        frameHeight: spec.frameHeight,
+      });
+    }
+    expect(wave1AndAssets.torchAnimFrames).toBe(4);
+
+    expect(wave1AndAssets.room).not.toBeNull();
+    expect(wave1AndAssets.roomObjectCount).toBeGreaterThan(0);
+    const room = wave1AndAssets.room!;
+    expect(room.x).toBeGreaterThanOrEqual(0);
+    expect(room.y).toBeGreaterThanOrEqual(0);
+    expect(room.x + room.width).toBeLessThanOrEqual(DESKTOP_VIEWPORT.width);
+    expect(room.y + room.height).toBeLessThanOrEqual(DESKTOP_VIEWPORT.height);
+
+    // The centre of the screen is no longer pure #000000: sample rendered pixels
+    // inside the room (screenshot decoded through a 2D canvas in the page).
+    const roomShot = await page.screenshot();
+    const nonBlackSamples = await page.evaluate(
+      async ({ b64, r }) => {
+        const img = new Image();
+        img.src = `data:image/png;base64,${b64}`;
+        await img.decode();
+        const c = document.createElement('canvas');
+        c.width = img.width;
+        c.height = img.height;
+        const ctx = c.getContext('2d')!;
+        ctx.drawImage(img, 0, 0);
+        let nonBlack = 0;
+        let total = 0;
+        for (let i = 1; i <= 7; i++) {
+          for (let j = 1; j <= 5; j++) {
+            const px = Math.round(r.x + (r.width * i) / 8);
+            const py = Math.round(r.y + (r.height * j) / 6);
+            const d = ctx.getImageData(px, py, 1, 1).data;
+            total++;
+            if (d[0] + d[1] + d[2] > 0) nonBlack++;
+          }
+        }
+        return { nonBlack, total };
+      },
+      { b64: roomShot.toString('base64'), r: room }
+    );
+    expect(nonBlackSamples.nonBlack).toBeGreaterThan(nonBlackSamples.total / 2);
 
     for (const spec of M6_MONSTER_SPECS) {
       const texInfo = wave1AndAssets.textures.find((t) => t.key === spec.key);
@@ -178,7 +272,7 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 &
     expect(existsSync(pcWave1Path)).toBe(true);
     expect(statSync(pcWave1Path).size).toBeGreaterThan(1024);
 
-    // Clear Wave 1 monsters and wait for Wave 2 (wolf_alpha, karnak, skeleton_chief)
+    // Clear Wave 1 monsters and wait for Wave 2 (wolf_alpha, skeleton_chief)
     await page.evaluate(() => {
       const monsters = window.__SUBMUNDO_DEBUG__!.getMonsters();
       for (const m of monsters) {
@@ -193,7 +287,7 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 &
         if (!dbg) return false;
         const scene = dbg.scene as unknown as { testArenaWave?: number };
         const monsters = dbg.getMonsters();
-        return scene.testArenaWave === 2 && monsters.length === 3;
+        return scene.testArenaWave === 2 && monsters.length === 2;
       },
       undefined,
       { timeout: 5000 }
@@ -229,15 +323,13 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 &
     expect(wave2Check.testArenaWave).toBe(2);
     expect(wave2Check.monsters.map((m) => m.defId)).toEqual([
       'wolf_alpha',
-      'karnak',
       'skeleton_chief',
     ]);
     expect(wave2Check.monsters.every((m) => m.isAlive)).toBe(true);
-
-    const karnakInfo = wave2Check.monsters.find((m) => m.defId === 'karnak');
-    expect(karnakInfo?.textureKey).toBe('karnak');
-    expect(karnakInfo?.scaleX).toBeCloseTo(1.06, 2);
-    expect(karnakInfo?.scaleY).toBeCloseTo(1.06, 2);
+    expect(wave2Check.monsters.map((m) => m.textureKey)).toEqual([
+      'wolf_alpha',
+      'skeleton_chief',
+    ]);
 
     const pcWave2Path = join(SCREENSHOT_DIR, 'm6_pc_wave2.png');
     await page.screenshot({ path: pcWave2Path });
@@ -278,7 +370,7 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 &
           const dbg = window.__SUBMUNDO_DEBUG__;
           if (!dbg) return false;
           const scene = dbg.scene as unknown as { testArenaWave?: number };
-          return scene.testArenaWave === 2 && dbg.getMonsters().length === 3;
+          return scene.testArenaWave === 2 && dbg.getMonsters().length === 2;
         },
         undefined,
         { timeout: 5000 }

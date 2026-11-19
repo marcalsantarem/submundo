@@ -185,7 +185,30 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
     frameHeight: 64,
     fallbackColor: 0x334155,
   },
+  {
+    key: 'dungeon_basic_tiles',
+    file: 'assets/sprites/dungeon_basic_tiles.png',
+    frameWidth: 32,
+    frameHeight: 32,
+    fallbackColor: 0x1c1917,
+  },
+  {
+    key: 'dungeon_basic_props',
+    file: 'assets/sprites/dungeon_basic_props.png',
+    frameWidth: 32,
+    frameHeight: 32,
+    fallbackColor: 0x78350f,
+  },
+  {
+    key: 'dungeon_basic_props_tall',
+    file: 'assets/sprites/dungeon_basic_props_tall.png',
+    frameWidth: 32,
+    frameHeight: 64,
+    fallbackColor: 0x44403c,
+  },
 ];
+
+const DUNGEON_BASIC_TORCH_ANIM_KEY = 'dungeon_basic_torch';
 
 const LINEAR_TEXTURE_KEYS: readonly string[] = ['ui_icons', 'portraits'];
 
@@ -210,6 +233,7 @@ export class BootScene extends Phaser.Scene {
   public create(): void {
     this.ensureFallbackTextures();
     this.applyTextureFilters();
+    this.createGlobalAnimations();
 
     const { width, height } = this.scale;
     this.cameras.main.setBackgroundColor('#09090b');
@@ -234,6 +258,24 @@ export class BootScene extends Phaser.Scene {
       this.scene.start('DungeonScene', { testArena: true });
     } else if ('HubScene' in this.scene.manager.keys) {
       this.scene.start('HubScene');
+    }
+  }
+
+  private createGlobalAnimations(): void {
+    // Torch flicker: frames 0-3 of dungeon_basic_props (Decision #17).
+    // Skipped when the sheet fell back to a single-frame placeholder texture.
+    const propsKey = 'dungeon_basic_props';
+    if (
+      !this.anims.exists(DUNGEON_BASIC_TORCH_ANIM_KEY) &&
+      this.textures.exists(propsKey) &&
+      this.textures.get(propsKey).has('3')
+    ) {
+      this.anims.create({
+        key: DUNGEON_BASIC_TORCH_ANIM_KEY,
+        frames: this.anims.generateFrameNumbers(propsKey, { start: 0, end: 3 }),
+        frameRate: 8,
+        repeat: -1,
+      });
     }
   }
 
