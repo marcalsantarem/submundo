@@ -105,4 +105,5 @@
 | T-101 | Extrair pose 3/4 de `skeleton_chief_turnaround.png` e gerar spritesheet 20f `public/assets/sprites/skeleton_chief.png` (`1600×80`) + `manifest.json`, `docs/guia_visual.md` e `preview_skeleton_chief_20f.png` (tam. P) | M6 | AG08 (Arte) | feita |
 | T-102 | Salvar dados e narrativa de `skeleton_chief` (*Esqueleto Chefe*, melee) em `src/data/monsters.json`, `docs/narrativa.md` e `tests/core/monsters-m6.test.ts` (tam. P) | M6 | AG04 (Sistemas/Meta) + AG06 (Narrativa) | feita |
 | T-103 | Registrar `skeleton_chief` em `CombatVfx.ts`, pré-carregar em `BootScene.ts` e aplicá-lo na Onda 2 da `testArena` junto com os bosses (`DungeonScene.ts`) (tam. P) | M6 | AG07 (Arquiteto) + AG01 (Gameplay) | feita |
-
+| T-104 | Corrigir orientação base (virado/atacando para a direita como os demais monstros) e recorte dos frames de ataque na animação 20f de **Karnak** (`scripts/art/buildMonstersSheets.py` + `public/assets/sprites/karnak.png`) (tam. P) | M6 | AG08 (Arte) | feita |
+| T-105 | Aumentar escala visual do sprite de **Karnak** em +20% (`0.88` → `1.06`) e ajustar `offsetY` da barra de HP em `src/view/scenes/DungeonScene.ts` (tam. P) | M6 | AG01 (Gameplay) | feita |

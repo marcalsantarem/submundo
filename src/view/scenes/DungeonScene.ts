@@ -723,7 +723,14 @@ export class DungeonScene extends Phaser.Scene {
     const isAnimatedSpritesheet = ANIMATED_SPRITESHEET_MONSTERS.has(
       monster.spriteKey
     );
-    const scale = isAnimatedSpritesheet ? 0.88 : isAbyssHerald ? 1.75 : 1.5;
+    const scale =
+      monster.spriteKey === 'karnak'
+        ? 1.06
+        : isAnimatedSpritesheet
+          ? 0.88
+          : isAbyssHerald
+            ? 1.75
+            : 1.5;
 
     const sprite = this.add
       .sprite(monster.position.x, monster.position.y, monster.spriteKey, 0)
@@ -1476,7 +1483,7 @@ export class DungeonScene extends Phaser.Scene {
       const barHeight = isBoss ? 6 : 4;
       const offsetY =
         monster.spriteKey === 'karnak'
-          ? 46
+          ? 56
           : monster.spriteKey === 'wolf_alpha'
             ? 40
             : monster.spriteKey === 'skeleton_chief'

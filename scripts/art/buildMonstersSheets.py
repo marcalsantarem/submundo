@@ -1326,18 +1326,57 @@ def _draw_crimson_slash(cv: Canvas, phase: float) -> None:
                         cv.put(ix, iy, col)
 
 
-def _draw_raised_axe(cv: Canvas, base_cv: Canvas, dst_x: float, dst_y: float, angle_rad: float) -> None:
-    """Recorta o machado duplo original do Karnak e o rotaciona erguido sobre o ombro."""
-    axe_src = Canvas(KARNAK_W, KARNAK_H)
-    for y in range(36, 70):
-        for x in range(0, 42):
-            col = base_cv.get(x, y)
+def _flip_canvas_h(cv: Canvas) -> Canvas:
+    out = Canvas(cv.w, cv.h)
+    for y in range(cv.h):
+        for x in range(cv.w):
+            col = cv.get(x, y)
             if col[3] > 0:
-                axe_src.put(x, y, col)
-    # Rotaciona em torno do punho do machado (x=32, y=54)
-    rot_axe = _rotate_canvas_nn(axe_src, 32.0, 54.0, angle_rad, dst_x, dst_y)
-    # Adiciona brilho nas runas da lamina erguida
-    _boost_karnak_glow(rot_axe, 0.8)
+                out.put(cv.w - 1 - x, y, col)
+    return out
+
+
+def _is_karnak_axe_region(x: int, y: int) -> bool:
+    """Isola apenas a lamina dupla + punho frontal do machado (sem ombro nem coxa)."""
+    if 38 <= y <= 48:
+        return x <= 33
+    if 49 <= y <= 57:
+        return x <= 34
+    if 58 <= y <= 64:
+        return x <= 33
+    return False
+
+
+def _is_karnak_cape_tail(x: int, y: int) -> bool:
+    """Isola apenas a ponta traseira da capa atras da perna esquerda (x >= 76, 65 <= y <= 84)."""
+    return 65 <= y <= 84 and x >= 76
+
+
+def _draw_raised_axe(cv: Canvas, base_cv: Canvas, dst_x: float, dst_y: float, angle_rad: float) -> None:
+    """Recorta o machado duplo original do Karnak e o rotaciona em torno do punho (x=32, y=53)."""
+    axe_src = Canvas(KARNAK_W, KARNAK_H)
+    for y in range(38, 65):
+        for x in range(0, 35):
+            if _is_karnak_axe_region(x, y):
+                col = base_cv.get(x, y)
+                if col[3] > 0:
+                    axe_src.put(x, y, col)
+    rot_axe = _rotate_canvas_nn(axe_src, 32.0, 53.0, angle_rad, dst_x, dst_y)
+    # Realca runas da lamina rotacionada
+    for y in range(rot_axe.h):
+        for x in range(rot_axe.w):
+            r, g, b, a = rot_axe.get(x, y)
+            if a > 0 and r >= 130 and r > g + 35 and r > b + 45:
+                rot_axe.put(
+                    x,
+                    y,
+                    (
+                        int(clamp(r + 45, 0, 255)),
+                        int(clamp(g + 55, 0, 255)),
+                        int(clamp(b + 20, 0, 255)),
+                        a,
+                    ),
+                )
     cv.composite(rot_axe)
 
 
@@ -1358,41 +1397,68 @@ def _render_karnak_posed(
 ) -> Canvas:
     out = Canvas(KARNAK_W, KARNAK_H)
 
-    # 1. Capa esfarrapada (fundo direito: x >= 66, y >= 45)
-    for y in range(45, 88):
-        for x in range(66, KARNAK_W):
+    # 1. Ponta traseira da capa (com overlap em x=73..76 atras da perna para nunca abrir fenda)
+    for y in range(65, 85):
+        for x in range(73, KARNAK_W):
             col = base_cv.get(x, y)
             if col[3] == 0:
                 continue
-            nx = clamp(x + cape_dx + upper_dx, 0, KARNAK_W - 1)
-            ny = clamp(y + cape_dy + upper_dy, 0, KARNAK_FOOT_Y - 1)
+            nx = clamp(x + leg_r_dx + cape_dx, 0, KARNAK_W - 1)
+            ny = clamp(y + leg_r_dy + cape_dy, 0, KARNAK_FOOT_Y - 1)
             out.put(nx, ny, col)
 
-    # 2. Pernas abaixo da cintura (y >= 62), com cascos limitados a y <= 91
+    # 2. Pernas abaixo da cintura (y >= 62), com saiote central coeso entre as duas coxas
+    mid_dx = int(round((leg_l_dx + leg_r_dx) * 0.5))
+    mid_dy = int(round((leg_l_dy + leg_r_dy) * 0.5))
+
+    # 2a. Perna frontal (x <= 50)
     for y in range(62, KARNAK_H):
-        for x in range(KARNAK_W):
-            if x >= 68 and y < 86:
-                continue  # ja desenhado na capa
-            if x < 35 and y < 68:
-                continue  # lamina do machado
+        for x in range(0, 51):
+            if _is_karnak_axe_region(x, y):
+                continue
             col = base_cv.get(x, y)
             if col[3] == 0:
                 continue
-            if x < 52:
-                nx = clamp(x + leg_l_dx, 0, KARNAK_W - 1)
-                ny = min(KARNAK_FOOT_Y - 1, max(0, y + leg_l_dy))
-            else:
-                nx = clamp(x + leg_r_dx, 0, KARNAK_W - 1)
-                ny = min(KARNAK_FOOT_Y - 1, max(0, y + leg_r_dy))
+            nx = clamp(x + leg_l_dx, 0, KARNAK_W - 1)
+            ny = min(KARNAK_FOOT_Y - 1, max(0, y + leg_l_dy))
             out.put(nx, ny, col)
 
-    # 3. Tronco, ombros, bracos e cabeca (y < 66)
-    for y in range(0, 66):
+    # 2b. Perna traseira + casco completo (55 <= x <= 78, exceto ponta da capa)
+    for y in range(62, KARNAK_H):
+        for x in range(55, KARNAK_W):
+            if _is_karnak_cape_tail(x, y):
+                continue
+            col = base_cv.get(x, y)
+            if col[3] == 0:
+                continue
+            nx = clamp(x + leg_r_dx, 0, KARNAK_W - 1)
+            ny = min(KARNAK_FOOT_Y - 1, max(0, y + leg_r_dy))
+            out.put(nx, ny, col)
+
+    # 2c. Saiote central (48 <= x <= 58, 62 <= y <= 83) com overlap de 3px em ambas as pernas
+    for y in range(62, 84):
+        for x in range(48, 59):
+            col = base_cv.get(x, y)
+            if col[3] == 0:
+                continue
+            nx = clamp(x + mid_dx, 0, KARNAK_W - 1)
+            ny = min(KARNAK_FOOT_Y - 1, max(0, y + mid_dy))
+            out.put(nx, ny, col)
+
+    # 2d. Garante que nenhuma fenda vertical de 1-2px sobre entre as pernas/saiote (62 <= y <= 82)
+    for y in range(62, 83):
+        for x in range(46, 62):
+            if out.get(x, y)[3] == 0:
+                left_c = out.get(x - 1, y)
+                right_c = out.get(x + 1, y) if x + 1 < KARNAK_W else (0, 0, 0, 0)
+                right2_c = out.get(x + 2, y) if x + 2 < KARNAK_W else (0, 0, 0, 0)
+                if left_c[3] > 0 and (right_c[3] > 0 or right2_c[3] > 0):
+                    out.put(x, y, left_c)
+
+    # 3. Tronco, ombros, ambos os bracos, cabo traseiro e cabeca (y < 65)
+    for y in range(0, 65):
         for x in range(KARNAK_W):
-            if x >= 68 and y >= 45:
-                continue  # capa
-            is_axe_head = (x <= 34 and y >= 36)
-            if is_axe_head:
+            if _is_karnak_axe_region(x, y):
                 continue
             col = base_cv.get(x, y)
             if col[3] == 0:
@@ -1401,17 +1467,18 @@ def _render_karnak_posed(
             ny = clamp(y + upper_dy, 0, KARNAK_FOOT_Y - 1)
             out.put(nx, ny, col)
 
-    # Preenche eventual fenda de 1-2px na cintura quando o tronco sobe
-    if upper_dy < 0:
-        for y in range(61 + upper_dy, 64):
-            for x in range(40, 66):
-                if out.get(x, y)[3] == 0 and out.get(x, y - 1)[3] > 0 and out.get(x, y + 2)[3] > 0:
-                    out.put(x, y, (34, 30, 34, 255))
+    # Preenche eventual fenda horizontal de 1-2px na cintura quando o tronco sobe/desce
+    for y in range(max(1, 60 + min(upper_dy, mid_dy)), min(KARNAK_H - 2, 66 + max(upper_dy, mid_dy))):
+        for x in range(38, 70):
+            if out.get(x, y)[3] == 0 and out.get(x, y - 1)[3] > 0 and out.get(x, y + 2)[3] > 0:
+                out.put(x, y, out.get(x, y - 1))
 
-    # 4. Cabeca do machado duplo (x <= 34, y >= 36)
+    # 4. Cabeca do machado duplo isolada
     if not hide_front_axe:
-        for y in range(36, 70):
-            for x in range(0, 36):
+        for y in range(38, 65):
+            for x in range(0, 35):
+                if not _is_karnak_axe_region(x, y):
+                    continue
                 col = base_cv.get(x, y)
                 if col[3] == 0:
                     continue
@@ -1464,40 +1531,56 @@ def build_karnak_frames() -> List[Canvas]:
         )
 
     # 10..15 attack (antecipacao erguendo machado -> golpe descendente com rastro carmesim -> retorno)
-    # 10: inicio da antecipacao
-    f10 = _render_karnak_posed(base_cv, upper_dx=3, upper_dy=-1, leg_l_dx=2, leg_r_dx=3, cape_dx=2, hide_front_axe=True, rune_boost=0.7)
-    _draw_raised_axe(f10, base_cv, 58.0, 32.0, 1.35)
+    # 10: inicio da antecipacao (machado subindo sem tampar o rosto)
+    f10 = _render_karnak_posed(
+        base_cv, upper_dx=3, upper_dy=-1, leg_l_dx=2, leg_r_dx=3, cape_dx=1, hide_front_axe=True, rune_boost=0.7
+    )
+    _draw_raised_axe(f10, base_cv, 39.0, 40.0, 0.95)
     frames.append(remove_isolated_pixels(f10))
 
-    # 11: pico da antecipacao (machado erguido atras)
-    f11 = _render_karnak_posed(base_cv, upper_dx=5, upper_dy=-2, leg_l_dx=3, leg_r_dx=4, cape_dx=3, cape_dy=-1, hide_front_axe=True, rune_boost=1.0)
-    _draw_raised_axe(f11, base_cv, 62.0, 26.0, 1.85)
+    # 11: pico da antecipacao (machado erguido alto acima do ombro)
+    f11 = _render_karnak_posed(
+        base_cv, upper_dx=5, upper_dy=-2, leg_l_dx=3, leg_r_dx=4, cape_dx=2, cape_dy=-1, hide_front_axe=True, rune_boost=1.0
+    )
+    _draw_raised_axe(f11, base_cv, 44.0, 33.0, 1.40)
     frames.append(remove_isolated_pixels(f11))
 
-    # 12: golpe amplo descendente com rastro vermelho carmesim
-    f12 = _render_karnak_posed(base_cv, upper_dx=-4, upper_dy=1, leg_l_dx=-4, leg_r_dx=-2, cape_dx=-2, axe_dx=-2, axe_dy=5, rune_boost=1.0)
+    # 12: golpe amplo descendente com machado acompanhando o arco vermelho carmesim
+    f12 = _render_karnak_posed(
+        base_cv, upper_dx=-4, upper_dy=1, leg_l_dx=-3, leg_r_dx=-2, cape_dx=-2, hide_front_axe=True, rune_boost=1.0
+    )
+    _draw_raised_axe(f12, base_cv, 30.0, 58.0, -0.45)
     _draw_crimson_slash(f12, phase=0.0)
     frames.append(remove_isolated_pixels(f12))
 
-    # 13: impacto baixo do golpe com rastro carmesim estendido
-    f13 = _render_karnak_posed(base_cv, upper_dx=-6, upper_dy=2, leg_l_dx=-5, leg_r_dx=-3, cape_dx=-3, axe_dx=-3, axe_dy=9, rune_boost=1.0)
+    # 13: impacto baixo do golpe com machado na ponta inferior do rastro carmesim
+    f13 = _render_karnak_posed(
+        base_cv, upper_dx=-6, upper_dy=2, leg_l_dx=-4, leg_r_dx=-3, cape_dx=-3, hide_front_axe=True, rune_boost=1.0
+    )
+    _draw_raised_axe(f13, base_cv, 29.0, 62.0, -0.82)
     _draw_crimson_slash(f13, phase=0.65)
     frames.append(remove_isolated_pixels(f13))
 
-    # 14: follow-through
-    frames.append(_render_karnak_posed(base_cv, upper_dx=-3, upper_dy=1, leg_l_dx=-2, leg_r_dx=-1, axe_dx=-1, axe_dy=4, rune_boost=0.5))
+    # 14: follow-through (recolhendo o machado do golpe baixo)
+    f14 = _render_karnak_posed(
+        base_cv, upper_dx=-3, upper_dy=1, leg_l_dx=-2, leg_r_dx=-1, hide_front_axe=True, rune_boost=0.5
+    )
+    _draw_raised_axe(f14, base_cv, 30.0, 56.0, -0.22)
+    frames.append(remove_isolated_pixels(f14))
 
     # 15: retorno a guarda
     frames.append(_render_karnak_posed(base_cv, upper_dx=-1, upper_dy=0, leg_l_dx=-1, rune_boost=0.2))
 
     # 16..19 death (recuo -> joelhos cedendo -> tombando -> caido no chao com machado)
     # 16: recuo
-    f16 = _render_karnak_posed(base_cv, upper_dx=3, upper_dy=2, leg_l_dx=1, leg_r_dx=2, cape_dx=2)
+    f16 = _render_karnak_posed(base_cv, upper_dx=3, upper_dy=2, leg_l_dx=1, leg_r_dx=2, cape_dx=1)
     _boost_karnak_glow(f16, 0.0, dim_eyes=True)
     frames.append(f16)
 
-    # 17: joelhos cedendo
-    f17 = _render_karnak_posed(base_cv, upper_dx=4, upper_dy=10, leg_l_dx=-1, leg_l_dy=8, leg_r_dx=3, leg_r_dy=8, axe_dy=12, cape_dy=8)
+    # 17: joelhos cedendo (machado e capa descem coesos com o tronco)
+    f17 = _render_karnak_posed(
+        base_cv, upper_dx=3, upper_dy=9, leg_l_dx=-1, leg_l_dy=7, leg_r_dx=2, leg_r_dy=7, axe_dy=1, cape_dy=0
+    )
     _boost_karnak_glow(f17, 0.0, dim_eyes=True)
     frames.append(f17)
 
@@ -1511,7 +1594,8 @@ def build_karnak_frames() -> List[Canvas]:
     _boost_karnak_glow(f19, 0.0, dim_eyes=True)
     frames.append(remove_isolated_pixels(f19))
 
-    return frames
+    # Espelha horizontalmente todos os 20 frames para orientacao base virada/atacando para a DIREITA
+    return [_flip_canvas_h(fr) for fr in frames]
 
 
 # ---------------------------------------------------------------------------
