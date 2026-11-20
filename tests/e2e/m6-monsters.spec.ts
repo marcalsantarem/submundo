@@ -39,7 +39,7 @@ const ANIM_STATES = [
 ] as const;
 
 test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 & Mobile Landscape 844x390)', () => {
-  test('validates testArena boot, tiled room bg, hero_living, 8 textures (frameTotal=21), 32 anims, dungeon_basic_* textures, Wave 1 -> Wave 2 (wolf_alpha + skeleton_chief), PC/Mobile Landscape screenshots', async ({
+  test('validates testArena boot, tiled room bg, hero_living, 8 textures (frameTotal=21), 32 anims, dungeon_basic_* textures, Wave 1 = slimes + wolves only (T-123), PC/Mobile Landscape screenshots', async ({
     page,
     browser,
     baseURL,
@@ -72,7 +72,7 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 &
     await page.waitForFunction(
       () =>
         typeof window.__SUBMUNDO_DEBUG__ !== 'undefined' &&
-        window.__SUBMUNDO_DEBUG__.getMonsters().length === 5,
+        window.__SUBMUNDO_DEBUG__.getMonsters().length > 0,
       undefined,
       { timeout: 10000 }
     );
@@ -203,14 +203,16 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 &
 
     expect(wave1AndAssets.room).not.toBeNull();
     expect(wave1AndAssets.roomObjectCount).toBeGreaterThan(0);
-    const room = wave1AndAssets.room!;
-    expect(room.x).toBeGreaterThanOrEqual(0);
-    expect(room.y).toBeGreaterThanOrEqual(0);
-    expect(room.x + room.width).toBeLessThanOrEqual(DESKTOP_VIEWPORT.width);
-    expect(room.y + room.height).toBeLessThanOrEqual(DESKTOP_VIEWPORT.height);
+    // Continuous 3-room map (Decision #19): the room lives in world space and the
+    // camera follows the hero, so only sanity-check its size here.
+    const room0 = wave1AndAssets.room!;
+    expect(room0.width).toBeGreaterThan(0);
+    expect(room0.height).toBeGreaterThan(0);
+    // Sample the central screen area (camera centred on the hero inside room 1).
+    const room = { x: 160, y: 120, width: 640, height: 300 };
 
     // The centre of the screen is no longer pure #000000: sample rendered pixels
-    // inside the room (screenshot decoded through a 2D canvas in the page).
+    // (screenshot decoded through a 2D canvas in the page).
     const roomShot = await page.screenshot();
     const nonBlackSamples = await page.evaluate(
       async ({ b64, r }) => {
@@ -258,83 +260,30 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 &
       }
     }
 
-    expect(wave1AndAssets.wave1Monsters.map((m) => m.defId)).toEqual([
-      'slime',
-      'cave_bat',
-      'wolf',
-      'skeleton',
-      'skeleton_archer',
-    ]);
+    // Wave 1 (room 1 of the test dungeon, T-123): only slimes and wolves.
+    const wave1Ids = wave1AndAssets.wave1Monsters.map((m) => m.defId);
+    expect(wave1Ids.length).toBeGreaterThan(0);
+    expect([...new Set(wave1Ids)].sort()).toEqual(['slime', 'wolf']);
     expect(wave1AndAssets.wave1Monsters.every((m) => m.isAlive)).toBe(true);
+
+    // Each wave-1 monster is rendered with its own texture.
+    const wave1Textures = await page.evaluate(() => {
+      const dbg = window.__SUBMUNDO_DEBUG__!;
+      const scene = dbg.scene as unknown as {
+        monsterVisuals?: Map<string, { sprite: { texture: { key: string } } }>;
+      };
+      return dbg
+        .getMonsters()
+        .map((m) => [m.defId, scene.monsterVisuals?.get(m.instanceId)?.sprite.texture.key ?? '']);
+    });
+    for (const [defId, key] of wave1Textures) {
+      expect(key).toBe(defId);
+    }
 
     const pcWave1Path = join(SCREENSHOT_DIR, 'm6_pc_wave1.png');
     await page.screenshot({ path: pcWave1Path });
     expect(existsSync(pcWave1Path)).toBe(true);
     expect(statSync(pcWave1Path).size).toBeGreaterThan(1024);
-
-    // Clear Wave 1 monsters and wait for Wave 2 (wolf_alpha, skeleton_chief)
-    await page.evaluate(() => {
-      const monsters = window.__SUBMUNDO_DEBUG__!.getMonsters();
-      for (const m of monsters) {
-        m.hp = 0;
-        m.isAlive = false;
-      }
-    });
-
-    await page.waitForFunction(
-      () => {
-        const dbg = window.__SUBMUNDO_DEBUG__;
-        if (!dbg) return false;
-        const scene = dbg.scene as unknown as { testArenaWave?: number };
-        const monsters = dbg.getMonsters();
-        return scene.testArenaWave === 2 && monsters.length === 2;
-      },
-      undefined,
-      { timeout: 5000 }
-    );
-
-    const wave2Check = await page.evaluate(() => {
-      const dbg = window.__SUBMUNDO_DEBUG__!;
-      const scene = dbg.scene as unknown as {
-        testArenaWave: number;
-        monsterVisuals?: Map<
-          string,
-          { sprite: { scaleX: number; scaleY: number; texture: { key: string } } }
-        >;
-      };
-
-      const monsters = dbg.getMonsters().map((m) => {
-        const vis = scene.monsterVisuals?.get(m.instanceId);
-        return {
-          defId: m.defId,
-          isAlive: m.isAlive,
-          textureKey: vis?.sprite.texture.key ?? '',
-          scaleX: vis?.sprite.scaleX ?? 0,
-          scaleY: vis?.sprite.scaleY ?? 0,
-        };
-      });
-
-      return {
-        testArenaWave: scene.testArenaWave,
-        monsters,
-      };
-    });
-
-    expect(wave2Check.testArenaWave).toBe(2);
-    expect(wave2Check.monsters.map((m) => m.defId)).toEqual([
-      'wolf_alpha',
-      'skeleton_chief',
-    ]);
-    expect(wave2Check.monsters.every((m) => m.isAlive)).toBe(true);
-    expect(wave2Check.monsters.map((m) => m.textureKey)).toEqual([
-      'wolf_alpha',
-      'skeleton_chief',
-    ]);
-
-    const pcWave2Path = join(SCREENSHOT_DIR, 'm6_pc_wave2.png');
-    await page.screenshot({ path: pcWave2Path });
-    expect(existsSync(pcWave2Path)).toBe(true);
-    expect(statSync(pcWave2Path).size).toBeGreaterThan(1024);
 
     // Mobile Landscape viewport (844x390, hasTouch: true)
     const { context: mobileContext, page: mobilePage } =
@@ -350,37 +299,28 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 &
       await mobilePage.waitForFunction(
         () =>
           typeof window.__SUBMUNDO_DEBUG__ !== 'undefined' &&
-          window.__SUBMUNDO_DEBUG__.getMonsters().length === 5,
+          window.__SUBMUNDO_DEBUG__.getMonsters().length > 0,
         undefined,
         { timeout: 10000 }
       );
 
       await assertLandscapeCanvas(mobilePage, MOBILE_LANDSCAPE_VIEWPORT);
 
-      await mobilePage.evaluate(() => {
-        const monsters = window.__SUBMUNDO_DEBUG__!.getMonsters();
-        for (const m of monsters) {
-          m.hp = 0;
-          m.isAlive = false;
-        }
+      const mobileWave1 = await mobilePage.evaluate(() => {
+        const dbg = window.__SUBMUNDO_DEBUG__!;
+        const scene = dbg.scene as unknown as { testArenaWave?: number };
+        return {
+          wave: scene.testArenaWave,
+          defIds: [...new Set(dbg.getMonsters().map((m) => m.defId))].sort(),
+        };
       });
-
-      await mobilePage.waitForFunction(
-        () => {
-          const dbg = window.__SUBMUNDO_DEBUG__;
-          if (!dbg) return false;
-          const scene = dbg.scene as unknown as { testArenaWave?: number };
-          return scene.testArenaWave === 2 && dbg.getMonsters().length === 2;
-        },
-        undefined,
-        { timeout: 5000 }
-      );
+      expect(mobileWave1).toEqual({ wave: 1, defIds: ['slime', 'wolf'] });
 
       await mobilePage.waitForTimeout(200);
-      const mobileWave2Path = join(SCREENSHOT_DIR, 'm6_mobile_wave2.png');
-      await mobilePage.screenshot({ path: mobileWave2Path });
-      expect(existsSync(mobileWave2Path)).toBe(true);
-      expect(statSync(mobileWave2Path).size).toBeGreaterThan(1024);
+      const mobileWave1Path = join(SCREENSHOT_DIR, 'm6_mobile_wave1.png');
+      await mobilePage.screenshot({ path: mobileWave1Path });
+      expect(existsSync(mobileWave1Path)).toBe(true);
+      expect(statSync(mobileWave1Path).size).toBeGreaterThan(1024);
     } finally {
       await mobileContext.close();
     }

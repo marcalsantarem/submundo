@@ -12,6 +12,7 @@ import {
   ensureHubScene,
   openMobileLandscapePage,
 } from './helpers/landscape';
+import { clickGroundDrop, pickUpAllDropsViaDebug } from './helpers/testDungeon';
 
 const SCREENSHOT_DIR = resolve(process.cwd(), 'docs/qa/screenshots');
 
@@ -450,7 +451,8 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
       return dbg.spawnTestDrop('rare');
     });
 
-    await page.keyboard.down('KeyD');
+    // T-125: ground items are collected by click/tap only (real mouse click).
+    await clickGroundDrop(page, victoryDrop.instanceId);
     await page.waitForFunction(
       (dropId: string) => {
         const inv = window.__SUBMUNDO_DEBUG__!.getInventory();
@@ -463,7 +465,6 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
       victoryDrop.instanceId,
       { timeout: 5000 }
     );
-    await page.keyboard.up('KeyD');
 
     const victoryRunResult = await page.evaluate(() => {
       const dbg = window.__SUBMUNDO_DEBUG__!;
@@ -559,7 +560,8 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
 
     expect(deathRunSetup.soulsInRoom2).toBeGreaterThan(0);
 
-    await page.keyboard.down('KeyD');
+    // T-125: collect via debug pickUpDropAt (same path as a click).
+    await pickUpAllDropsViaDebug(page);
     await page.waitForFunction(
       (dropId: string) => {
         const inv = window.__SUBMUNDO_DEBUG__!.getInventory();
@@ -572,7 +574,6 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
       deathRunSetup.dropId,
       { timeout: 5000 }
     );
-    await page.keyboard.up('KeyD');
 
     // Trigger hero death in Room 2
     await page.evaluate(() => {

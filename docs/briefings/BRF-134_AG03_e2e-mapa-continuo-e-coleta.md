@@ -1,0 +1,15 @@
+# BRF-134 — AG03 — T-124 E2E da dungeon de teste em mapa contínuo (3 salas) e coleta de itens por clique
+**Leia:** `docs/agentes/AG03_QA.md`, decisões #18 e #19 em `docs/decisoes.md`, as linhas T-122 a T-125 de `docs/backlog.md`, `tests/e2e/m6-monsters.spec.ts`, `tests/e2e/m8-dungeon-basic.spec.ts` e, em `src/view/scenes/DungeonScene.ts`, só o bloco `window.__SUBMUNDO_DEBUG__` e os campos públicos da testArena. **Regra:** respostas curtas; sem commit/push/branches.
+**O que mudou (já implementado):**
+- A testArena tem 3 salas procedurais (`generateTestDungeon(seed)` em `src/core/dungeon/TestDungeon.ts`), carregadas juntas num mapa vertical (Sala 1 embaixo) e ligadas por corredores. Uma onda por sala: **1** `slime` + `wolf`; **2** `skeleton` + `skeleton_archer`; **3** só `skeleton_chief`. Morcego, Chefe da Matilha e Karnak saíram do teste.
+- A porta de saída fica selada até a sala ser limpa. A onda N+1 nasce quando o herói pisa na sala seguinte. Ao limpar a Sala 3, `testArenaFinished` vira true e aparece "Teste finalizado".
+- A semente vem de `?seed=N` ou é aleatória. Campos públicos: `testArenaSeed`, `testArenaRoomIndex`, `testArenaWave`, `testArenaFinished`. Debug: `getTestRooms()`, `getTestRoomIndex()`, `getTestRoomWorldOrigins()`, `getGroundDrops()` e `pickUpDropAt(i)`.
+- Itens no chão (T-125): **sem coleta automática por proximidade**. Clique/toque perto coleta; longe, o herói caminha até o item e coleta. Almas continuam automáticas.
+**Fazer:**
+(1) Atualize `m6-monsters.spec.ts`: Onda 1 = só slimes e lobos; remova as expectativas de morcego, esqueletos e Onda 2 antiga. Mantenha as checagens de texturas/animações dos monstros que continuam carregadas no boot.
+(2) Reescreva `m8-dungeon-basic.spec.ts` com `?seed=7`: 3 salas, composição de cada onda, porta selada bloqueando (o herói empurrado contra a porta continua na sala 1), limpar a sala (matar via debug), **caminhar** até a porta e pelo corredor (simule teclado `ArrowUp`/`W` ou mova `hero.position` passo a passo pela área caminhável; prefira teclado se for estável), conferir `testArenaRoomIndex` 0→1→2 e `testArenaWave` 1→2→3, e por fim `testArenaFinished` com o texto "Teste finalizado". Capture PC `960×540` da sala 1, do corredor e da tela final em `docs/qa/screenshots/m8_*`.
+(3) Crie um teste de coleta: gere/obtenha um drop, confira que parar sobre ele **não** coleta, que um clique real (`page.mouse.click` na posição de tela do item) de longe faz o herói caminhar e coletar, e que uma tecla de movimento durante a caminhada cancela.
+(4) Rode `npm test` e os E2E alterados/criados 3 vezes seguidas (estabilidade). Rode também os demais E2E, um arquivo por vez, e relate quais quebraram por causa desta mudança (sem corrigir `src/`). A m4 já tem um erro de ambiente conhecido (import de `campaign.json`): só registre.
+**Permitido:** `tests/`, `docs/qa/screenshots/`. **Proibido:** `src/`, assets, configs de build, Git.
+**Pronto quando:** os E2E m6, m8 e de coleta passam 3× seguidas.
+**Entrega:** até 10 linhas: testes alterados/criados, resultados das 3 rodadas, quebras em outros E2E com o motivo, capturas e o que não foi verificado.

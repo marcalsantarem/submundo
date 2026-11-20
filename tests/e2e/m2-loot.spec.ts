@@ -11,6 +11,7 @@ import {
   ensureHubScene,
   openMobileLandscapePage,
 } from './helpers/landscape';
+import { clickGroundDrop, pickUpAllDropsViaDebug } from './helpers/testDungeon';
 
 const SCREENSHOT_DIR = resolve(process.cwd(), 'docs/qa/screenshots');
 
@@ -106,7 +107,7 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 960x540 
     expect(pwaCheck.appleIconType).toContain('image/png');
     expect(pwaCheck.swStatus).toBe(200);
 
-    // 2. Spawn legendary drop, move hero right to auto-pickup & auto-equip, verify hero stats/forces
+    // 2. Spawn legendary drop, collect it with a real click (T-125: no proximity pickup) & auto-equip, verify hero stats/forces
     const drop1 = await page.evaluate(() => {
       const hero = window.__SUBMUNDO_DEBUG__!.getHero();
       hero.stats.hp = hero.stats.maxHp;
@@ -115,7 +116,7 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 960x540 
     });
     expect(drop1.rarity).toBe('legendary');
 
-    await page.keyboard.down('KeyD');
+    await clickGroundDrop(page, drop1.instanceId);
     await page.waitForFunction(
       (targetId: string) => {
         const inv = window.__SUBMUNDO_DEBUG__!.getInventory();
@@ -128,7 +129,6 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 960x540 
       drop1.instanceId,
       { timeout: 5000 }
     );
-    await page.keyboard.up('KeyD');
 
     const afterFirstPickup = await page.evaluate(() => {
       const dbg = window.__SUBMUNDO_DEBUG__!;
@@ -157,7 +157,7 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 960x540 
       );
     }
 
-    // 3. Spawn 7 more drops and walk over them to populate bag (>= 2 items across 6 slots) + test explicit equipItem
+    // 3. Spawn 7 more drops and collect them (debug pickUpDropAt) to populate bag (>= 2 items across 6 slots) + test explicit equipItem
     await page.evaluate(() => {
       const dbg = window.__SUBMUNDO_DEBUG__!;
       dbg.spawnTestDrop('rare');
@@ -169,13 +169,12 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 960x540 
       dbg.spawnTestDrop('rare');
     });
 
-    await page.keyboard.down('KeyD');
+    await pickUpAllDropsViaDebug(page);
     await page.waitForFunction(
       () => window.__SUBMUNDO_DEBUG__!.getInventory().bag.length >= 2,
       undefined,
       { timeout: 5000 }
     );
-    await page.keyboard.up('KeyD');
 
     const equipResult = await page.evaluate(() => {
       const dbg = window.__SUBMUNDO_DEBUG__!;
@@ -323,7 +322,7 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 960x540 
       dbg.spawnTestDrop('rare');
     });
 
-    await page.keyboard.down('KeyD');
+    await pickUpAllDropsViaDebug(page);
     await page.waitForFunction(
       () => {
         const inv = window.__SUBMUNDO_DEBUG__!.getInventory();
@@ -333,7 +332,6 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 960x540 
       undefined,
       { timeout: 5000 }
     );
-    await page.keyboard.up('KeyD');
 
     await page.evaluate(() => {
       const dbg = window.__SUBMUNDO_DEBUG__!;

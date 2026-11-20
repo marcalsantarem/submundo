@@ -13,6 +13,10 @@ import {
   getCurrentRoom,
   type DungeonRunState,
 } from '../../core/dungeon/DungeonRun';
+import {
+  generateTestDungeon,
+  type TestRoomSpec,
+} from '../../core/dungeon/TestDungeon';
 import { moveHero, type HeroState } from '../../core/entities/Hero';
 import { spawnMonster, type MonsterInstance } from '../../core/entities/Monster';
 import {
@@ -104,23 +108,6 @@ const ANIMATED_SPRITESHEET_MONSTERS = new Set<string>([
   'karnak',
 ]);
 
-// Offsets relative to the Masmorra Básica room center (T-118); clamped to the
-// walkable floor and pushed out of prop obstacles on spawn.
-const TEST_ARENA_WAVE_1: ReadonlyArray<{ id: string; dx: number; dy: number }> = [
-  { id: 'slime', dx: -150, dy: -86 },
-  { id: 'cave_bat', dx: 150, dy: -86 },
-  { id: 'wolf', dx: -200, dy: 20 },
-  { id: 'skeleton', dx: 200, dy: 20 },
-  { id: 'skeleton_archer', dx: -110, dy: 110 },
-];
-
-// Karnak left the test arena (owner decision, T-118); assets/data stay intact.
-const TEST_ARENA_WAVE_2: ReadonlyArray<{ id: string; dx: number; dy: number }> = [
-  { id: 'wolf_alpha', dx: -150, dy: -40 },
-  { id: 'skeleton_chief', dx: 150, dy: -40 },
-];
-
-const TEST_ARENA_WAVE_2_BANNER = 'Onda 2: Chefe da Matilha & Esqueleto Chefe!';
 const TEST_ARENA_FINISHED_TEXT = 'Teste finalizado';
 const TEST_ARENA_FINISH_DELAY_MS = 800;
 
@@ -145,37 +132,8 @@ const DUNGEON_BASIC_PROP_FRAMES = [
   'bones', 'rubble', 'chain', 'skulls_candle',
 ] as const;
 type DungeonBasicProp = (typeof DUNGEON_BASIC_PROP_FRAMES)[number];
-const TEST_ROOM_COLS = 20;
-const TEST_ROOM_ROWS = 12;
-const TEST_ROOM_DOOR_COLS = [9, 10] as const;
-const TEST_ROOM_TORCH_COLS = [6, 8, 11, 13] as const;
 /** Distance from an actor's center (sprite origin) to its feet, in world px. */
 const ACTOR_FEET_OFFSET = 30;
-/** Room-local floor props (top-left like the approved mockup). */
-const TEST_ROOM_FLOOR_PROPS: ReadonlyArray<{ name: DungeonBasicProp; x: number; y: number }> = [
-  { name: 'skulls_candle', x: 40, y: 104 },
-  { name: 'rubble', x: 520, y: 106 },
-  { name: 'barrel', x: 548, y: 118 },
-  { name: 'urn', x: 576, y: 124 },
-  { name: 'bones', x: 150, y: 300 },
-  { name: 'chest_closed', x: 440, y: 316 },
-  { name: 'rubble', x: 300, y: 330 },
-];
-/** Room-local tall props (top-left of the 32x64 frame). */
-const TEST_ROOM_TALL_PROPS: ReadonlyArray<{ frame: number; x: number; y: number }> = [
-  { frame: 0, x: 96, y: 98 },
-  { frame: 0, x: 512, y: 98 },
-  { frame: 1, x: 64, y: 262 },
-];
-/** Room-local obstacle rects in feet space (already padded by the actor half width). */
-const TEST_ROOM_OBSTACLES: ReadonlyArray<{ x: number; y: number; w: number; h: number }> = [
-  { x: 88, y: 136, w: 48, h: 30 }, // pillar L
-  { x: 504, y: 136, w: 48, h: 30 }, // pillar R
-  { x: 56, y: 298, w: 48, h: 30 }, // broken pillar
-  { x: 538, y: 128, w: 84, h: 32 }, // barrel + urn
-  { x: 432, y: 328, w: 48, h: 26 }, // chest
-];
-
 interface TestArenaRoomGeometry {
   x: number;
   y: number;
@@ -189,6 +147,28 @@ interface TestArenaRoomGeometry {
   centerX: number;
   centerY: number;
 }
+
+interface TestRoomRuntime {
+  spec: TestRoomSpec;
+  geo: TestArenaRoomGeometry;
+  row2: Phaser.GameObjects.Image[];
+  row3: Phaser.GameObjects.Image[];
+  entryTiles: Phaser.GameObjects.Image[];
+  exitSeal: Phaser.GameObjects.GameObject[];
+  entrySeal: Phaser.GameObjects.GameObject[];
+  runeLight?: Phaser.GameObjects.Image;
+}
+
+interface WalkRect {
+  l: number;
+  r: number;
+  t: number;
+  b: number;
+}
+
+/** Vertical corridor between two stacked test rooms, in tiles. */
+const TEST_CORRIDOR_TILES = 3;
+const TEST_WORLD_MARGIN = 48;
 
 interface GroundDrop {
   item: ItemInstance;
@@ -213,6 +193,11 @@ export interface SubmundoDebugApi {
   advanceRoom: () => void;
   restartRun: (stageId?: CampaignStageId) => void;
   returnToHub?: () => void;
+  getTestRooms: () => TestRoomSpec[];
+  getTestRoomIndex: () => number;
+  getTestRoomWorldOrigins: () => Array<{ x: number; y: number }>;
+  getGroundDrops: () => Array<{ x: number; y: number; item: ItemInstance }>;
+  pickUpDropAt: (index: number) => boolean;
 }
 
 declare global {
@@ -224,7 +209,10 @@ declare global {
 const TILE_DISPLAY_SIZE = 32;
 const ARENA_PADDING = 36;
 const ROOM_CLEAR_AUTO_ADVANCE_MS = 1200;
-const DROP_PICKUP_RADIUS = 34;
+/** Click/tap pickup: collect at once within this reach, else walk to it. */
+const DROP_CLICK_REACH = 70;
+const DROP_WALK_ARRIVE = 40;
+const DROP_HIT_SIZE = 44;
 const GROUND_DROP_TAG_OFFSET_Y = 26;
 const GROUND_DROP_TAG_COLORS: Record<Rarity, string> = {
   common: '#cbd5e1',
@@ -250,6 +238,20 @@ const RARITY_DROP_FRAME: Record<Rarity, number> = {
   rare: 2,
   legendary: 3,
 };
+
+/** First test run honours `?seed=N`; later restarts use a fresh seed. */
+let urlSeedConsumed = false;
+function resolveTestArenaSeed(): number {
+  if (!urlSeedConsumed && typeof window !== 'undefined') {
+    urlSeedConsumed = true;
+    const raw = new URLSearchParams(window.location.search).get('seed');
+    const parsed = raw === null ? NaN : Number(raw);
+    if (Number.isFinite(parsed)) {
+      return Math.abs(Math.trunc(parsed));
+    }
+  }
+  return Date.now() % 2147483647;
+}
 
 export class DungeonScene extends Phaser.Scene {
   private readonly monstersCatalog: MonsterDef[] =
@@ -297,6 +299,10 @@ export class DungeonScene extends Phaser.Scene {
   private readonly monsterVisuals = new Map<string, MonsterVisual>();
   private readonly minionVisuals = new Map<string, Phaser.GameObjects.Graphics>();
   private groundDrops: GroundDrop[] = [];
+  /** Drop the hero is auto-walking to after a click/tap (cancelled by input). */
+  private pickupTarget?: GroundDrop;
+  private pickupLastPos?: Vector2D;
+  private pickupStuckMs = 0;
 
   private portalContainer?: Phaser.GameObjects.Container;
   private portalPosition?: Vector2D;
@@ -307,8 +313,19 @@ export class DungeonScene extends Phaser.Scene {
   private bannerExpiresAtMs = 0;
   private isTestArena = false;
   private testArenaWave = 1;
-  private testArenaWave2TriggerAtMs?: number;
-  /** True once Wave 2 of the testArena is cleared ("Teste finalizado"). */
+  /** Seed of the current test dungeon run (`?seed=N` overrides the first run). */
+  public testArenaSeed = 0;
+  /** Index (0..2) of the test room the hero is currently in. */
+  public testArenaRoomIndex = 0;
+  private testRooms: TestRoomSpec[] = [];
+  private testRoomClearAtMs?: number;
+  private testRuntime: TestRoomRuntime[] = [];
+  private testWorld?: { x: number; y: number; width: number; height: number };
+  /** Per room: exit door opened / entry sealed behind the hero. */
+  private testDoorOpenFlags: boolean[] = [false, false, false];
+  private testEntryClosedFlags: boolean[] = [false, false, false];
+  private rangedArrows: Phaser.GameObjects.Graphics[] = [];
+  /** True once the last test room (boss) is cleared ("Teste finalizado"). */
   public testArenaFinished = false;
   private testArenaFinishAtMs?: number;
   private testArenaRoom?: TestArenaRoomGeometry;
@@ -348,7 +365,7 @@ export class DungeonScene extends Phaser.Scene {
   }): void {
     this.isTestArena = Boolean(data?.testArena);
     this.testArenaWave = 1;
-    this.testArenaWave2TriggerAtMs = undefined;
+    this.resetTestRoomState();
     this.testArenaFinished = false;
     this.testArenaFinishAtMs = undefined;
     this.testArenaObjects = [];
@@ -463,7 +480,10 @@ export class DungeonScene extends Phaser.Scene {
       this.bannerExpiresAtMs = 0;
       this.isTestArena = false;
       this.testArenaWave = 1;
-      this.testArenaWave2TriggerAtMs = undefined;
+      this.resetTestRoomState();
+      // Camera manager may already be torn down during SHUTDOWN (return to Hub).
+      this.cameras?.main?.resetFX();
+      this.clearRangedArrows();
       this.testArenaFinishAtMs = undefined;
       this.destroyTestArenaFinishOverlay();
       this.clearTestArenaRoom();
@@ -491,6 +511,20 @@ export class DungeonScene extends Phaser.Scene {
         restartRun: (stageId?: CampaignStageId) =>
           this.startNewRun(stageId ? { stageId } : undefined),
         returnToHub: () => this.returnToHub(),
+        getTestRooms: () => this.testRooms,
+        getTestRoomIndex: () => this.testArenaRoomIndex,
+        getTestRoomWorldOrigins: () =>
+          this.testRuntime.map((r) => ({ x: r.geo.x, y: r.geo.y })),
+        getGroundDrops: () =>
+          this.groundDrops.map((d) => ({
+            x: d.position.x,
+            y: d.position.y,
+            item: d.item,
+          })),
+        pickUpDropAt: (index: number) => {
+          const drop = this.groundDrops[index];
+          return drop ? this.handleDropClick(drop) : false;
+        },
       };
     }
   }
@@ -520,16 +554,13 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     const clampedDelta = Math.min(Math.max(0, delta), 100);
+
     this.elapsedTimeMs += clampedDelta;
     const nowMs = this.elapsedTimeMs;
 
-    const bounds = {
-      width: this.scale.width || 960,
-      height: this.scale.height || 540,
-      padding: ARENA_PADDING,
-    };
+    const bounds = this.getActorBounds();
 
-    const moveDir = this.hud.getMoveVector();
+    const moveDir = this.resolveMoveDir(clampedDelta);
     const canMove =
       this.hero.isAlive &&
       (this.runState.status === 'in_progress' ||
@@ -545,11 +576,7 @@ export class DungeonScene extends Phaser.Scene {
       this.runState.elapsedMs += clampedDelta;
 
       moveHero(this.hero, moveDir, clampedDelta, bounds);
-      if (!this.isTestArena) {
-        this.collectNearbyDrops();
-      } else {
-        this.constrainActorsToTestArenaRoom();
-      }
+      this.constrainActorsToTestArenaRoom();
 
       if (!this.autoAttackEnabled) {
         if (this.manualAttackQueued) {
@@ -574,13 +601,13 @@ export class DungeonScene extends Phaser.Scene {
       this.constrainActorsToTestArenaRoom();
       this.processCombatEvents(events);
       this.checkAndUpdateRoomState(nowMs);
+      this.checkTestRoomEntry();
     } else if (
       !this.isTestArena &&
       this.runState.status === 'room_cleared' &&
       this.hero.isAlive
     ) {
       moveHero(this.hero, moveDir, clampedDelta, bounds);
-      this.collectNearbyDrops();
       this.roomClearTimerMs -= clampedDelta;
 
       const touchedPortal =
@@ -611,11 +638,7 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     const nowMs = this.elapsedTimeMs;
-    const bounds = {
-      width: this.scale.width || 960,
-      height: this.scale.height || 540,
-      padding: ARENA_PADDING,
-    };
+    const bounds = this.getActorBounds();
     const moveDir = this.hud.getMoveVector();
     const prevHeroPos = { ...this.hero.position };
 
@@ -636,6 +659,7 @@ export class DungeonScene extends Phaser.Scene {
       this.constrainActorsToTestArenaRoom();
       // Show dash trail from previous position if dash occurred
       if (events.some((e) => e.type === 'hero_dash')) {
+        this.cancelPickupWalk();
         this.vfx.showDashTrail(prevHeroPos.x, prevHeroPos.y);
       }
       this.processCombatEvents(events);
@@ -774,10 +798,18 @@ export class DungeonScene extends Phaser.Scene {
 
     this.isTestArena = Boolean(data?.testArena);
     this.testArenaWave = 1;
-    this.testArenaWave2TriggerAtMs = undefined;
+    this.resetTestRoomState();
     this.testArenaFinished = false;
     this.testArenaFinishAtMs = undefined;
     this.destroyTestArenaFinishOverlay();
+    this.clearRangedArrows();
+    this.cameras.main.resetFX();
+    if (this.isTestArena) {
+      this.testArenaSeed = resolveTestArenaSeed();
+      this.testRooms = generateTestDungeon(this.testArenaSeed);
+    } else {
+      this.testRooms = [];
+    }
     this.autoAttackEnabled = true;
     this.manualAttackQueued = false;
     this.manualAttackReadyAtMs = 0;
@@ -900,6 +932,9 @@ export class DungeonScene extends Phaser.Scene {
     this.clearGroundDrops();
     this.cancelHeroActionAnim();
     this.lastHeroFootstepFrame = -1;
+    if (this.isTestArena) {
+      this.clearMinionVisuals();
+    }
     this.buildArenaTilesAndLighting(
       width,
       height,
@@ -915,16 +950,16 @@ export class DungeonScene extends Phaser.Scene {
     };
 
     if (this.isTestArena) {
-      if (this.testArenaRoom) {
+      const first = this.testRuntime[0];
+      if (first) {
         this.hero.position = {
-          x: this.testArenaRoom.centerX,
-          y: this.testArenaRoom.centerY,
+          x: first.geo.x + first.spec.heroStart.x,
+          y: first.geo.y + first.spec.heroStart.y,
         };
+        this.enterTestRoom(0, true);
+        this.constrainPositionToTestArenaRoom(this.hero.position, true);
+        this.cameras.main.centerOn(this.hero.position.x, this.hero.position.y);
       }
-      this.testArenaWave = 1;
-      this.testArenaWave2TriggerAtMs = undefined;
-      this.testArenaFinishAtMs = undefined;
-      this.spawnTestArenaWave(TEST_ARENA_WAVE_1, 1);
       return;
     }
 
@@ -1026,7 +1061,7 @@ export class DungeonScene extends Phaser.Scene {
 
     if (this.isTestArena) {
       this.lightingGraphics.clear();
-      this.buildTestArenaRoom(width, height);
+      this.buildTestArenaRoom();
       return;
     }
 
@@ -1447,62 +1482,96 @@ export class DungeonScene extends Phaser.Scene {
     );
   }
 
-  private spawnTestArenaWave(
-    spawns: ReadonlyArray<{ id: string; dx: number; dy: number }>,
-    waveNum: number
-  ): void {
-    const width = this.scale.width || 960;
-    const height = this.scale.height || 540;
+  private currentTestRoom(): TestRoomSpec | undefined {
+    return this.testRooms[this.testArenaRoomIndex];
+  }
+
+  private resetTestRoomState(): void {
+    this.testArenaRoomIndex = 0;
+    this.testRooms = [];
+    this.testRoomClearAtMs = undefined;
+    this.testRuntime = [];
+    this.testWorld = undefined;
+    this.testDoorOpenFlags = [false, false, false];
+    this.testEntryClosedFlags = [false, false, false];
+  }
+
+  /** Actor movement bounds: the whole test world (world px) or the scene. */
+  private getActorBounds(): { width: number; height: number; padding: number } {
+    const world = this.isTestArena ? this.testWorld : undefined;
+    if (world) {
+      return {
+        width: world.x + world.width + 200,
+        height: world.y + world.height + 200,
+        padding: 0,
+      };
+    }
+    return {
+      width: this.scale.width || 960,
+      height: this.scale.height || 540,
+      padding: ARENA_PADDING,
+    };
+  }
+
+  /** The hero enters room `index`: its wave spawns and the door behind seals. */
+  private enterTestRoom(index: number, initial: boolean): void {
+    const rt = this.testRuntime[index];
+    if (!rt) {
+      return;
+    }
+    this.testArenaRoomIndex = index;
+    this.testArenaRoom = rt.geo;
+    this.testArenaWave = rt.spec.wave;
+    this.testRoomClearAtMs = undefined;
+    this.testArenaFinishAtMs = undefined;
+    if (!initial) {
+      this.closeTestEntry(index);
+    }
+    this.spawnTestArenaWave();
+    this.showTimedBanner(rt.spec.banner, 2500);
+  }
+
+  private spawnTestArenaWave(): void {
+    const spec = this.currentTestRoom();
     const room = this.testArenaRoom;
     this.monsters = [];
-    for (const spec of spawns) {
-      const def = this.monsterDefMap.get(spec.id);
+    if (!spec || !room) {
+      return;
+    }
+    spec.spawns.forEach((sp, i) => {
+      const def = this.monsterDefMap.get(sp.defId);
       if (!def) {
-        continue;
+        return;
       }
-      let spawnPos: Vector2D;
-      if (room) {
-        spawnPos = { x: room.centerX + spec.dx, y: room.centerY + spec.dy };
-        this.constrainPositionToTestArenaRoom(spawnPos);
-      } else {
-        spawnPos = {
-          x: Math.max(
-            ARENA_PADDING,
-            Math.min(width - ARENA_PADDING, this.hero.position.x + spec.dx)
-          ),
-          y: Math.max(
-            ARENA_PADDING + 24,
-            Math.min(height - ARENA_PADDING - 24, this.hero.position.y + spec.dy)
-          ),
-        };
-      }
+      const spawnPos: Vector2D = { x: room.x + sp.x, y: room.y + sp.y };
+      this.constrainPositionToTestArenaRoom(spawnPos);
       const monster = spawnMonster(
         def,
-        `test_w${waveNum}_${spec.id}`,
+        `test_r${spec.index}_${i}_${sp.defId}`,
         spawnPos
       );
       this.monsters.push(monster);
       this.createMonsterVisual(monster);
-    }
+    });
   }
 
   // ===========================================================================
-  // TEST ARENA: Masmorra Básica 2.5D room (Decision #17, T-118 / BRF-128)
+  // TEST ARENA: 3 stacked Masmorra Básica rooms + corridors (Decision #19)
   // ===========================================================================
 
-  private computeTestArenaRoom(
-    width: number,
-    height: number
+  private computeTestGeometry(
+    spec: TestRoomSpec,
+    x: number,
+    y: number
   ): TestArenaRoomGeometry {
-    const roomW = TEST_ROOM_COLS * TILE_DISPLAY_SIZE;
-    const roomH = TEST_ROOM_ROWS * TILE_DISPLAY_SIZE;
-    const x = Math.round((width - roomW) / 2);
-    const y = Math.round((height - roomH) / 2);
+    const T = TILE_DISPLAY_SIZE;
+    const roomW = spec.cols * T;
+    const roomH = spec.rows * T;
     const sideMargin = 14;
     // Feet must stay on the floor: below the 2-tile wall face (rows 1-2), above
     // the bottom wall row and inside the side wall columns.
-    const floorTop = y + TILE_DISPLAY_SIZE * 3;
-    const floorBottom = y + roomH - TILE_DISPLAY_SIZE;
+    const floorTop = y + T * 3;
+    const floorBottom = y + roomH - T;
     const minY = floorTop + 8 - ACTOR_FEET_OFFSET;
     const maxY = floorBottom - 6 - ACTOR_FEET_OFFSET;
     return {
@@ -1510,8 +1579,8 @@ export class DungeonScene extends Phaser.Scene {
       y,
       width: roomW,
       height: roomH,
-      minX: x + TILE_DISPLAY_SIZE + sideMargin,
-      maxX: x + roomW - TILE_DISPLAY_SIZE - sideMargin,
+      minX: x + T + sideMargin,
+      maxX: x + roomW - T - sideMargin,
       minY,
       maxY,
       centerX: x + roomW / 2,
@@ -1519,12 +1588,128 @@ export class DungeonScene extends Phaser.Scene {
     };
   }
 
-  private buildTestArenaRoom(width: number, height: number): void {
-    const room = this.computeTestArenaRoom(width, height);
-    this.testArenaRoom = room;
+  /** Room 1 at the bottom, room 3 on top; exit door N lines up with entry N+1. */
+  private layoutTestRooms(): TestArenaRoomGeometry[] {
+    const T = TILE_DISPLAY_SIZE;
+    const specs = this.testRooms;
+    const pos: Array<{ x: number; y: number }> = [];
+    specs.forEach((spec, i) => {
+      if (i === 0) {
+        pos.push({ x: 0, y: 0 });
+        return;
+      }
+      const prev = specs[i - 1];
+      const exitL = prev.exitDoorCols?.[0] ?? 0;
+      const entryL = spec.entryDoorCols?.[0] ?? 0;
+      pos.push({
+        x: pos[i - 1].x + exitL * T - entryL * T,
+        y: pos[i - 1].y - TEST_CORRIDOR_TILES * T - spec.rows * T,
+      });
+    });
+    const minX = Math.min(...pos.map((p) => p.x));
+    const minY = Math.min(...pos.map((p) => p.y));
+    return specs.map((spec, i) =>
+      this.computeTestGeometry(
+        spec,
+        pos[i].x - minX + TEST_WORLD_MARGIN,
+        pos[i].y - minY + TEST_WORLD_MARGIN
+      )
+    );
+  }
+
+  private buildTestArenaRoom(): void {
+    const specs = this.testRooms;
+    if (specs.length === 0) {
+      return;
+    }
+    const geos = this.layoutTestRooms();
+    this.testRuntime = specs.map((spec, i) => ({
+      spec,
+      geo: geos[i],
+      row2: [],
+      row3: [],
+      entryTiles: [],
+      exitSeal: [],
+      entrySeal: [],
+    }));
+    const left = Math.min(...geos.map((g) => g.x));
+    const right = Math.max(...geos.map((g) => g.x + g.width));
+    const top = Math.min(...geos.map((g) => g.y));
+    const bottom = Math.max(...geos.map((g) => g.y + g.height));
+    this.testWorld = { x: left, y: top, width: right - left, height: bottom - top };
+
+    this.lightingGraphics.clear();
+    this.testRuntime.forEach((rt, i) => this.buildTestRoomVisuals(rt, i));
+    this.testArenaRoom = this.testRuntime[this.testArenaRoomIndex]?.geo;
+    this.applyTestArenaCameraBounds();
+  }
+
+  private trackTestObject<O extends Phaser.GameObjects.GameObject>(obj: O): O {
+    this.testArenaObjects.push(obj);
+    return obj;
+  }
+
+  /** Rune seal covering a doorway (closed door). Returns the objects to free. */
+  private buildTestSeal(
+    cx: number,
+    cy: number,
+    cover: { x: number; y: number; w: number; h: number },
+    radius: number
+  ): Phaser.GameObjects.GameObject[] {
+    const seal = this.trackTestObject(this.add.graphics().setDepth(1.25));
+    seal.fillStyle(0x0b0618, 0.78);
+    seal.fillRect(cover.x, cover.y, cover.w, cover.h);
+    seal.lineStyle(2, 0xc084fc, 0.95);
+    seal.strokeCircle(cx, cy, radius);
+    seal.lineStyle(1, 0xe9d5ff, 0.9);
+    seal.strokeCircle(cx, cy, radius * 0.6);
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4;
+      seal.lineBetween(
+        cx + Math.cos(a) * radius * 0.7,
+        cy + Math.sin(a) * radius * 0.7,
+        cx + Math.cos(a) * radius * 1.15,
+        cy + Math.sin(a) * radius * 1.15
+      );
+    }
+    seal.lineBetween(cx - radius * 0.4, cy, cx + radius * 0.4, cy);
+    seal.lineBetween(cx, cy - radius * 0.3, cx, cy + radius * 0.5);
+    const glow = this.trackTestObject(
+      this.add
+        .image(cx, cy, this.ensureRadialLightTexture())
+        .setDisplaySize(radius * 4, radius * 4)
+        .setTint(0xa855f7)
+        .setAlpha(0.5)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(6)
+    );
+    this.testArenaLights.push({ image: glow, baseAlpha: 0.5 });
+    return [seal, glow];
+  }
+
+  private freeTestObjects(objs: Phaser.GameObjects.GameObject[]): void {
+    for (const obj of objs) {
+      this.testArenaLights = this.testArenaLights.filter(
+        (l) => (l.image as unknown) !== obj
+      );
+      this.testArenaObjects = this.testArenaObjects.filter((o) => o !== obj);
+      obj.destroy();
+    }
+    objs.length = 0;
+  }
+
+  private buildTestRoomVisuals(rt: TestRoomRuntime, roomIndex: number): void {
+    const spec = rt.spec;
+    const room = rt.geo;
     const T = TILE_DISPLAY_SIZE;
     const ox = room.x;
     const oy = room.y;
+    const cols = spec.cols;
+    const rows = spec.rows;
+    const doorOpen = this.testDoorOpenFlags[roomIndex];
+    const entryClosed = this.testEntryClosedFlags[roomIndex];
+    const track = <O extends Phaser.GameObjects.GameObject>(obj: O): O =>
+      this.trackTestObject(obj);
 
     const hasTiles =
       this.textures.exists(DUNGEON_BASIC_TILES_KEY) &&
@@ -1539,11 +1724,15 @@ export class DungeonScene extends Phaser.Scene {
     const hasTall =
       this.textures.exists(DUNGEON_BASIC_TALL_KEY) &&
       this.textures.get(DUNGEON_BASIC_TALL_KEY).has('1');
+    const tileFrame = (name: DungeonBasicTile): number =>
+      DUNGEON_BASIC_TILE_FRAMES.indexOf(name);
 
-    const track = <O extends Phaser.GameObjects.GameObject>(obj: O): O => {
-      this.testArenaObjects.push(obj);
-      return obj;
-    };
+    const door = spec.exitDoorCols;
+    const entry = spec.entryDoorCols;
+    const doorL = door?.[0] ?? -10;
+    const doorR = door?.[1] ?? -10;
+    const entryL = entry?.[0] ?? -10;
+    const entryR = entry?.[1] ?? -10;
 
     if (!hasTiles) {
       // Fallback (textures not loaded): flat blocks with the same geometry.
@@ -1557,42 +1746,51 @@ export class DungeonScene extends Phaser.Scene {
       g.fillRect(ox + room.width - T, oy, T, room.height);
       g.fillStyle(0x1b2029, 1);
       g.fillRect(ox + T, oy + T, room.width - T * 2, T * 2);
+      if (door) {
+        g.fillStyle(0x1b2029, 1);
+        g.fillRect(ox + doorL * T, oy - TEST_CORRIDOR_TILES * T, T * 2, TEST_CORRIDOR_TILES * T + 3 * T);
+      }
     } else {
-      const tile = (name: DungeonBasicTile, col: number, row: number, depth: number) => {
+      const tileAt = (
+        name: DungeonBasicTile,
+        x: number,
+        y: number,
+        depth: number
+      ): Phaser.GameObjects.Image =>
         track(
           this.add
-            .image(
-              ox + col * T,
-              oy + row * T,
-              DUNGEON_BASIC_TILES_KEY,
-              DUNGEON_BASIC_TILE_FRAMES.indexOf(name)
-            )
+            .image(x, y, DUNGEON_BASIC_TILES_KEY, tileFrame(name))
             .setOrigin(0, 0)
             .setDepth(depth)
         );
-      };
+      const tile = (name: DungeonBasicTile, col: number, row: number, depth: number) =>
+        tileAt(name, ox + col * T, oy + row * T, depth);
       const floorCycle: DungeonBasicTile[] = [
         'floor_0', 'floor_1', 'floor_2', 'floor_0', 'floor_1', 'floor_2', 'floor_1',
       ];
-      const special = new Map<string, DungeonBasicTile>([
-        ['1,4', 'floor_moss'],
-        ['18,7', 'floor_moss'],
-        ['17,8', 'floor_moss'],
-        ['5,9', 'floor_blood'],
-        ['12,6', 'floor_cracked'],
-        ['6,5', 'floor_cracked'],
-        ['14,9', 'floor_blood'],
-      ]);
-      const [doorL, doorR] = TEST_ROOM_DOOR_COLS;
-      const lastC = TEST_ROOM_COLS - 1;
-      const lastR = TEST_ROOM_ROWS - 1;
-      for (let r = 0; r < TEST_ROOM_ROWS; r++) {
-        for (let c = 0; c < TEST_ROOM_COLS; c++) {
+      const lastC = cols - 1;
+      const lastR = rows - 1;
+      const crackedCols = [4, cols - 5];
+      const grateCols = [3, cols - 4];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
           let name: DungeonBasicTile;
           if (r === 0) {
-            name = c === 0 ? 'corner_in_tl' : c === lastC ? 'corner_in_tr' : 'wall_top_s';
+            name =
+              c === 0 ? 'corner_in_tl'
+              : c === lastC ? 'corner_in_tr'
+              : c === doorL || c === doorR ? 'floor_0'
+              : 'wall_top_s';
           } else if (r === lastR) {
-            name = c === 0 ? 'corner_in_bl' : c === lastC ? 'corner_in_br' : 'wall_bottom';
+            if (c === 0) {
+              name = 'corner_in_bl';
+            } else if (c === lastC) {
+              name = 'corner_in_br';
+            } else if (!entryClosed && (c === entryL || c === entryR)) {
+              name = c === entryL ? 'door_threshold_l' : 'door_threshold_r';
+            } else {
+              name = 'wall_bottom';
+            }
           } else if (c === 0) {
             name = 'wall_side_l';
           } else if (c === lastC) {
@@ -1601,25 +1799,37 @@ export class DungeonScene extends Phaser.Scene {
             name =
               c === doorL ? 'door_arch_l'
               : c === doorR ? 'door_arch_r'
-              : c === 4 || c === 15 ? 'wall_face_upper_cracked'
+              : crackedCols.includes(c) ? 'wall_face_upper_cracked'
               : 'wall_face_upper';
           } else if (r === 2) {
             name =
-              c === doorL ? 'door_open_l'
-              : c === doorR ? 'door_open_r'
-              : c === 3 || c === 16 ? 'wall_face_lower_grate'
+              c === doorL || c === doorR
+                ? doorOpen
+                  ? c === doorL ? 'door_open_l' : 'door_open_r'
+                  : 'wall_face_lower'
+              : grateCols.includes(c) ? 'wall_face_lower_grate'
               : 'wall_face_lower';
-          } else if (r === 3 && (c === doorL || c === doorR)) {
+          } else if (r === 3 && doorOpen && (c === doorL || c === doorR)) {
             name = c === doorL ? 'door_threshold_l' : 'door_threshold_r';
           } else {
-            // Deterministic floor variation (same formula as the approved mockup).
+            // Deterministic floor variation (same base formula as the mockup).
+            const h = (c * 13 + r * 7 + spec.index * 5) % 29;
             name =
-              special.get(`${c},${r}`) ??
-              floorCycle[
-                (c * 7 + r * 3) % 5 !== 0 ? (c * 31 + r * 17 + 13) % 7 : 0
-              ];
+              r >= 4 && h === 0 ? 'floor_moss'
+              : r >= 4 && h === 11 ? 'floor_blood'
+              : r >= 4 && h === 17 ? 'floor_cracked'
+              : floorCycle[
+                  (c * 7 + r * 3) % 5 !== 0 ? (c * 31 + r * 17 + 13) % 7 : 0
+                ];
           }
-          tile(name, c, r, 1);
+          const img = tile(name, c, r, 1);
+          if (r === 2 && (c === doorL || c === doorR)) {
+            rt.row2.push(img);
+          } else if (r === 3 && (c === doorL || c === doorR)) {
+            rt.row3.push(img);
+          } else if (r === lastR && (c === entryL || c === entryR)) {
+            rt.entryTiles.push(img);
+          }
         }
       }
       // Wall shadows cast over the floor.
@@ -1635,13 +1845,30 @@ export class DungeonScene extends Phaser.Scene {
         tile('shadow_l', 1, r, 1.1);
         tile('shadow_r', lastC - 1, r, 1.1);
       }
+      // Corridor above this room (to the next one): floor + side walls.
+      if (door && roomIndex < this.testRooms.length - 1) {
+        for (let k = 1; k <= TEST_CORRIDOR_TILES; k++) {
+          const y = oy - k * T;
+          tileAt('wall_side_l', ox + (doorL - 1) * T, y, 1);
+          tileAt('wall_side_r', ox + (doorR + 1) * T, y, 1);
+          tileAt(floorCycle[(k * 3) % 7], ox + doorL * T, y, 1);
+          tileAt(floorCycle[(k * 5 + 1) % 7], ox + doorR * T, y, 1);
+        }
+        // Side walls also beside the doorway row 0 (wall continues).
+      }
     }
 
-    // Wall props: chains + 4 animated torches on the upper wall face.
+    // Wall props: chains + animated torches on the upper wall face.
     if (hasProps) {
-      const propFrame = (name: DungeonBasicProp) =>
-        DUNGEON_BASIC_PROP_FRAMES.indexOf(name);
-      for (const c of [2, 17]) {
+      const propFrame = (name: string) =>
+        DUNGEON_BASIC_PROP_FRAMES.indexOf(name as DungeonBasicProp);
+      for (const c of [2, cols - 3]) {
+        if (
+          spec.torchCols.includes(c) ||
+          (door && c >= door[0] - 1 && c <= door[1] + 1)
+        ) {
+          continue;
+        }
         track(
           this.add
             .image(ox + c * T, oy + T + 2, DUNGEON_BASIC_PROPS_KEY, propFrame('chain'))
@@ -1649,7 +1876,7 @@ export class DungeonScene extends Phaser.Scene {
             .setDepth(1.2)
         );
       }
-      TEST_ROOM_TORCH_COLS.forEach((c, i) => {
+      spec.torchCols.forEach((c, i) => {
         const torch = track(
           this.add
             .sprite(ox + c * T, oy + T, DUNGEON_BASIC_PROPS_KEY, i % 4)
@@ -1657,10 +1884,12 @@ export class DungeonScene extends Phaser.Scene {
             .setDepth(1.2)
         );
         if (this.anims.exists(DUNGEON_BASIC_TORCH_ANIM)) {
-          torch.play({ key: DUNGEON_BASIC_TORCH_ANIM, startFrame: [0, 2, 1, 3][i] });
+          torch.play({ key: DUNGEON_BASIC_TORCH_ANIM, startFrame: [0, 2, 1, 3][i % 4] });
         }
       });
-      const floorProps = [...TEST_ROOM_FLOOR_PROPS].sort((a, b) => a.y - b.y);
+      const floorProps = spec.floorProps
+        .filter((p) => propFrame(p.name) >= 0)
+        .sort((a, b) => a.y - b.y);
       floorProps.forEach((p, i) => {
         track(
           this.add
@@ -1672,7 +1901,7 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     if (hasTall) {
-      for (const p of TEST_ROOM_TALL_PROPS) {
+      for (const p of spec.tallProps) {
         const baseY = oy + p.y + 61;
         const image = track(
           this.add
@@ -1708,7 +1937,7 @@ export class DungeonScene extends Phaser.Scene {
       tint: number,
       alpha: number,
       flicker: boolean
-    ) => {
+    ): Phaser.GameObjects.Image => {
       const img = track(
         this.add
           .image(x, y, lightKey)
@@ -1721,19 +1950,149 @@ export class DungeonScene extends Phaser.Scene {
       if (flicker) {
         this.testArenaLights.push({ image: img, baseAlpha: alpha });
       }
+      return img;
     };
-    for (const c of TEST_ROOM_TORCH_COLS) {
+    for (const c of spec.torchCols) {
       const fx = ox + c * T + 15.5;
       const fy = oy + T + 9;
       light(fx, fy + 34, 230, 190, 0xf59e0b, 0.34, true);
       light(fx, oy + T * 3 + 18, 120, 48, 0xf59e0b, 0.22, true);
       light(fx, fy, 34, 34, 0xfde047, 0.55, true);
     }
-    // Rune arch (cold) and skull candle.
-    light(ox + room.width / 2, oy + T * 2 + 4, 90, 90, 0x38bdf8, 0.16, false);
-    light(ox + 56, oy + 112, 48, 48, 0xf59e0b, 0.35, true);
+    for (const p of spec.floorProps) {
+      if (p.name === 'skulls_candle') {
+        light(ox + p.x + 16, oy + p.y + 8, 48, 48, 0xf59e0b, 0.35, true);
+      }
+    }
 
-    this.applyTestArenaCameraBounds();
+    // Exit door: rune halo + sealing glyph while the room is not cleared.
+    if (door) {
+      const dx = ox + door[1] * T;
+      const dy = oy + T * 2;
+      rt.runeLight = light(
+        dx,
+        dy + 4,
+        90,
+        90,
+        doorOpen ? 0x38bdf8 : 0xa855f7,
+        doorOpen ? 0.16 : 0.3,
+        false
+      );
+      if (!doorOpen) {
+        rt.exitSeal = this.buildTestSeal(
+          dx,
+          dy + 2,
+          { x: dx - T, y: oy + 2 * T, w: 2 * T, h: T },
+          17
+        );
+      }
+    }
+    // Entry opening (bottom wall): sealed once the hero walked in.
+    if (entry && entryClosed) {
+      const ex = ox + (entry[1]) * T;
+      const ey = oy + room.height - T / 2;
+      rt.entrySeal = this.buildTestSeal(
+        ex,
+        ey,
+        { x: ex - T, y: oy + room.height - T, w: 2 * T, h: T },
+        13
+      );
+    }
+  }
+
+  /** Frees the sealing glyph and swaps the arch to its open frames. */
+  private openTestDoor(index: number): void {
+    const rt = this.testRuntime[index];
+    if (!rt || this.testDoorOpenFlags[index]) {
+      return;
+    }
+    this.testDoorOpenFlags[index] = true;
+    this.freeTestObjects(rt.exitSeal);
+    const frames: DungeonBasicTile[] = ['door_open_l', 'door_open_r'];
+    rt.row2.forEach((img, i) =>
+      img.setFrame(DUNGEON_BASIC_TILE_FRAMES.indexOf(frames[i] ?? 'door_open_r'))
+    );
+    const thresholds: DungeonBasicTile[] = ['door_threshold_l', 'door_threshold_r'];
+    rt.row3.forEach((img, i) =>
+      img.setFrame(
+        DUNGEON_BASIC_TILE_FRAMES.indexOf(thresholds[i] ?? 'door_threshold_r')
+      )
+    );
+    rt.runeLight?.setTint(0x38bdf8).setAlpha(0.16);
+    this.showTimedBanner('Sala limpa — siga pela porta', 6000);
+  }
+
+  /** Seals the opening behind the hero with the same rune seal. */
+  private closeTestEntry(index: number): void {
+    const rt = this.testRuntime[index];
+    const entry = rt?.spec.entryDoorCols;
+    if (!rt || !entry || this.testEntryClosedFlags[index]) {
+      return;
+    }
+    this.testEntryClosedFlags[index] = true;
+    for (const img of rt.entryTiles) {
+      img.setFrame(DUNGEON_BASIC_TILE_FRAMES.indexOf('wall_bottom'));
+    }
+    const T = TILE_DISPLAY_SIZE;
+    const ex = rt.geo.x + entry[1] * T;
+    const ey = rt.geo.y + rt.geo.height - T / 2;
+    rt.entrySeal = this.buildTestSeal(
+      ex,
+      ey,
+      { x: ex - T, y: rt.geo.y + rt.geo.height - T, w: 2 * T, h: T },
+      13
+    );
+  }
+
+  /** The next wave spawns only when the hero WALKS into the next room. */
+  private checkTestRoomEntry(): void {
+    if (!this.isTestArena || this.testArenaFinished || !this.hero.isAlive) {
+      return;
+    }
+    const idx = this.testArenaRoomIndex;
+    const next = this.testRuntime[idx + 1];
+    if (!next || !this.testDoorOpenFlags[idx]) {
+      return;
+    }
+    const g = next.geo;
+    const hx = this.hero.position.x;
+    if (this.hero.position.y <= g.maxY - 4 && hx >= g.minX && hx <= g.maxX) {
+      this.enterTestRoom(idx + 1, false);
+    }
+  }
+
+  private testWalkRects(forHero: boolean): WalkRect[] {
+    const T = TILE_DISPLAY_SIZE;
+    const floor = (g: TestArenaRoomGeometry): WalkRect => ({
+      l: g.minX,
+      r: g.maxX,
+      t: g.minY + ACTOR_FEET_OFFSET,
+      b: g.maxY + ACTOR_FEET_OFFSET,
+    });
+    if (!forHero) {
+      const cur = this.testRuntime[this.testArenaRoomIndex];
+      return cur ? [floor(cur.geo)] : [];
+    }
+    const out: WalkRect[] = [];
+    this.testRuntime.forEach((rt, i) => {
+      out.push(floor(rt.geo));
+      const next = this.testRuntime[i + 1];
+      const door = rt.spec.exitDoorCols;
+      if (!next || !door) {
+        return;
+      }
+      const open = this.testDoorOpenFlags[i];
+      const entryClosed = this.testEntryClosedFlags[i + 1];
+      out.push({
+        l: rt.geo.x + door[0] * T + 8,
+        r: rt.geo.x + (door[1] + 1) * T - 8,
+        t: entryClosed
+          ? next.geo.y + next.geo.height
+          : next.geo.maxY + ACTOR_FEET_OFFSET - 8,
+        b: open ? rt.geo.y + 3 * T + 16 : rt.geo.y + 2 * T,
+      });
+    });
+    return out;
   }
 
   /** Soft white radial gradient used (tinted, additive) for torch halos. */
@@ -1767,62 +2126,88 @@ export class DungeonScene extends Phaser.Scene {
     this.testArenaTallProps = [];
     this.testArenaLights = [];
     this.testArenaRoom = undefined;
+    this.testRuntime = [];
+    this.testWorld = undefined;
     this.actorShadows?.clear();
   }
 
-  /** Limits the world camera to the room (centered when narrower than the view). */
+  /** Limits the world camera to the whole test world (3 rooms + corridors). */
   private applyTestArenaCameraBounds(): void {
-    const room = this.testArenaRoom;
-    if (!this.isTestArena || !room) {
+    const world = this.testWorld;
+    if (!this.isTestArena || !world) {
       return;
     }
     const zoom = this.getWorldZoom();
     const viewW = (this.viewport.width || this.scale.width || 960) / zoom;
     const viewH = (this.viewport.height || this.scale.height || 540) / zoom;
-    const padX = Math.max(0, (viewW - room.width) / 2);
-    const padY = Math.max(0, (viewH - room.height) / 2);
+    const padX = Math.max(0, (viewW - world.width) / 2);
+    const padY = Math.max(0, (viewH - world.height) / 2);
     this.cameras.main.setBounds(
-      room.x - padX,
-      room.y - padY,
-      room.width + padX * 2,
-      room.height + padY * 2
+      world.x - padX,
+      world.y - padY,
+      world.width + padX * 2,
+      world.height + padY * 2
     );
   }
 
-  private constrainPositionToTestArenaRoom(pos: Vector2D): void {
-    const room = this.testArenaRoom;
-    if (!room) {
+  private constrainPositionToTestArenaRoom(
+    pos: Vector2D,
+    isHero = false
+  ): void {
+    const rects = this.testWalkRects(isHero);
+    if (rects.length === 0) {
       return;
     }
-    pos.x = Math.min(room.maxX, Math.max(room.minX, pos.x));
-    pos.y = Math.min(room.maxY, Math.max(room.minY, pos.y));
+    const inside = (x: number, y: number): boolean =>
+      rects.some((r) => x >= r.l && x <= r.r && y >= r.t && y <= r.b);
+    const snap = (x: number, y: number): { x: number; y: number } => {
+      if (inside(x, y)) {
+        return { x, y };
+      }
+      let best = { x, y };
+      let bestD = Number.POSITIVE_INFINITY;
+      for (const r of rects) {
+        const cx = Math.min(r.r, Math.max(r.l, x));
+        const cy = Math.min(r.b, Math.max(r.t, y));
+        const d = (cx - x) ** 2 + (cy - y) ** 2;
+        if (d < bestD) {
+          bestD = d;
+          best = { x: cx, y: cy };
+        }
+      }
+      return best;
+    };
+
+    let f = snap(pos.x, pos.y + ACTOR_FEET_OFFSET);
 
     // Push the feet out of prop obstacles along the axis of least penetration.
-    for (const o of TEST_ROOM_OBSTACLES) {
-      const left = room.x + o.x;
-      const top = room.y + o.y;
-      const right = left + o.w;
-      const bottom = top + o.h;
-      const fx = pos.x;
-      const fy = pos.y + ACTOR_FEET_OFFSET;
-      if (fx <= left || fx >= right || fy <= top || fy >= bottom) {
-        continue;
-      }
-      const pushes = [
-        { d: fx - left, x: left - 0.5, y: fy },
-        { d: right - fx, x: right + 0.5, y: fy },
-        { d: fy - top, x: fx, y: top - 0.5 },
-        { d: bottom - fy, x: fx, y: bottom + 0.5 },
-      ].sort((a, b) => a.d - b.d);
-      for (const p of pushes) {
-        const cy = p.y - ACTOR_FEET_OFFSET;
-        if (p.x >= room.minX && p.x <= room.maxX && cy >= room.minY && cy <= room.maxY) {
-          pos.x = p.x;
-          pos.y = cy;
-          break;
+    for (const rt of this.testRuntime) {
+      for (const o of rt.spec.obstacles) {
+        const left = rt.geo.x + o.x;
+        const top = rt.geo.y + o.y;
+        const right = left + o.w;
+        const bottom = top + o.h;
+        const fx = f.x;
+        const fy = f.y;
+        if (fx <= left || fx >= right || fy <= top || fy >= bottom) {
+          continue;
+        }
+        const pushes = [
+          { d: fx - left, x: left - 0.5, y: fy },
+          { d: right - fx, x: right + 0.5, y: fy },
+          { d: fy - top, x: fx, y: top - 0.5 },
+          { d: bottom - fy, x: fx, y: bottom + 0.5 },
+        ].sort((a, b) => a.d - b.d);
+        for (const p of pushes) {
+          if (inside(p.x, p.y)) {
+            f = { x: p.x, y: p.y };
+            break;
+          }
         }
       }
     }
+    pos.x = f.x;
+    pos.y = f.y - ACTOR_FEET_OFFSET;
   }
 
   private constrainActorsToTestArenaRoom(): void {
@@ -1830,7 +2215,7 @@ export class DungeonScene extends Phaser.Scene {
       return;
     }
     if (this.hero) {
-      this.constrainPositionToTestArenaRoom(this.hero.position);
+      this.constrainPositionToTestArenaRoom(this.hero.position, true);
     }
     for (const monster of this.monsters) {
       if (monster.isAlive) {
@@ -2011,29 +2396,26 @@ export class DungeonScene extends Phaser.Scene {
       if (this.bannerText && nowMs >= this.bannerExpiresAtMs) {
         this.bannerText = undefined;
       }
-      if (
-        this.testArenaWave === 1 &&
-        this.monsters.length > 0 &&
-        this.monsters.every((m) => !m.isAlive)
-      ) {
-        if (this.testArenaWave2TriggerAtMs === undefined) {
-          this.testArenaWave2TriggerAtMs = nowMs + 650;
-        } else if (nowMs >= this.testArenaWave2TriggerAtMs) {
-          this.testArenaWave = 2;
-          this.testArenaWave2TriggerAtMs = undefined;
-          this.spawnTestArenaWave(TEST_ARENA_WAVE_2, 2);
-          this.showTimedBanner(TEST_ARENA_WAVE_2_BANNER, 2500);
-        }
-      } else if (
-        this.testArenaWave === 2 &&
-        !this.testArenaFinished &&
-        this.monsters.length > 0 &&
-        this.monsters.every((m) => !m.isAlive)
-      ) {
+      const spec = this.currentTestRoom();
+      if (!spec || this.testArenaFinished) {
+        return;
+      }
+      const cleared =
+        this.monsters.length > 0 && this.monsters.every((m) => !m.isAlive);
+      if (!cleared) {
+        return;
+      }
+      if (spec.isBossRoom) {
         if (this.testArenaFinishAtMs === undefined) {
           this.testArenaFinishAtMs = nowMs + TEST_ARENA_FINISH_DELAY_MS;
         } else if (nowMs >= this.testArenaFinishAtMs) {
           this.finishTestArena();
+        }
+      } else if (!this.testDoorOpenFlags[this.testArenaRoomIndex]) {
+        if (this.testRoomClearAtMs === undefined) {
+          this.testRoomClearAtMs = nowMs + 650;
+        } else if (nowMs >= this.testRoomClearAtMs) {
+          this.openTestDoor(this.testArenaRoomIndex);
         }
       }
       return;
@@ -2419,24 +2801,24 @@ export class DungeonScene extends Phaser.Scene {
           )
         : 0);
 
+    const testSpec = this.isTestArena ? this.currentTestRoom() : undefined;
+    const testRoom = this.isTestArena ? this.testArenaRoom : undefined;
     const missionObjective = this.isTestArena
       ? this.testArenaFinished
         ? `Arena de Teste — ${TEST_ARENA_FINISHED_TEXT}`
-        : this.testArenaWave >= 2
-          ? 'Arena de Teste — Onda 2 (Chefes)'
-          : 'Arena de Teste — Onda 1 (Monstros)'
+        : (testSpec?.title ?? 'Arena de Teste')
       : `${currentRoom.roomNumber}/${this.runState.totalRooms} — ${currentRoom.title}`;
 
     const minimap = {
-      heroX: this.hero.position.x,
-      heroY: this.hero.position.y,
-      arenaWidth: this.scale.width || 960,
-      arenaHeight: this.scale.height || 540,
+      heroX: this.hero.position.x - (testRoom?.x ?? 0),
+      heroY: this.hero.position.y - (testRoom?.y ?? 0),
+      arenaWidth: testRoom?.width ?? (this.scale.width || 960),
+      arenaHeight: testRoom?.height ?? (this.scale.height || 540),
       enemies: this.monsters
         .filter((m) => m.isAlive)
         .map((m) => ({
-          x: m.position.x,
-          y: m.position.y,
+          x: m.position.x - (testRoom?.x ?? 0),
+          y: m.position.y - (testRoom?.y ?? 0),
           isBoss: m.type === 'boss',
         })),
     };
@@ -2455,8 +2837,11 @@ export class DungeonScene extends Phaser.Scene {
       minimap,
       roomNumber: currentRoom.roomNumber,
       totalRooms: this.runState.totalRooms,
-      isBossRoom: currentRoom.isBossRoom || livingBosses.length > 0,
-      roomTitle: currentRoom.title,
+      isBossRoom:
+        currentRoom.isBossRoom ||
+        livingBosses.length > 0 ||
+        Boolean(testSpec?.isBossRoom),
+      roomTitle: testSpec?.title ?? currentRoom.title,
       stageName: this.activeStage?.name,
       bossHp: bossMonster?.hp,
       bossMaxHp: bossMonster?.maxHp,
@@ -2494,24 +2879,26 @@ export class DungeonScene extends Phaser.Scene {
       currentRoom.biome
     );
 
-    this.hero.position.x = Math.max(
-      ARENA_PADDING,
-      Math.min(width - ARENA_PADDING, this.hero.position.x)
-    );
-    this.hero.position.y = Math.max(
-      ARENA_PADDING,
-      Math.min(height - ARENA_PADDING, this.hero.position.y)
-    );
+    if (!this.isTestArena) {
+      this.hero.position.x = Math.max(
+        ARENA_PADDING,
+        Math.min(width - ARENA_PADDING, this.hero.position.x)
+      );
+      this.hero.position.y = Math.max(
+        ARENA_PADDING,
+        Math.min(height - ARENA_PADDING, this.hero.position.y)
+      );
 
-    for (const monster of this.monsters) {
-      monster.position.x = Math.max(
-        ARENA_PADDING,
-        Math.min(width - ARENA_PADDING, monster.position.x)
-      );
-      monster.position.y = Math.max(
-        ARENA_PADDING,
-        Math.min(height - ARENA_PADDING, monster.position.y)
-      );
+      for (const monster of this.monsters) {
+        monster.position.x = Math.max(
+          ARENA_PADDING,
+          Math.min(width - ARENA_PADDING, monster.position.x)
+        );
+        monster.position.y = Math.max(
+          ARENA_PADDING,
+          Math.min(height - ARENA_PADDING, monster.position.y)
+        );
+      }
     }
 
     for (const drop of this.groundDrops) {
@@ -2742,6 +3129,9 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private destroyGroundDropVisuals(drop: GroundDrop): void {
+    if (this.pickupTarget === drop) {
+      this.cancelPickupWalk();
+    }
     if (drop.pillarTween) {
       drop.pillarTween.stop();
       drop.pillarTween = undefined;
@@ -2759,14 +3149,15 @@ export class DungeonScene extends Phaser.Scene {
   private spawnGroundDrop(item: ItemInstance, rawPosition: Vector2D): void {
     const width = this.scale.width || 960;
     const height = this.scale.height || 540;
-    const x = Math.max(
-      ARENA_PADDING,
-      Math.min(width - ARENA_PADDING, rawPosition.x)
-    );
-    const y = Math.max(
-      ARENA_PADDING + 24,
-      Math.min(height - ARENA_PADDING - 24, rawPosition.y)
-    );
+    const x = this.isTestArena
+      ? rawPosition.x
+      : Math.max(ARENA_PADDING, Math.min(width - ARENA_PADDING, rawPosition.x));
+    const y = this.isTestArena
+      ? rawPosition.y
+      : Math.max(
+          ARENA_PADDING + 24,
+          Math.min(height - ARENA_PADDING - 24, rawPosition.y)
+        );
 
     const rarityNum = Number.parseInt(
       RARITY_COLORS[item.rarity].replace('#', ''),
@@ -2802,7 +3193,7 @@ export class DungeonScene extends Phaser.Scene {
       item.rarity === 'legendary' ? 'loot_legendary' : 'loot_drop'
     );
     this.vfx.showLootDropBeam(x, y, item.rarity);
-    this.groundDrops.push({
+    const drop: GroundDrop = {
       item,
       position: { x, y },
       sprite,
@@ -2810,7 +3201,127 @@ export class DungeonScene extends Phaser.Scene {
       labelContainer,
       pillar,
       pillarTween,
-    });
+    };
+    this.groundDrops.push(drop);
+    this.makeDropInteractive(drop);
+  }
+
+  /** Sprite, glow and name tag all take clicks/taps (>= 44 px hit areas). */
+  private makeDropInteractive(drop: GroundDrop): void {
+    const onDown = (
+      _pointer: Phaser.Input.Pointer,
+      _lx: number,
+      _ly: number,
+      event: Phaser.Types.Input.EventData
+    ) => {
+      event?.stopPropagation();
+      this.handleDropClick(drop);
+    };
+
+    const sw = drop.sprite.width || 16;
+    const sh = drop.sprite.height || 16;
+    const localW = Math.max(sw, DROP_HIT_SIZE / Math.max(0.1, drop.sprite.scaleX));
+    const localH = Math.max(sh, DROP_HIT_SIZE / Math.max(0.1, drop.sprite.scaleY));
+    drop.sprite
+      .setInteractive({
+        hitArea: new Phaser.Geom.Rectangle(
+          (sw - localW) / 2,
+          (sh - localH) / 2,
+          localW,
+          localH
+        ),
+        hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+        useHandCursor: true,
+      })
+      .on('pointerdown', onDown);
+
+    drop.glow
+      .setInteractive({
+        hitArea: new Phaser.Geom.Circle(0, 0, DROP_HIT_SIZE / 2),
+        hitAreaCallback: Phaser.Geom.Circle.Contains,
+        useHandCursor: true,
+      })
+      .on('pointerdown', onDown);
+
+    const bounds = drop.labelContainer.getBounds();
+    drop.labelContainer
+      .setSize(
+        Math.max(bounds.width, DROP_HIT_SIZE),
+        Math.max(bounds.height, DROP_HIT_SIZE)
+      )
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', onDown);
+  }
+
+  /** Click/tap on a ground item: collect when near, otherwise walk to it. */
+  private handleDropClick(drop: GroundDrop): boolean {
+    if (
+      !this.groundDrops.includes(drop) ||
+      !this.hero?.isAlive ||
+      !this.runState ||
+      this.inventoryModal?.isOpen() ||
+      (this.isTestArena && this.testArenaFinished) ||
+      this.runState.status === 'victory' ||
+      this.runState.status === 'defeat'
+    ) {
+      return false;
+    }
+    if (distanceBetween(this.hero.position, drop.position) <= DROP_CLICK_REACH) {
+      this.cancelPickupWalk();
+      return this.collectDrop(drop);
+    }
+    this.pickupTarget = drop;
+    this.pickupLastPos = undefined;
+    this.pickupStuckMs = 0;
+    return true;
+  }
+
+  private cancelPickupWalk(): void {
+    this.pickupTarget = undefined;
+    this.pickupLastPos = undefined;
+    this.pickupStuckMs = 0;
+  }
+
+  /** Player input beats the auto-walk; otherwise steer straight at the item. */
+  private resolveMoveDir(deltaMs: number): Vector2D {
+    const input = this.hud.getMoveVector();
+    const target = this.pickupTarget;
+    if (!target) {
+      return input;
+    }
+    if (
+      input.x !== 0 ||
+      input.y !== 0 ||
+      !this.hero.isAlive ||
+      !this.groundDrops.includes(target)
+    ) {
+      this.cancelPickupWalk();
+      return input;
+    }
+    const dx = target.position.x - this.hero.position.x;
+    const dy = target.position.y - this.hero.position.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist <= DROP_WALK_ARRIVE) {
+      this.cancelPickupWalk();
+      this.collectDrop(target);
+      return { x: 0, y: 0 };
+    }
+    // Give up when blocked (walls/obstacles): barely moved for ~0.5 s.
+    if (this.pickupLastPos) {
+      const moved = distanceBetween(this.hero.position, this.pickupLastPos);
+      const expected = (this.hero.stats.moveSpeed * deltaMs) / 1000;
+      this.pickupStuckMs = moved < expected * 0.25 ? this.pickupStuckMs + deltaMs : 0;
+      if (this.pickupStuckMs > 500) {
+        this.cancelPickupWalk();
+        // Blocked right beside the item (prop in the way): still collect it.
+        if (dist <= DROP_CLICK_REACH) {
+          this.collectDrop(target);
+        }
+        return { x: 0, y: 0 };
+      }
+    }
+    this.pickupLastPos = { ...this.hero.position };
+    return { x: dx / dist, y: dy / dist };
   }
 
   private spawnTestDrop(rarity?: Rarity): ItemInstance {
@@ -2825,41 +3336,29 @@ export class DungeonScene extends Phaser.Scene {
     return item;
   }
 
-  private collectNearbyDrops(): void {
-    if (this.groundDrops.length === 0) {
-      return;
+  /** Same routine as the old proximity pickup (bag, auto-equip, feedback). */
+  private collectDrop(drop: GroundDrop): boolean {
+    const added = addItemToBag(this.inventory, drop.item);
+    if (!added) {
+      this.showTimedBanner('Mochila cheia', 1800);
+      return false;
     }
-
-    const remaining: GroundDrop[] = [];
-    for (const drop of this.groundDrops) {
-      if (
-        distanceBetween(this.hero.position, drop.position) <=
-        DROP_PICKUP_RADIUS
-      ) {
-        const added = addItemToBag(this.inventory, drop.item);
-        if (!added) {
-          remaining.push(drop);
-          continue;
-        }
-        this.destroyGroundDropVisuals(drop);
-        if (this.inventory.equipped[drop.item.slot] === null) {
-          equipItemFromBag(this.inventory, drop.item.instanceId);
-          this.recalculateHeroGear();
-        }
-        this.vfx.showItemPickupBanner(
-          drop.position.x,
-          drop.position.y,
-          drop.item.name,
-          RARITY_COLORS[drop.item.rarity]
-        );
-        if (this.inventoryModal?.isOpen()) {
-          this.inventoryModal.update(this.buildInventorySnapshot());
-        }
-      } else {
-        remaining.push(drop);
-      }
+    this.groundDrops = this.groundDrops.filter((d) => d !== drop);
+    this.destroyGroundDropVisuals(drop);
+    if (this.inventory.equipped[drop.item.slot] === null) {
+      equipItemFromBag(this.inventory, drop.item.instanceId);
+      this.recalculateHeroGear();
     }
-    this.groundDrops = remaining;
+    this.vfx.showItemPickupBanner(
+      drop.position.x,
+      drop.position.y,
+      drop.item.name,
+      RARITY_COLORS[drop.item.rarity]
+    );
+    if (this.inventoryModal?.isOpen()) {
+      this.inventoryModal.update(this.buildInventorySnapshot());
+    }
+    return true;
   }
 
   private collectRemainingDropsOnVictory(): void {
@@ -2904,8 +3403,18 @@ export class DungeonScene extends Phaser.Scene {
     this.bannerExpiresAtMs = this.elapsedTimeMs + durationMs;
   }
 
+  private clearRangedArrows(): void {
+    for (const arrow of this.rangedArrows) {
+      this.tweens.killTweensOf(arrow);
+      arrow.destroy();
+    }
+    this.rangedArrows = [];
+  }
+
   private clearMonsterVisuals(): void {
+    this.deferredDeathIds.clear();
     for (const visual of this.monsterVisuals.values()) {
+      this.tweens.killTweensOf(visual.sprite);
       visual.sprite.destroy();
       visual.hpBar.destroy();
     }
@@ -3168,6 +3677,7 @@ export class DungeonScene extends Phaser.Scene {
     arrow.lineBetween(-9, 0, -12, -2.5);
     arrow.lineBetween(-9, 0, -12, 2.5);
 
+    this.rangedArrows.push(arrow);
     this.tweens.add({
       targets: arrow,
       x: to.x,
@@ -3175,6 +3685,7 @@ export class DungeonScene extends Phaser.Scene {
       duration: 160,
       ease: 'Linear',
       onComplete: () => {
+        this.rangedArrows = this.rangedArrows.filter((a) => a !== arrow);
         arrow.destroy();
       },
     });
