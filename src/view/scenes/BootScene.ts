@@ -206,6 +206,14 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
     frameHeight: 64,
     fallbackColor: 0x44403c,
   },
+  {
+    // 43 frames 32x32 (1376x32): portas, selos e vínculos de corredor (T-128).
+    key: 'dungeon_basic_doors',
+    file: 'assets/sprites/dungeon_basic_doors.png',
+    frameWidth: 32,
+    frameHeight: 32,
+    fallbackColor: 0x292524,
+  },
 ];
 
 const DUNGEON_BASIC_TORCH_ANIM_KEY = 'dungeon_basic_torch';
