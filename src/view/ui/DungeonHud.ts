@@ -48,6 +48,10 @@ export interface HudSnapshot {
   autoAttackEnabled?: boolean;
   isTestArena?: boolean;
   missionObjective?: string;
+  /** Há item no chão dentro do raio de busca do botão "Pegar" (T-132). */
+  pickupAvailable?: boolean;
+  /** Raridade do item mais próximo (cor do anel do botão "Pegar"). */
+  pickupRarity?: 'common' | 'magic' | 'rare' | 'legendary';
   minimap?: {
     heroX: number;
     heroY: number;
@@ -112,6 +116,7 @@ export class DungeonHud {
     onToggleInventory?: () => void;
     onBasicAttack?: () => void;
     onToggleAutoAttack?: () => void;
+    onPickupNearest?: () => void;
   };
 
   private viewport: ViewportConfig;
@@ -202,6 +207,20 @@ export class DungeonHud {
   private readonly attackBtnZone: Phaser.GameObjects.Zone;
   private readonly attackBtnRadius = 42;
 
+  // Bottom-Right above Attack: "Pegar" button (r = 24) — coleta o item mais próximo (T-132)
+  private pickupBtnContainer!: Phaser.GameObjects.Container;
+  private pickupBtnGlow!: Phaser.GameObjects.Graphics;
+  private pickupBtnBg!: Phaser.GameObjects.Graphics;
+  private pickupBtnIcon!: Phaser.GameObjects.Image | null;
+  private pickupBtnFallbackText!: Phaser.GameObjects.Text;
+  private pickupBtnLabelText!: Phaser.GameObjects.Text;
+  private pickupHotkeyBg!: Phaser.GameObjects.Graphics;
+  private pickupHotkeyText!: Phaser.GameObjects.Text;
+  private pickupBtnZone!: Phaser.GameObjects.Zone;
+  private readonly pickupBtnRadius = 24;
+  private pickupStateKey = '';
+  private pickupPulseTween: Phaser.Tweens.Tween | null = null;
+
   private readonly skillButtons: SkillButtonView[] = [];
   private readonly skillBySlot = new Map<SkillSlot, SkillDef>();
 
@@ -246,6 +265,7 @@ export class DungeonHud {
       onToggleInventory?: () => void;
       onBasicAttack?: () => void;
       onToggleAutoAttack?: () => void;
+      onPickupNearest?: () => void;
     }
   ) {
     this.scene = scene;
@@ -797,6 +817,7 @@ export class DungeonHud {
       .setDepth(1022);
 
     this.buildSkillButtons();
+    this.buildPickupButton();
 
     // -------------------------------------------------------------------------
     // 9. END-OF-RUN MODAL (VICTORY / DEFEAT)
@@ -991,6 +1012,7 @@ export class DungeonHud {
     this.refreshAutoButtonState(snapshot.autoAttackEnabled !== false);
     this.refreshBagButtonState(snapshot.bagCount ?? 0);
     this.refreshMuteButtonState();
+    this.refreshPickupButtonState(snapshot);
 
     // 3. Top-Center: Boss HP Bar
     const showBossBar =
@@ -1164,6 +1186,9 @@ export class DungeonHud {
     this.bossContainer.destroy();
     this.bannerContainer.destroy();
     this.attackBtnContainer.destroy();
+    this.pickupPulseTween?.stop();
+    this.pickupPulseTween = null;
+    this.pickupBtnContainer.destroy();
     this.modalContainer.destroy();
 
     for (const btn of this.skillButtons) {
@@ -2026,6 +2051,245 @@ export class DungeonHud {
       );
       btn.hotkeyText.setPosition(0, pillY).setVisible(true);
     }
+
+    this.layoutPickupButton(atkX, atkY);
+  }
+
+  // ===========================================================================
+  // BOTTOM-RIGHT: BOTÃO "PEGAR" (T-132) — acima do Ataque, à direita de active_2
+  // ===========================================================================
+
+  private buildPickupButton(): void {
+    const scene = this.scene;
+    this.pickupBtnGlow = scene.add.graphics();
+    this.pickupBtnBg = scene.add.graphics();
+    this.pickupBtnIcon = hasUiTextureFrame(
+      scene,
+      DF_UI_ICONS_KEY,
+      DF_UI_ICON_FRAMES.bag
+    )
+      ? scene.add
+          .image(0, -5, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.bag)
+          .setOrigin(0.5)
+      : null;
+    this.pickupBtnFallbackText = scene.add
+      .text(0, -5, 'PEG', {
+        fontFamily: DF_FONTS.BODY,
+        resolution: 2,
+        fontSize: '10px',
+        color: DF_PALETTE.textLight,
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    this.pickupBtnLabelText = scene.add
+      .text(0, 11, 'Pegar', {
+        fontFamily: DF_FONTS.TITLE,
+        resolution: 2,
+        fontSize: '9.5px',
+        color: '#fff7ed',
+        fontStyle: 'bold',
+        stroke: '#07090e',
+        strokeThickness: 2.5,
+      })
+      .setOrigin(0.5);
+    this.pickupHotkeyBg = scene.add.graphics();
+    this.pickupHotkeyText = scene.add
+      .text(0, 0, 'E', {
+        fontFamily: DF_FONTS.BODY,
+        resolution: 2,
+        fontSize: '8px',
+        color: DF_PALETTE.textMuted,
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+
+    const r = this.pickupBtnRadius;
+    this.pickupBtnZone = scene.add
+      .zone(0, 0, r * 2 + 8, r * 2 + 8)
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    this.pickupBtnZone.on(
+      'pointerdown',
+      (
+        pointer: Phaser.Input.Pointer,
+        _lx: number,
+        _ly: number,
+        event?: Phaser.Types.Input.EventData
+      ) => {
+        // Consome o toque: não chega ao joystick nem dispara ataque.
+        event?.stopPropagation?.();
+        soundManager.unlock();
+        if (pointer.id >= 0) {
+          this.triggerPickupNearest();
+        }
+      }
+    );
+
+    const children: Phaser.GameObjects.GameObject[] = [
+      this.pickupBtnGlow,
+      this.pickupBtnBg,
+    ];
+    if (this.pickupBtnIcon) {
+      children.push(this.pickupBtnIcon);
+    }
+    children.push(
+      this.pickupBtnFallbackText,
+      this.pickupBtnLabelText,
+      this.pickupHotkeyBg,
+      this.pickupHotkeyText,
+      this.pickupBtnZone
+    );
+
+    this.pickupBtnContainer = scene.add
+      .container(0, 0, children)
+      .setScrollFactor(0)
+      .setDepth(1021);
+  }
+
+  private layoutPickupButton(atkX: number, atkY: number): void {
+    const r = this.pickupBtnRadius;
+    // Acima do Ataque, levemente à direita; folga medida para active_2 (atkX - 38, atkY - 94, r 26).
+    this.pickupBtnContainer.setPosition(atkX + 24, atkY - 92);
+    this.pickupBtnZone.setSize(r * 2 + 8, r * 2 + 8);
+
+    const iconSize = Math.round(r * 0.98);
+    if (this.pickupBtnIcon) {
+      this.pickupBtnIcon.setPosition(0, -5).setDisplaySize(iconSize, iconSize);
+    }
+    this.pickupBtnFallbackText.setPosition(0, -5);
+    this.pickupBtnLabelText.setPosition(0, 11);
+
+    this.pickupHotkeyBg.clear();
+    const pillW = 15;
+    const pillH = 12;
+    const pillY = r + 1;
+    this.pickupHotkeyBg.fillStyle(DF_PALETTE.obsidianBg, 0.84);
+    this.pickupHotkeyBg.fillRoundedRect(
+      -pillW / 2,
+      pillY - pillH / 2,
+      pillW,
+      pillH,
+      3
+    );
+    this.pickupHotkeyBg.lineStyle(1, DF_PALETTE.metalBorder, 0.72);
+    this.pickupHotkeyBg.strokeRoundedRect(
+      -pillW / 2,
+      pillY - pillH / 2,
+      pillW,
+      pillH,
+      3
+    );
+    this.pickupHotkeyText.setPosition(0, pillY);
+
+    this.pickupStateKey = '';
+  }
+
+  private isPickupAvailable(): boolean {
+    return this.lastSnapshot.pickupAvailable === true && !this.isRunEnded();
+  }
+
+  private triggerPickupNearest(): void {
+    if (!this.isPickupAvailable()) {
+      return;
+    }
+    this.pulseContainer(this.pickupBtnContainer);
+    this.callbacks.onPickupNearest?.();
+  }
+
+  private getPickupRarityColor(rarity: HudSnapshot['pickupRarity']): number {
+    switch (rarity) {
+      case 'magic':
+        return 0x60a5fa;
+      case 'rare':
+        return 0xfacc15;
+      case 'legendary':
+        return 0xf97316;
+      default:
+        return 0xc4c4cc;
+    }
+  }
+
+  private refreshPickupButtonState(snapshot: HudSnapshot): void {
+    if (!this.pickupBtnContainer) {
+      return;
+    }
+    const available =
+      snapshot.pickupAvailable === true &&
+      snapshot.runStatus !== 'victory' &&
+      snapshot.runStatus !== 'defeat';
+    const rarity = snapshot.pickupRarity ?? 'common';
+    const stateKey = available ? `on:${rarity}` : 'off';
+    if (stateKey === this.pickupStateKey) {
+      return;
+    }
+    this.pickupStateKey = stateKey;
+
+    const r = this.pickupBtnRadius;
+    const ringColor = this.getPickupRarityColor(rarity);
+    const bg = this.pickupBtnBg;
+    const glow = this.pickupBtnGlow;
+    bg.clear();
+    glow.clear();
+
+    bg.fillStyle(DF_PALETTE.obsidianBg, available ? 0.94 : 0.8);
+    bg.fillCircle(0, 0, r);
+    bg.fillStyle(
+      available ? ringColor : DF_PALETTE.metalDark,
+      available ? 0.2 : 0.35
+    );
+    bg.fillCircle(0, 0, r - 3);
+
+    bg.lineStyle(2.8, DF_PALETTE.metalDark, 0.98);
+    bg.strokeCircle(0, 0, r + 1.2);
+    if (available) {
+      bg.lineStyle(2.2, ringColor, 0.98);
+      bg.strokeCircle(0, 0, r);
+      bg.lineStyle(1, 0xffffff, 0.22);
+      bg.strokeCircle(0, 0, r - 3);
+
+      glow.fillStyle(ringColor, 0.3);
+      glow.fillCircle(0, 0, r + 6);
+      glow.fillStyle(ringColor, 0.18);
+      glow.fillCircle(0, 0, r + 3);
+    } else {
+      bg.lineStyle(1.6, DF_PALETTE.metalBorder, 0.6);
+      bg.strokeCircle(0, 0, r);
+      bg.lineStyle(1.1, DF_PALETTE.deepRecess, 0.7);
+      bg.strokeCircle(0, 0, r - 3);
+    }
+
+    const hasIcon =
+      this.pickupBtnIcon !== null &&
+      hasUiTextureFrame(this.scene, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.bag);
+    if (this.pickupBtnIcon) {
+      this.pickupBtnIcon.setVisible(hasIcon);
+    }
+    this.pickupBtnFallbackText.setVisible(!hasIcon);
+    this.pickupHotkeyText.setColor(
+      available ? DF_PALETTE.textParchment : DF_PALETTE.textMuted
+    );
+
+    this.pickupBtnContainer.setAlpha(available ? 1 : 0.45);
+
+    this.pickupPulseTween?.stop();
+    this.pickupPulseTween = null;
+    glow.setAlpha(1).setScale(1);
+    if (
+      available &&
+      this.scene.tweens &&
+      typeof this.scene.tweens.add === 'function'
+    ) {
+      this.pickupPulseTween = this.scene.tweens.add({
+        targets: glow,
+        alpha: { from: 1, to: 0.35 },
+        scaleX: { from: 1, to: 1.08 },
+        scaleY: { from: 1, to: 1.08 },
+        duration: 720,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
   }
 
   private drawPrimaryAttackButton(r: number): void {
@@ -2429,6 +2693,11 @@ export class DungeonHud {
       if (potion) {
         this.callbacks.onUseSkill(potion.id);
       }
+      return;
+    }
+
+    if (code === 'KeyE') {
+      this.triggerPickupNearest();
       return;
     }
 

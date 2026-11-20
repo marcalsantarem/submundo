@@ -1,0 +1,14 @@
+# BRF-142 — AG02 — T-132 Botão "Pegar" na roda de ação do HUD
+**Leia:** `docs/agentes/AG02_UI.md`, a decisão #21 em `docs/decisoes.md`, `src/view/ui/DungeonHud.ts` (`callbacks`, `HudSnapshot`, `layoutActionCluster`, `handleKeyDown`, desenho dos botões de skill) e `src/view/ui/DarkFantasyUiBuilder.ts` (só leitura de estilo). Abra `assets/mockups/ref_landscape_hud.jpg` para manter o estilo. **Regra:** respostas curtas; sem commit/push/branches.
+**Decisão do dono (#21):** coletar item só por clique é pouco prático. A roda de ação ganha um botão **"Pegar"**, **na parte de cima do botão de Ataque**, que coleta o item mais próximo no chão.
+**Contrato (o AG01 implementa a ação na `DungeonScene.ts` em paralelo):**
+- Novo callback opcional em `callbacks`: `onPickupNearest?: () => void`.
+- Novos campos opcionais em `HudSnapshot`: `pickupAvailable?: boolean` (há item no raio de busca) e `pickupRarity?: 'common' | 'magic' | 'rare' | 'legendary'` (raridade do item mais próximo).
+- Tecla **`E`** (`code === 'KeyE'`) chama `onPickupNearest`, respeitando as mesmas condições de bloqueio das outras teclas (modal aberto, fim de run etc.).
+**Fazer:**
+(1) Botão circular `r ≈ 24`, posicionado acima do Ataque, levemente à direita (ponto de partida: `x = atkX + 22, y = atkY - 92`). Ele não pode sobrepor `active_2` (`atkX - 38, atkY - 94, r 26`), o Ataque, o minimapa nem os botões AUTO/Inventário/Áudio em `960×540` e no mobile paisagem `844×390`. Ajuste se precisar e meça.
+(2) Visual no padrão da roda: anel metálico escuro, ícone de mão/bolsa (use um frame existente de `ui_icons`, ex.: mochila, ou desenhe por código no estilo) e rótulo pequeno "Pegar" em `DF_FONTS.TITLE`, com pílula discreta da tecla `E` como os outros atalhos. Quando `pickupAvailable` for false, o botão fica apagado (alpha ~0,45, sem brilho) e o toque não faz nada. Quando for true, ele acende, com o anel na cor da raridade (`pickupRarity`: comum cinza, mágico azul, raro amarelo, lendário laranja) e um pulso suave.
+(3) Área de toque generosa (`r*2+8`, como os outros), multitouch compatível com o joystick e com o Ataque segurado ao mesmo tempo, sem disparar ataque.
+**Permitido:** `src/view/ui/DungeonHud.ts` (e `src/view/ui/VirtualJoystick.ts` só se precisar evitar conflito de toque). **Proibido:** `DungeonScene.ts`, `src/core/`, assets, `tests/`, Git.
+**Pronto quando:** `npm test` e `npm run build` passam. Mostre capturas do HUD com o botão apagado e aceso (PC `960×540` e mobile `844×390`) em `C:\Users\marca\AppData\Local\Temp\claude\6c0b19bfccb97544\a5a78be9-f64a-40a6-a789-0967cf940a2a\scratchpad\t132_hud_*.png`. Use a porta 5196 e encerre o servidor depois. Se o AG01 ainda não tiver preenchido o snapshot, force o estado pelo debug para capturar.
+**Entrega:** até 6 linhas: posição final do botão, como ele acende, capturas e o que não foi verificado.

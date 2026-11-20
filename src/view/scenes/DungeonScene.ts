@@ -184,6 +184,8 @@ export interface SubmundoDebugApi {
   getTestRoomWorldOrigins: () => Array<{ x: number; y: number }>;
   getGroundDrops: () => Array<{ x: number; y: number; item: ItemInstance }>;
   pickUpDropAt: (index: number) => boolean;
+  /** Same as the "Pegar" button / E key (T-132). */
+  pickUpNearest: () => boolean;
 }
 
 declare global {
@@ -198,6 +200,8 @@ const ROOM_CLEAR_AUTO_ADVANCE_MS = 1200;
 /** Click/tap pickup: collect at once within this reach, else walk to it. */
 const DROP_CLICK_REACH = 70;
 const DROP_WALK_ARRIVE = 40;
+/** "Pegar" button / E key (T-132): search radius for the nearest ground item. */
+const DROP_NEAREST_SEARCH_RADIUS = 180;
 const DROP_HIT_SIZE = 44;
 const GROUND_DROP_TAG_OFFSET_Y = 26;
 const GROUND_DROP_TAG_COLORS: Record<Rarity, string> = {
@@ -418,6 +422,9 @@ export class DungeonScene extends Phaser.Scene {
         soundManager.play('ui_click');
         this.updateHud(this.elapsedTimeMs);
       },
+      onPickupNearest: () => {
+        this.pickUpNearestDrop();
+      },
     });
 
     this.inventoryModal = new InventoryModal(this, {
@@ -528,6 +535,7 @@ export class DungeonScene extends Phaser.Scene {
           const drop = this.groundDrops[index];
           return drop ? this.handleDropClick(drop) : false;
         },
+        pickUpNearest: () => this.pickUpNearestDrop(),
       };
     }
   }
@@ -2635,7 +2643,10 @@ export class DungeonScene extends Phaser.Scene {
         })),
     };
 
+    const nearestDrop = this.findNearestDrop();
     const snapshot: HudSnapshot = {
+      pickupAvailable: Boolean(nearestDrop),
+      pickupRarity: nearestDrop?.item.rarity,
       hp: this.hero.stats.hp,
       maxHp: this.hero.stats.maxHp,
       souls: this.hero.souls,
@@ -3086,6 +3097,29 @@ export class DungeonScene extends Phaser.Scene {
     this.pickupLastPos = undefined;
     this.pickupStuckMs = 0;
     return true;
+  }
+
+  /** Nearest ground item to the hero's feet within the search radius. */
+  private findNearestDrop(): GroundDrop | undefined {
+    if (!this.hero) {
+      return undefined;
+    }
+    let best: GroundDrop | undefined;
+    let bestDist = DROP_NEAREST_SEARCH_RADIUS;
+    for (const drop of this.groundDrops) {
+      const dist = distanceBetween(this.hero.position, drop.position);
+      if (dist <= bestDist) {
+        best = drop;
+        bestDist = dist;
+      }
+    }
+    return best;
+  }
+
+  /** "Pegar" button / E key: same as clicking the nearest item in range. */
+  private pickUpNearestDrop(): boolean {
+    const drop = this.findNearestDrop();
+    return drop ? this.handleDropClick(drop) : false;
   }
 
   private cancelPickupWalk(): void {
