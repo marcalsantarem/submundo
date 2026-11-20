@@ -90,7 +90,6 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 &
           };
         };
         heroSprite?: { texture: { key: string } };
-        testArenaRoom?: { x: number; y: number; width: number; height: number };
         testArenaObjects?: unknown[];
         textures: {
           exists: (k: string) => boolean;
@@ -167,14 +166,13 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 &
         textures,
         dungeonTextures,
         torchAnimFrames,
-        room: scene.testArenaRoom
-          ? {
-              x: scene.testArenaRoom.x,
-              y: scene.testArenaRoom.y,
-              width: scene.testArenaRoom.width,
-              height: scene.testArenaRoom.height,
-            }
-          : null,
+        // T-128: the testArena renders the procedural map (generateDungeonMap).
+        map: (() => {
+          const m = dbg.getDungeonMap();
+          return m
+            ? { mode: m.mode, cols: m.cols, rows: m.rows, zones: m.zones.length, rooms: m.rooms.length }
+            : null;
+        })(),
         roomObjectCount: scene.testArenaObjects?.length ?? 0,
         animLengths,
         wave1Monsters,
@@ -201,13 +199,15 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 &
     }
     expect(wave1AndAssets.torchAnimFrames).toBe(4);
 
-    expect(wave1AndAssets.room).not.toBeNull();
+    expect(wave1AndAssets.map).not.toBeNull();
     expect(wave1AndAssets.roomObjectCount).toBeGreaterThan(0);
-    // Continuous 3-room map (Decision #19): the room lives in world space and the
-    // camera follows the hero, so only sanity-check its size here.
-    const room0 = wave1AndAssets.room!;
-    expect(room0.width).toBeGreaterThan(0);
-    expect(room0.height).toBeGreaterThan(0);
+    // New map (Decision #20, T-127/T-128): default `?map=rooms`, 3 zones (waves 1-3).
+    const map0 = wave1AndAssets.map!;
+    expect(map0.mode).toBe('rooms');
+    expect(map0.zones).toBe(3);
+    expect(map0.rooms).toBeGreaterThanOrEqual(3);
+    expect(map0.cols).toBeGreaterThan(0);
+    expect(map0.rows).toBeGreaterThan(0);
     // Sample the central screen area (camera centred on the hero inside room 1).
     const room = { x: 160, y: 120, width: 640, height: 300 };
 

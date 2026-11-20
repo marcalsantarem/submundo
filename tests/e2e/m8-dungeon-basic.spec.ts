@@ -1,34 +1,32 @@
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
+import type { DungeonMap, MapCorridor } from '../../src/core/dungeon/DungeonMap';
 import { DESKTOP_VIEWPORT, assertLandscapeCanvas } from './helpers/landscape';
 import {
+  TILE,
+  type ArenaState,
+  type XY,
+  doorOutward,
+  doorPoint,
   expectNoErrors,
+  expectTestFinished,
   getArenaState,
-  getExitDoorX,
-  getRoomGeos,
+  getMap,
+  healHero,
   holdKeyUntil,
   killAllMonsters,
   waitForTestArena,
-  walkToX,
+  walkFeetTo,
 } from './helpers/testDungeon';
 
-// Evidence lives in the repo (BRF-129 / BRF-134).
+// T-130 (BRF-141): new procedural map of the testArena (Decision #20, T-127/T-128).
 const SCREENSHOT_DIR = join(process.cwd(), 'docs', 'qa', 'screenshots');
-const SEED = 7;
-
-async function waitDoorOpen(page: Page, index: number): Promise<void> {
-  await page.waitForFunction(
-    (i) =>
-      (
-        window.__SUBMUNDO_DEBUG__?.scene as unknown as {
-          testDoorOpenFlags?: boolean[];
-        }
-      )?.testDoorOpenFlags?.[i] === true,
-    index,
-    { timeout: 10000 }
-  );
-}
+const EXPECTED_WAVES = [
+  ['slime', 'wolf'],
+  ['skeleton', 'skeleton_archer'],
+  ['skeleton_chief'],
+];
 
 async function shot(page: Page, name: string): Promise<void> {
   const p = join(SCREENSHOT_DIR, name);
@@ -37,188 +35,215 @@ async function shot(page: Page, name: string): Promise<void> {
   expect(statSync(p).size).toBeGreaterThan(1024);
 }
 
-test.describe('SUBMUNDO M8 — dungeon de teste em mapa contínuo (3 salas, PC 960x540)', () => {
-  test(`seed=${SEED}: 3 salas, ondas 1-3, porta selada, caminhada pelo corredor e "Teste finalizado"`, async ({
-    page,
-  }) => {
-    test.setTimeout(300000);
-    mkdirSync(SCREENSHOT_DIR, { recursive: true });
+function trackErrors(page: Page) {
+  const errors = { consoleErrors: [] as string[], pageErrors: [] as string[], notFoundUrls: [] as string[] };
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.consoleErrors.push(msg.text());
+  });
+  page.on('pageerror', (err) => errors.pageErrors.push(err.message));
+  page.on('response', (res) => {
+    if (res.status() === 404) errors.notFoundUrls.push(res.url());
+  });
+  return errors;
+}
 
-    const errors = { consoleErrors: [] as string[], pageErrors: [] as string[], notFoundUrls: [] as string[] };
-    page.on('console', (msg) => {
-      if (msg.type() === 'error') errors.consoleErrors.push(msg.text());
+/** A corridor bends when its 2-wide path spans more than 2 columns AND more than 2 rows. */
+function isCurved(c: MapCorridor): boolean {
+  return new Set(c.cells.map((x) => x.col)).size > 2 && new Set(c.cells.map((x) => x.row)).size > 2;
+}
+
+function triggerTarget(map: DungeonMap, zone: number): XY {
+  const r = map.zones[zone].trigger[0];
+  return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+}
+
+async function waitZone(page: Page, zone: number): Promise<ArenaState> {
+  await page.waitForFunction(
+    (z) => {
+      const d = window.__SUBMUNDO_DEBUG__!;
+      return d.getActiveZoneIndex() === z && d.getMonsters().length > 0;
+    },
+    zone,
+    { timeout: 10000 }
+  );
+  return getArenaState(page);
+}
+
+function expectWave(s: ArenaState, zone: number): void {
+  expect(s.zoneIndex).toBe(zone);
+  expect(s.wave).toBe(zone + 1);
+  expect(s.finished).toBe(false);
+  expect([...new Set(s.monsters)].sort()).toEqual(EXPECTED_WAVES[zone]);
+  expect(s.aliveMonsters).toBe(s.monsters.length);
+}
+
+/** Clears zone `zone` (debug) and waits for its exit doors to unseal. */
+async function clearZone(page: Page, map: DungeonMap, zone: number): Promise<void> {
+  await killAllMonsters(page);
+  const exits = map.zones[zone].exitDoorIds;
+  await page.waitForFunction(
+    (ids) => {
+      const sealed = window.__SUBMUNDO_DEBUG__!.getSealedDoorIds();
+      return ids.every((id) => !sealed.includes(id));
+    },
+    exits,
+    { timeout: 10000 }
+  );
+}
+
+for (const SEED of [101, 606]) {
+  test.describe(`SUBMUNDO M8 — mapa novo modo rooms seed=${SEED} (PC 960x540)`, () => {
+    test(`seed=${SEED}: porta selada segura o herói, caminhada por teclado 0→1→2, ondas 1→2→3 e "Teste finalizado"`, async ({
+      page,
+    }) => {
+      test.setTimeout(420000);
+      mkdirSync(SCREENSHOT_DIR, { recursive: true });
+      const errors = trackErrors(page);
+      const captures = SEED === 101;
+
+      await page.setViewportSize(DESKTOP_VIEWPORT);
+      await page.goto(`/?map=rooms&seed=${SEED}`);
+      await waitForTestArena(page);
+      await assertLandscapeCanvas(page, DESKTOP_VIEWPORT);
+
+      // --- Map structure
+      const map = await getMap(page);
+      expect(map.mode).toBe('rooms');
+      expect(map.seed).toBe(SEED);
+      expect(map.zones.map((z) => z.wave)).toEqual([1, 2, 3]);
+      expect(map.zones.map((z) => z.isBossZone)).toEqual([false, false, true]);
+      expect(map.zones[0].entryDoorIds).toEqual([]);
+      expect(map.zones[2].exitDoorIds).toEqual([]);
+      expect(map.doors.some((d) => d.side === 'e' || d.side === 'w')).toBe(true);
+      expect(map.corridors.some(isCurved)).toBe(true);
+
+      const s0 = await getArenaState(page);
+      expect(s0).toMatchObject({ seed: SEED, mode: 'rooms' });
+      expectWave(s0, 0);
+      for (const banned of ['cave_bat', 'wolf_alpha', 'karnak']) {
+        expect(s0.monsters).not.toContain(banned);
+      }
+      // Exit doors are born sealed (all zones); no entry door is sealed yet.
+      const allExits = map.zones.flatMap((z) => z.exitDoorIds);
+      expect([...s0.sealedDoorIds].sort()).toEqual([...allExits].sort());
+
+      // --- Sealed exit door of zone 0: pushing against it keeps the hero inside
+      const exitDoor = map.doors.find((d) => d.id === map.zones[0].exitDoorIds[0])!;
+      const dp = doorPoint(exitDoor);
+      const out = doorOutward(exitDoor);
+      const proj = (f: XY) => (f.x - dp.x) * out.x + (f.y - dp.y) * out.y;
+      // Feet 40 px inside the room, in front of the opening.
+      await healHero(page);
+      await walkFeetTo(page, { x: dp.x - out.x * 40, y: dp.y - out.y * 40 }, {
+        onWaypoint: () => healHero(page),
+      });
+      const pushKey = { n: 'ArrowUp', s: 'ArrowDown', e: 'ArrowRight', w: 'ArrowLeft' }[exitDoor.side];
+      const atWall = await holdKeyUntil(page, pushKey, (s) => proj(s.feet) > -24, 20000);
+      expect(atWall.ok).toBe(true);
+      const sealed = await holdKeyUntil(page, pushKey, (s) => proj(s.feet) > 2 || s.zoneIndex !== 0, 2500);
+      expect(sealed.ok).toBe(false);
+      expect(sealed.state.zoneIndex).toBe(0);
+      expect(proj(sealed.state.feet)).toBeLessThanOrEqual(2);
+      expect(proj(sealed.state.feet)).toBeGreaterThan(-30); // it really reached the door
+      expect(sealed.state.sealedDoorIds).toContain(exitDoor.id);
+      if (captures && (exitDoor.side === 'e' || exitDoor.side === 'w')) {
+        await page.waitForTimeout(150);
+        await shot(page, 'm8_map_porta_lateral.png');
+      }
+
+      // --- Zone 0 -> 1 -> 2 by keyboard
+      const zoneSeq: number[] = [0];
+      const waveSeq: number[] = [s0.wave];
+      let curveShot = !captures;
+      const curved = new Set(
+        map.corridors.filter(isCurved).flatMap((c) => c.cells.map((x) => x.row * map.cols + x.col))
+      );
+
+      for (const zone of [1, 2]) {
+        await clearZone(page, map, zone - 1);
+        expect((await getArenaState(page)).zoneIndex).toBe(zone - 1);
+        await walkFeetTo(page, triggerTarget(map, zone), {
+          timeoutMs: 180000,
+          onWaypoint: async (p, i) => {
+            await healHero(page);
+            const k = Math.floor(p.y / TILE) * map.cols + Math.floor(p.x / TILE);
+            if (!curveShot && i > 0 && curved.has(k) && map.cells[k] === 2) {
+              curveShot = true;
+              // The waypoint is a corner of the path inside a curved corridor (its bend).
+              await page.waitForTimeout(150);
+              await shot(page, 'm8_map_corredor_curva.png');
+            }
+          },
+        });
+        const s = await waitZone(page, zone);
+        expectWave(s, zone);
+        // The entry doors of the new zone seal behind the hero.
+        for (const id of map.zones[zone].entryDoorIds) expect(s.sealedDoorIds).toContain(id);
+        zoneSeq.push(s.zoneIndex);
+        waveSeq.push(s.wave);
+      }
+      expect(zoneSeq).toEqual([0, 1, 2]);
+      expect(waveSeq).toEqual([1, 2, 3]);
+      expect(curveShot).toBe(true);
+
+      // --- Clear the boss zone -> "Teste finalizado"
+      await killAllMonsters(page);
+      await expectTestFinished(page);
+      if (captures) await shot(page, 'm8_map_teste_finalizado.png');
+
+      expectNoErrors(errors);
     });
-    page.on('pageerror', (err) => errors.pageErrors.push(err.message));
-    page.on('response', (res) => {
-      if (res.status() === 404) errors.notFoundUrls.push(res.url());
-    });
+  });
+}
+
+test.describe('SUBMUNDO M8 — mapa novo modo giant seed=707 (PC 960x540)', () => {
+  test('seed=707: zonas ativam ao pisar no trigger, ondas 1→2→3 e "Teste finalizado"', async ({ page }) => {
+    test.setTimeout(420000);
+    mkdirSync(SCREENSHOT_DIR, { recursive: true });
+    const errors = trackErrors(page);
 
     await page.setViewportSize(DESKTOP_VIEWPORT);
-    await page.goto(`/?seed=${SEED}`);
+    await page.goto('/?map=giant&seed=707');
     await waitForTestArena(page);
     await assertLandscapeCanvas(page, DESKTOP_VIEWPORT);
 
-    // --- 3 rooms, wave composition, stacked vertically (room 1 at the bottom)
-    const layout = await page.evaluate(() => {
-      const d = window.__SUBMUNDO_DEBUG__!;
-      return {
-        rooms: d.getTestRooms().map((r) => ({
-          index: r.index,
-          wave: r.wave,
-          isBossRoom: r.isBossRoom,
-          defIds: [...new Set(r.spawns.map((s) => s.defId))].sort(),
-          hasExit: r.exitDoorCols !== null,
-          hasEntry: r.entryDoorCols !== null,
-        })),
-        origins: d.getTestRoomWorldOrigins(),
-        roomIndexApi: d.getTestRoomIndex(),
-      };
-    });
-    expect(layout.rooms).toEqual([
-      { index: 0, wave: 1, isBossRoom: false, defIds: ['slime', 'wolf'], hasExit: true, hasEntry: false },
-      { index: 1, wave: 2, isBossRoom: false, defIds: ['skeleton', 'skeleton_archer'], hasExit: true, hasEntry: true },
-      { index: 2, wave: 3, isBossRoom: true, defIds: ['skeleton_chief'], hasExit: false, hasEntry: true },
-    ]);
-    expect(layout.origins).toHaveLength(3);
-    expect(layout.origins[0].y).toBeGreaterThan(layout.origins[1].y);
-    expect(layout.origins[1].y).toBeGreaterThan(layout.origins[2].y);
-    expect(layout.roomIndexApi).toBe(0);
-
-    const s0 = await getArenaState(page);
-    expect(s0).toMatchObject({ seed: SEED, roomIndex: 0, wave: 1, finished: false });
-    expect([...new Set(s0.monsters)].sort()).toEqual(['slime', 'wolf']);
-    for (const banned of ['cave_bat', 'wolf_alpha', 'karnak']) {
-      expect(s0.monsters).not.toContain(banned);
+    const map = await getMap(page);
+    expect(map.mode).toBe('giant');
+    expect(map.seed).toBe(707);
+    expect(map.rooms).toHaveLength(1);
+    expect(map.doors).toEqual([]);
+    expect(map.zones.map((z) => z.wave)).toEqual([1, 2, 3]);
+    for (const z of map.zones) {
+      expect(z.entryDoorIds).toEqual([]);
+      expect(z.exitDoorIds).toEqual([]);
     }
 
-    await page.waitForTimeout(300);
-    await shot(page, 'm8_pc_sala1.png');
+    const s0 = await getArenaState(page);
+    expect(s0).toMatchObject({ seed: 707, mode: 'giant' });
+    expectWave(s0, 0);
+    expect(s0.sealedDoorIds).toEqual([]);
 
-    const geos = await getRoomGeos(page);
-    const door0X = (await getExitDoorX(page, 0))!;
-    const door1X = (await getExitDoorX(page, 1))!;
-    expect(door0X).not.toBeNull();
-    expect(door1X).not.toBeNull();
-
-    // --- Sealed door: pushing up against it keeps the hero in room 1
-    // Walk speed depends on headless frame pacing, so first reach the wall
-    // (condition-driven), then keep pushing and confirm nothing gives way.
-    await walkToX(page, door0X);
-    const atWall = await holdKeyUntil(
-      page,
-      'ArrowUp',
-      (s) => s.roomIndex !== 0 || s.hero.y <= geos[0].minY + 2,
-      25000
-    );
-    expect(atWall.ok).toBe(true);
-    const sealed = await holdKeyUntil(
-      page,
-      'ArrowUp',
-      (s) => s.roomIndex !== 0 || s.hero.y < geos[0].minY - 4,
-      2000
-    );
-    expect(sealed.ok).toBe(false);
-    expect(sealed.state.roomIndex).toBe(0);
-    expect(sealed.state.hero.y).toBeGreaterThanOrEqual(geos[0].minY - 2);
-    expect(sealed.state.hero.y).toBeLessThanOrEqual(geos[0].minY + 10); // it did reach the wall
-
-    // --- Clear room 1, walk through the door into the corridor
-    await killAllMonsters(page);
-    await waitDoorOpen(page, 0);
-    expect((await getArenaState(page)).roomIndex).toBe(0);
-
-    await walkToX(page, door0X);
-    const inCorridor = await holdKeyUntil(
-      page,
-      'ArrowUp',
-      (s) => s.hero.y < geos[0].y - 4,
-      60000
-    );
-    expect(inCorridor.ok).toBe(true);
-    expect(inCorridor.state.roomIndex).toBe(0); // still in the corridor, wave 2 not spawned
-    expect(inCorridor.state.wave).toBe(1);
-    expect(inCorridor.state.hero.y).toBeGreaterThan(geos[1].y + geos[1].height - 40);
-    await page.waitForTimeout(150);
-    await shot(page, 'm8_pc_corredor.png');
-
-    // --- Walk into room 2: wave 2 spawns (skeleton + skeleton_archer)
-    const enter1 = await holdKeyUntil(page, 'ArrowUp', (s) => s.roomIndex === 1, 60000);
-    expect(enter1.ok).toBe(true);
-    await page.waitForFunction(
-      () => (window.__SUBMUNDO_DEBUG__?.getMonsters().length ?? 0) > 0,
-      undefined,
-      { timeout: 5000 }
-    );
-    const s1 = await getArenaState(page);
-    expect(s1).toMatchObject({ roomIndex: 1, wave: 2, finished: false });
-    expect([...new Set(s1.monsters)].sort()).toEqual(['skeleton', 'skeleton_archer']);
-    expect(s1.aliveMonsters).toBe(s1.monsters.length);
-    expect(await page.evaluate(() => window.__SUBMUNDO_DEBUG__!.getTestRoomIndex())).toBe(1);
-
-    // --- Clear room 2 and walk to room 3: wave 3 (skeleton_chief only)
-    await killAllMonsters(page);
-    await waitDoorOpen(page, 1);
-    // Step clear of the (now sealed) entry before steering sideways.
-    await holdKeyUntil(page, 'ArrowUp', (s) => s.hero.y < geos[1].maxY - 40, 15000);
-    await walkToX(page, door1X);
-    const enter2 = await holdKeyUntil(page, 'ArrowUp', (s) => s.roomIndex === 2, 60000);
-    expect(enter2.ok).toBe(true);
-    await page.waitForFunction(
-      () => (window.__SUBMUNDO_DEBUG__?.getMonsters().length ?? 0) > 0,
-      undefined,
-      { timeout: 5000 }
-    );
-    const s2 = await getArenaState(page);
-    expect(s2).toMatchObject({ roomIndex: 2, wave: 3, finished: false });
-    expect(s2.monsters).toEqual(['skeleton_chief']);
-
-    // --- Clear room 3 -> "Teste finalizado"
-    await killAllMonsters(page);
-    await page.waitForFunction(
-      () =>
-        (window.__SUBMUNDO_DEBUG__?.scene as unknown as { testArenaFinished?: boolean })
-          ?.testArenaFinished === true,
-      undefined,
-      { timeout: 15000 }
-    );
-    await page.waitForTimeout(500); // overlay fade-in
-
-    const finish = await page.evaluate(() => {
-      type GO = {
-        type: string;
-        text?: string;
-        visible?: boolean;
-        alpha?: number;
-        list?: GO[];
-        parentContainer?: GO | null;
-      };
-      const scene = window.__SUBMUNDO_DEBUG__!.scene as unknown as {
-        testArenaFinished: boolean;
-        children: { list: GO[] };
-      };
-      const found: GO[] = [];
-      const walk = (objs: GO[]) => {
-        for (const o of objs) {
-          if (o.type === 'Text' && o.text === 'Teste finalizado') found.push(o);
-          if (o.list) walk(o.list);
-        }
-      };
-      walk(scene.children.list);
-      const t = found[0];
-      let effAlpha = t ? t.alpha ?? 1 : 0;
-      let visible = t ? t.visible !== false : false;
-      for (let p = t?.parentContainer; p; p = p.parentContainer) {
-        effAlpha *= p.alpha ?? 1;
-        visible = visible && p.visible !== false;
+    for (const zone of [1, 2]) {
+      await killAllMonsters(page);
+      await page.waitForTimeout(400);
+      // Not inside the next trigger yet: the next wave has not spawned.
+      expect((await getArenaState(page)).zoneIndex).toBe(zone - 1);
+      await walkFeetTo(page, triggerTarget(map, zone), {
+        timeoutMs: 180000,
+        onWaypoint: () => healHero(page),
+      });
+      const s = await waitZone(page, zone);
+      expectWave(s, zone);
+      const f = s.feet;
+      expect(map.zones[zone].trigger.some((t) => f.x > t.x && f.x < t.x + t.w && f.y > t.y && f.y < t.y + t.h)).toBe(true);
+      if (zone === 1) {
+        await page.waitForTimeout(300);
+        await shot(page, 'm8_map_sala_gigante.png');
       }
-      return { finished: scene.testArenaFinished, textCount: found.length, visible, effAlpha };
-    });
-    expect(finish.finished).toBe(true);
-    expect(finish.textCount).toBe(1);
-    expect(finish.visible).toBe(true);
-    expect(finish.effAlpha).toBeGreaterThan(0.95);
-    await shot(page, 'm8_pc_teste_finalizado.png');
+    }
 
+    await killAllMonsters(page);
+    await expectTestFinished(page);
     expectNoErrors(errors);
   });
 });
