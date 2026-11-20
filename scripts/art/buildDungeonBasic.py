@@ -41,6 +41,8 @@ TILES_PNG = SPRITES_DIR / "dungeon_basic_tiles.png"
 PROPS_PNG = SPRITES_DIR / "dungeon_basic_props.png"
 PROPS_TALL_PNG = SPRITES_DIR / "dungeon_basic_props_tall.png"
 PREVIEW_PNG = MOCKUPS_DIR / "preview_m8_dungeon_basic_sheets.png"
+DOORS_PNG = SPRITES_DIR / "dungeon_basic_doors.png"
+DOORS_PREVIEW_PNG = MOCKUPS_DIR / "preview_m8_dungeon_doors_corridors.png"
 
 T = 32
 Color = Tuple[int, int, int, int]
@@ -1206,6 +1208,523 @@ def compose_sample(tiles, props, tall) -> Canvas:
 
 
 # ---------------------------------------------------------------------------
+# BRF-135 / T-126 (Decisao #20): portas em todas as paredes, corredores com
+# curva e salas nao retangulares -> sheet novo dungeon_basic_doors.png
+# ---------------------------------------------------------------------------
+#
+# Autotile das tampas ("cap"): cada celula de parede que nao e face olha os
+# 8 vizinhos. R = piso ou face (inclui porta norte). Uma borda recebe aro
+# quando o vizinho ortogonal e R; um canto recebe "ponto" (aro de quina)
+# quando so o vizinho diagonal e R. Nome = cap_<bordas em ordem n,e,s,w>
+# [_d<diagonal>...]. Os casos que ja existem no sheet de tiles mantem o nome
+# antigo (CAP_LOOKUP abaixo).
+
+SEAL_FILL: RGB = (11, 6, 24)  # 0x0b0618 (selo da cena)
+SEAL_RING: RGB = (192, 132, 252)  # #c084fc
+SEAL_CORE: RGB = (233, 213, 255)  # #e9d5ff
+SEAL_GLOW: RGB = (168, 85, 247)  # #a855f7
+SLOT0, SLOT1 = 19, 45  # abertura das portas (igual ao vao do arco norte: x 19..44 em 64 px)
+
+DOT_PATTERN = (((29, 29), SIDE_RIM_LO), ((30, 29), SIDE_RIM_LO), ((31, 29), SIDE_RIM_LO),
+               ((29, 30), SIDE_RIM_LO), ((29, 31), SIDE_RIM_LO), ((30, 30), SIDE_RIM),
+               ((31, 30), SIDE_RIM), ((30, 31), SIDE_RIM), ((31, 31), RIM))
+
+
+def corner_dot(cv: Canvas, diag: str) -> None:
+    for (x, y), c in DOT_PATTERN:
+        xx = x if "e" in diag else T - 1 - x
+        yy = y if "s" in diag else T - 1 - y
+        cv.put(xx, yy, rgba(c))
+
+
+def tile_cap_combo(edges: str, dots: Sequence[str], seed: int) -> Canvas:
+    cv = cap_base(seed)
+    for e in "nswe":  # mesma ordem dos corner_out_* existentes
+        if e in edges:
+            {"n": rim_n, "s": rim_s, "w": rim_w, "e": rim_e}[e](cv)
+    for d in dots:
+        corner_dot(cv, d)
+    return cv
+
+
+CAP_COMBOS: Sequence[Tuple[str, Sequence[str]]] = (
+    ("ns", ()), ("ew", ()), ("nes", ()), ("esw", ()), ("nsw", ()), ("new", ()), ("nesw", ()),
+    ("n", ("se",)), ("n", ("sw",)), ("s", ("ne",)), ("s", ("nw",)),
+    ("e", ("nw",)), ("e", ("sw",)), ("w", ("ne",)), ("w", ("se",)),
+    ("", ("ne", "nw")), ("", ("se", "sw")), ("", ("ne", "se")), ("", ("nw", "sw")),
+)
+
+
+def cap_name(edges: str, dots: Sequence[str]) -> str:
+    return "cap_" + "_".join(([edges] if edges else []) + ["d" + d for d in dots])
+
+
+# (bordas, pontos) -> (sheet, frame). Bordas na ordem n,e,s,w; pontos ordenados.
+CAP_LOOKUP: Dict[Tuple[str, Tuple[str, ...]], Tuple[str, str]] = {
+    ("", ()): ("tiles", "wall_top"),
+    ("s", ()): ("tiles", "wall_top_s"),
+    ("e", ()): ("tiles", "wall_side_l"),
+    ("w", ()): ("tiles", "wall_side_r"),
+    ("n", ()): ("tiles", "wall_bottom"),
+    ("", ("se",)): ("tiles", "corner_in_tl"),
+    ("", ("sw",)): ("tiles", "corner_in_tr"),
+    ("", ("ne",)): ("tiles", "corner_in_bl"),
+    ("", ("nw",)): ("tiles", "corner_in_br"),
+    ("nw", ()): ("tiles", "corner_out_tl"),
+    ("ne", ()): ("tiles", "corner_out_tr"),
+    ("sw", ()): ("tiles", "corner_out_bl"),
+    ("es", ()): ("tiles", "corner_out_br"),
+}
+for _e, _d in CAP_COMBOS:
+    CAP_LOOKUP[(_e, tuple(sorted(_d)))] = ("doors", cap_name(_e, _d))
+
+
+def rim_v(cv: Canvas, x_out: int, inward: int, y0: int, y1: int) -> None:
+    """Aro vertical de 3 px (igual a rim_e/rim_w) na coluna x_out, voltado para fora."""
+    for y in range(y0, y1):
+        cv.put(x_out, y, rgba(SIDE_RIM_LO))
+        cv.put(x_out + inward, y, rgba(SIDE_RIM if y % 11 else RIM))
+        cv.put(x_out + 2 * inward, y, rgba(SIDE_RIM_LO))
+
+
+def rim_h_n(cv: Canvas, y_out: int, x0: int, x1: int) -> None:
+    """Aro horizontal fino (igual a rim_n) com a borda externa em y_out (voltado para cima)."""
+    for x in range(x0, x1):
+        cv.put(x, y_out, rgba(SIDE_RIM_LO))
+        cv.put(x, y_out + 1, rgba(SIDE_RIM if x % 7 else RIM))
+        cv.put(x, y_out + 2, rgba(SIDE_RIM_LO))
+
+
+def floor_patch(w: int, h: int, seed: int) -> Canvas:
+    cv = Canvas(w, h)
+    variants = ("a", "b", "c")
+    for ty in range(0, h, T):
+        for tx in range(0, w, T):
+            k = (tx // T) + (ty // T) * 3
+            blit(cv, tile_floor(variants[k % 3], seed + k), tx, ty)
+    return cv
+
+
+def front_face(cv: Canvas, x0: int, x1: int, y0: int, y1: int, rng: random.Random) -> None:
+    """Face frontal curta (2.5D) de um batente: tijolo miudo + aresta clara + base escura."""
+    for y in range(y0, y1):
+        for x in range(x0, x1):
+            yin = (y - y0) % 4
+            xm = (x + (2 if ((y - y0) // 4) % 2 else 0)) % 8
+            base = (50, 48, 60) if ((x // 8) + (y // 4)) % 2 else (45, 43, 55)
+            col = BRICK_MORTAR if (yin == 0 or xm == 0) else base
+            if y == y0:
+                col = (70, 70, 84)
+            elif y == y1 - 1:
+                col = (14, 14, 18)
+            elif col != BRICK_MORTAR and rng.random() < 0.1:
+                col = shade(col, 0.86)
+            cv.put(x, y, rgba(col))
+
+
+def apply_seal(cv: Canvas, inside: Callable[[int, int], bool], cx: float, cy: float, r: float) -> None:
+    """Selo runico roxo translucido (mesmo desenho do buildTestSeal da cena)."""
+    for y in range(cv.h):
+        for x in range(cv.w):
+            if inside(x, y):
+                cv.blend_pixel(x, y, rgba(SEAL_FILL, 205))
+    for y in range(cv.h):
+        for x in range(cv.w):
+            d = math.hypot(x + 0.5 - cx, y + 0.5 - cy)
+            if inside(x, y) and d < r * 1.7:
+                cv.blend_pixel(x, y, rgba(SEAL_GLOW, int(70 * (1 - d / (r * 1.7)))))
+    for y in range(cv.h):
+        for x in range(cv.w):
+            d = math.hypot(x + 0.5 - cx, y + 0.5 - cy)
+            if abs(d - r) < 0.72:
+                cv.put(x, y, rgba(SEAL_RING))
+            elif abs(d - r) < 1.25:
+                cv.blend_pixel(x, y, rgba(SEAL_GLOW, 120))
+            elif abs(d - r * 0.6) < 0.6:
+                cv.put(x, y, rgba(SEAL_CORE))
+    for k in range(8):
+        a = k * math.pi / 4
+        for i in range(12):
+            t = 0.7 + (1.15 - 0.7) * i / 11
+            cv.put(int(math.floor(cx + math.cos(a) * r * t)), int(math.floor(cy + math.sin(a) * r * t)),
+                   rgba(SEAL_CORE if t < 0.9 else SEAL_RING))
+    for i in range(-int(r * 0.4), int(r * 0.4) + 1):
+        cv.put(int(math.floor(cx + i)), int(math.floor(cy)), rgba(SEAL_CORE))
+    for i in range(-int(r * 0.3), int(r * 0.5) + 1):
+        cv.put(int(math.floor(cx)), int(math.floor(cy + i)), rgba(SEAL_CORE))
+    cv.put(int(math.floor(cx)), int(math.floor(cy)), rgba((255, 255, 255)))
+
+
+def door_opening(x: int, y: int) -> bool:
+    dx = x + 0.5 - 31.5
+    return (abs(dx) < 12.5 and y >= 27) or (math.hypot(dx, y + 0.5 - 27.0) < 12.5 and y < 27)
+
+
+def build_door_sealed() -> Canvas:
+    cv = build_door()
+    apply_seal(cv, door_opening, 31.5, 38.0, 10.0)
+    return cv
+
+
+def build_door_n_link() -> Canvas:
+    """Tampa sobre o arco norte quando um corredor continua para o norte (64x32)."""
+    cv = Canvas(64, T)
+    blit(cv, cap_base(9401), 0, 0)
+    blit(cv, cap_base(9402), 32, 0)
+    fl = floor_patch(64, T, 9403)
+    for y in range(T):
+        f = 0.92 - 0.55 * (y / (T - 1))  # escurece rumo ao vao do arco
+        for x in range(SLOT0, SLOT1):
+            c = fl.get(x, y)
+            cv.put(x, y, rgba(shade(c[:3], f)))
+    # sombra dos blocos sobre a passagem
+    for y in range(T):
+        for x, f in ((SLOT0, 0.45), (SLOT0 + 1, 0.7), (SLOT1 - 1, 0.6), (SLOT1 - 2, 0.82)):
+            c = cv.get(x, y)
+            cv.put(x, y, rgba(shade(c[:3], f)))
+    rim_h_n(cv, 0, 0, SLOT0)
+    rim_h_n(cv, 0, SLOT1, 64)
+    for x0, x1 in ((0, SLOT0), (SLOT1, 64)):
+        for x in range(x0, x1):
+            cv.put(x, 28, rgba(shade(cv.get(x, 28)[:3], 0.8)))
+            cv.put(x, 29, rgba(SIDE_RIM_LO))
+            cv.put(x, 30, rgba(RIM if x % 9 else RIM_HI))
+            cv.put(x, 31, rgba(RIM_LO))
+    rim_v(cv, SLOT0 - 1, -1, 0, T)
+    rim_v(cv, SLOT1, 1, 0, T)
+    draw_rune(cv, 7, 12, RUNE_GLYPHS[1], False)
+    draw_rune(cv, 54, 12, RUNE_GLYPHS[3], False)
+    return cv
+
+
+def build_door_s(sealed: bool) -> Canvas:
+    """Porta na parede sul (abertura no wall_bottom, 64x32)."""
+    cv = Canvas(64, T)
+    rng = random.Random(9501)
+    blit(cv, cap_base(9502), 0, 0)
+    blit(cv, cap_base(9503), 32, 0)
+    fl = floor_patch(64, T, 9504)
+    for y in range(T):
+        for x in range(SLOT0, SLOT1):
+            c = fl.get(x, y)
+            f = 0.62 if x in (SLOT0, SLOT1 - 1) else (0.8 if x in (SLOT0 + 1, SLOT1 - 2) else 0.95)
+            cv.put(x, y, rgba(shade(c[:3], f)))
+    rim_h_n(cv, 0, 0, SLOT0)
+    rim_h_n(cv, 0, SLOT1, 64)
+    rim_v(cv, SLOT0 - 1, -1, 0, 25)
+    rim_v(cv, SLOT1, 1, 0, 25)
+    # face sul dos batentes (vista 2.5D) com runas
+    front_face(cv, 0, SLOT0, 25, 32, rng)
+    front_face(cv, SLOT1, 64, 25, 32, rng)
+    for x in (SLOT0 - 1, SLOT1):
+        for y in range(25, 32):
+            cv.put(x, y, rgba((12, 12, 16)))
+    draw_rune(cv, 8, 10, RUNE_GLYPHS[2], True)
+    draw_rune(cv, 53, 10, RUNE_GLYPHS[0], True)
+    # soleira runica atravessando a passagem
+    for x in range(SLOT0 + 2, SLOT1 - 2):
+        cv.put(x, 4, rgba((58, 58, 70)))
+        cv.put(x, 5, rgba((14, 70, 98) if x % 3 else RUNE_D))
+        cv.put(x, 6, rgba((8, 8, 12)))
+    if sealed:
+        apply_seal(cv, lambda x, y: SLOT0 <= x < SLOT1, 31.5, 17.0, 10.0)
+    return cv
+
+
+def build_door_side(sealed: bool, east: bool) -> Canvas:
+    """Porta na parede oeste (east=False) ou leste (east=True): coluna 32x64 com passagem."""
+    cv = Canvas(T, 64)
+    rng = random.Random(9601 + (7 if east else 0))
+    blit(cv, cap_base(9602 + (7 if east else 0)), 0, 0)
+    blit(cv, cap_base(9603 + (7 if east else 0)), 0, 32)
+    fl = floor_patch(T, 64, 9604 + (7 if east else 0))
+    for y in range(SLOT0, SLOT1):
+        for x in range(T):
+            c = fl.get(x, y)
+            f = 0.55 if y == SLOT0 else (0.72 if y == SLOT0 + 1 else (0.86 if y < SLOT0 + 5 else 0.97))
+            cv.put(x, y, rgba(shade(c[:3], f)))
+    # batente de cima: tampa + face sul curta; batente de baixo: tampa com aro norte
+    rim_v(cv, 0, 1, 0, 12)
+    rim_v(cv, T - 1, -1, 0, 12)
+    front_face(cv, 0, T, 12, SLOT0, rng)
+    rim_v(cv, 0, 1, SLOT1, 64)
+    rim_v(cv, T - 1, -1, SLOT1, 64)
+    rim_h_n(cv, SLOT1, 0, T)
+    cv.put(0, SLOT1, rgba(SIDE_RIM_LO))
+    cv.put(T - 1, SLOT1, rgba(SIDE_RIM_LO))
+    # filete runico no piso da passagem (lado da sala)
+    fx = 6 if east else T - 7
+    for y in range(SLOT0 + 3, SLOT1 - 1):
+        cv.put(fx, y, rgba((14, 70, 98) if y % 3 else RUNE_D))
+        cv.put(fx + (1 if east else -1), y, rgba((8, 8, 12)))
+    draw_rune(cv, 14, 13, RUNE_GLYPHS[1 if east else 2], True)
+    draw_rune(cv, 14, 52, RUNE_GLYPHS[3 if east else 0], False)
+    if sealed:
+        apply_seal(cv, lambda x, y: SLOT0 <= y < SLOT1, 15.5, 32.0, 10.0)
+    return cv
+
+
+def tile_face_end(kind: str, sides: str, seed: int) -> Canvas:
+    """Face frontal que termina numa aresta (bloco convexo visto de frente)."""
+    cv = tile_face(kind, seed)
+    upper = kind == "upper"
+    for side in sides:
+        for y in range(T):
+            gy = (0 if upper else T) + y
+            course = gy // 8
+            mortar = gy % 8 == 0
+            quoin = 9 if course % 2 else 5  # pedras de cunhal alternadas (longa/curta)
+            for i in range(quoin + 1):
+                x = i if side == "l" else T - 1 - i
+                if i == 0:
+                    col = SIDE_RIM_LO
+                elif i == 1:
+                    col = (82, 82, 98) if not mortar else SIDE_RIM
+                elif i == 2:
+                    col = SIDE_RIM_LO if not mortar else BRICK_MORTAR
+                elif i == quoin:
+                    col = BRICK_MORTAR
+                else:
+                    col = BRICK_MORTAR if mortar else ((56, 55, 68) if i == 3 else (52, 51, 63))
+                if not upper and y >= 24:  # rodape
+                    col = {0: SIDE_RIM_LO, 1: (66, 66, 79), 2: (38, 38, 47)}.get(i, cv.get(x, y)[:3])
+                    if y >= 30:
+                        col = (14, 14, 18) if i else SIDE_RIM_LO
+                cv.put(x, y, rgba(col))
+    if upper:
+        overhang_shadow(cv)
+    return cv
+
+
+def build_doors_sheet() -> List[Tuple[str, Canvas]]:
+    def sub(src: Canvas, x: int, y: int) -> Canvas:
+        c = Canvas(T, T)
+        for yy in range(T):
+            for xx in range(T):
+                c.put(xx, yy, src.get(x + xx, y + yy))
+        return c
+
+    sealed = build_door_sealed()
+    link = build_door_n_link()
+    ds, dss = build_door_s(False), build_door_s(True)
+    dw, dws = build_door_side(False, False), build_door_side(True, False)
+    de, des = build_door_side(False, True), build_door_side(True, True)
+    frames: List[Tuple[str, Canvas]] = [
+        ("door_arch_sealed_l", sub(sealed, 0, 0)),
+        ("door_arch_sealed_r", sub(sealed, 32, 0)),
+        ("door_open_sealed_l", sub(sealed, 0, 32)),
+        ("door_open_sealed_r", sub(sealed, 32, 32)),
+        ("door_n_link_l", sub(link, 0, 0)),
+        ("door_n_link_r", sub(link, 32, 0)),
+        ("door_s_l", sub(ds, 0, 0)),
+        ("door_s_r", sub(ds, 32, 0)),
+        ("door_s_sealed_l", sub(dss, 0, 0)),
+        ("door_s_sealed_r", sub(dss, 32, 0)),
+        ("door_w_t", sub(dw, 0, 0)),
+        ("door_w_b", sub(dw, 0, 32)),
+        ("door_w_sealed_t", sub(dws, 0, 0)),
+        ("door_w_sealed_b", sub(dws, 0, 32)),
+        ("door_e_t", sub(de, 0, 0)),
+        ("door_e_b", sub(de, 0, 32)),
+        ("door_e_sealed_t", sub(des, 0, 0)),
+        ("door_e_sealed_b", sub(des, 0, 32)),
+        ("wall_face_upper_end_l", tile_face_end("upper", "l", 311)),
+        ("wall_face_upper_end_r", tile_face_end("upper", "r", 312)),
+        ("wall_face_upper_end_lr", tile_face_end("upper", "lr", 313)),
+        ("wall_face_lower_end_l", tile_face_end("lower", "l", 314)),
+        ("wall_face_lower_end_r", tile_face_end("lower", "r", 315)),
+        ("wall_face_lower_end_lr", tile_face_end("lower", "lr", 316)),
+    ]
+    for i, (e, d) in enumerate(CAP_COMBOS):
+        frames.append((cap_name(e, d), tile_cap_combo(e, d, 220 + i)))
+    return frames
+
+
+# ---------------------------------------------------------------------------
+# Amostra montada por autotile (valida a convencao para a cena)
+# ---------------------------------------------------------------------------
+
+def sample_map() -> Tuple[int, int, set, Dict[Tuple[int, int], str], Dict[Tuple[int, int], str]]:
+    """Retorna (W, H, piso, portas-piso, portas-face). Coordenadas em celulas."""
+    W, H = 31, 31
+    floor: set = set()
+
+    def rect(x0: int, y0: int, x1: int, y1: int) -> None:
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1):
+                floor.add((x + 1, y + 1))
+
+    rect(14, 3, 19, 6)  # sala pequena B
+    rect(2, 18, 12, 25)  # sala grande A
+    rect(19, 22, 27, 26)  # sala em L (perna de baixo)
+    rect(24, 13, 27, 21)  # sala em L (braco de cima)
+    rect(4, 13, 5, 14)  # corredor: sobe da porta norte de A
+    rect(4, 11, 17, 12)  # ... vira para a direita
+    rect(16, 8, 17, 10)  # ... sobe de novo ate a porta sul de B
+    rect(14, 23, 17, 24)  # corredor lateral A -> L
+    rect(20, 28, 21, 29)  # corredor saindo pela porta sul de L
+    # portas que sao "piso" para a regra de face/sombra (sul, oeste, leste)
+    doors: Dict[Tuple[int, int], str] = {}
+    for (x, y), n in (((16, 7), "door_s_l"), ((17, 7), "door_s_r"),
+                      ((20, 27), "door_s_l"), ((21, 27), "door_s_r"),
+                      ((13, 23), "door_e_t"), ((13, 24), "door_e_b"),
+                      ((18, 23), "door_w_sealed_t"), ((18, 24), "door_w_sealed_b")):
+        doors[(x + 1, y + 1)] = n
+    # portas norte (substituem face/tampa)
+    north: Dict[Tuple[int, int], str] = {}
+    for (x, y), n in (((4, 16), "door_arch_l"), ((5, 16), "door_arch_r"),
+                      ((4, 17), "door_open_l"), ((5, 17), "door_open_r"),
+                      ((4, 15), "door_n_link_l"), ((5, 15), "door_n_link_r"),
+                      ((16, 1), "door_arch_sealed_l"), ((17, 1), "door_arch_sealed_r"),
+                      ((16, 2), "door_open_sealed_l"), ((17, 2), "door_open_sealed_r")):
+        north[(x + 1, y + 1)] = n
+    return W, H, floor, doors, north
+
+
+def autotile_sample(W: int, H: int, floor: set, doors: Dict, north: Dict) -> Dict[Tuple[int, int], List[Tuple[str, str]]]:
+    """Camadas por celula: lista de (sheet, frame). Implementa a convencao do guia 3.3."""
+    def F(c):  # piso de verdade
+        return c in floor
+
+    face: Dict[Tuple[int, int], str] = {}
+    for y in range(H):
+        for x in range(W):
+            c = (x, y)
+            if F(c) or c in doors:
+                continue
+            if F((x, y + 1)):
+                face[c] = "lower"
+            elif not F((x, y + 1)) and (x, y + 1) not in doors and F((x, y + 2)):
+                face[c] = "upper"
+
+    def R(c):
+        return F(c) or c in face
+
+    def is_wall(c):  # bloqueia luz (gera sombra): nem piso nem porta
+        return not F(c) and c not in doors
+
+    out: Dict[Tuple[int, int], List[Tuple[str, str]]] = {}
+    for y in range(H):
+        for x in range(W):
+            c = (x, y)
+            layers: List[Tuple[str, str]] = []
+            if c in north and north[c].startswith("door_n_link"):
+                layers.append(("doors", north[c]))
+            elif c in north:
+                layers.append(("doors" if "sealed" in north[c] else "tiles", north[c]))
+            elif c in doors:
+                layers.append(("doors", doors[c]))
+            elif F(c):
+                h = (x * 73856093 ^ y * 19349663) & 0xFFFF
+                fname = ("floor_0", "floor_1", "floor_2")[h % 3]
+                if h % 23 == 0:
+                    fname = "floor_cracked"
+                elif h % 29 == 0:
+                    fname = "floor_moss"
+                elif h % 37 == 0:
+                    fname = "floor_blood"
+                above = (x, y - 1)
+                if above in north and "open" in north[above]:
+                    fname = "door_threshold_l" if north[above].endswith("_l") else "door_threshold_r"
+                layers.append(("tiles", fname))
+                n_face = above in face or above in north
+                w_wall, e_wall = is_wall((x - 1, y)), is_wall((x + 1, y))
+                if n_face and w_wall:
+                    layers.append(("tiles", "shadow_corner_l"))
+                elif n_face and e_wall:
+                    layers.append(("tiles", "shadow_corner_r"))
+                elif n_face:
+                    layers.append(("tiles", "shadow_s"))
+                elif w_wall:
+                    layers.append(("tiles", "shadow_l"))
+                elif e_wall:
+                    layers.append(("tiles", "shadow_r"))
+            elif c in face:
+                kind = face[c]
+                end = ("l" if F((x - 1, y)) else "") + ("r" if F((x + 1, y)) else "")
+                if end:
+                    layers.append(("doors", f"wall_face_{kind}_end_{end}"))
+                else:
+                    h = (x * 31 + y * 17) % 19
+                    name = f"wall_face_{kind}"
+                    if kind == "upper" and h == 3:
+                        name = "wall_face_upper_cracked"
+                    elif kind == "lower" and h == 7:
+                        name = "wall_face_lower_grate"
+                    layers.append(("tiles", name))
+            else:
+                n, e, s, w = R((x, y - 1)), R((x + 1, y)), R((x, y + 1)), R((x - 1, y))
+                edges = "".join(k for k, v in (("n", n), ("e", e), ("s", s), ("w", w)) if v)
+                dots = []
+                for dname, dx, dy, a, b in (("ne", 1, -1, n, e), ("nw", -1, -1, n, w),
+                                            ("se", 1, 1, s, e), ("sw", -1, 1, s, w)):
+                    if R((x + dx, y + dy)) and not a and not b:
+                        dots.append(dname)
+                key = (edges, tuple(sorted(dots)))
+                if key not in CAP_LOOKUP:
+                    raise RuntimeError(f"combinacao de tampa sem frame em {c}: {key}")
+                layers.append(CAP_LOOKUP[key])
+            out[c] = layers
+    return out
+
+
+def compose_doors_sample(tiles, doors_frames, props) -> Canvas:
+    W, H, floor, doors, north = sample_map()
+    lay = autotile_sample(W, H, floor, doors, north)
+    sheets = {"tiles": {n: c for n, c in tiles}, "doors": {n: c for n, c in doors_frames}}
+    pr = {n: c for n, c in props}
+    cv = Canvas(W * T, H * T, (9, 9, 11, 255))
+    for (x, y), layers in lay.items():
+        for sheet, name in layers:
+            blit(cv, sheets[sheet][name], x * T, y * T)
+    for (name, x, y) in (("torch_0", 3, 17), ("torch_2", 10, 17), ("torch_1", 8, 10), ("torch_3", 16, 22),
+                         ("torch_0", 21, 21), ("torch_2", 26, 12), ("chain", 7, 17), ("torch_1", 15, 2),
+                         ("torch_3", 19, 2)):
+        blit(cv, pr[name], x * T, y * T)
+    for (name, x, y) in (("chest_closed", 26, 15), ("bones", 9, 24), ("barrel", 3, 25), ("urn", 27, 26),
+                         ("rubble", 12, 12), ("skulls_candle", 19, 5)):
+        blit(cv, pr[name], x * T, y * T)
+    return cv
+
+
+def build_doors_preview(tiles, doors_frames, props) -> None:
+    K = 3
+    cell_w = T * K + 46
+    pad = 24
+    cols = 8
+    bg = (18, 18, 24, 255)
+    rows = math.ceil(len(doors_frames) / cols)
+    grid_h = rows * (T * K + 30)
+    sample = compose_doors_sample(tiles, doors_frames, props)
+    SK = 2
+    W = max(pad * 2 + cols * cell_w, pad * 2 + sample.w * SK)
+    H = 56 + grid_h + 44 + sample.h * SK + pad
+    cv = Canvas(W, H, bg)
+    labels: List[Dict[str, object]] = []
+    labels.append(text_item("SUBMUNDO · Masmorra Básica 2.5D — portas em todas as paredes, corredores com curva e "
+                            "salas não retangulares (BRF-135) — prancha 3×", pad, 22, 18,
+                            (241, 210, 138), "Palatino Linotype", True))
+    labels.append(text_item("dungeon_basic_doors.png — 32×32 · %d frames" % len(doors_frames),
+                            pad, 42, 13, (148, 163, 184), "Consolas", True))
+    y0 = 56
+    for i, (name, c) in enumerate(doors_frames):
+        col, row = i % cols, i // cols
+        x = pad + col * cell_w
+        y = y0 + row * (T * K + 30)
+        for yy in range(T * K):
+            for xx in range(T * K):
+                cv.put(x + xx, y + yy, (30, 30, 38, 255) if ((xx // 12) + (yy // 12)) % 2 else (24, 24, 31, 255))
+        blit(cv, upscale(c, K), x, y)
+        labels.append(text_item(f"{i}: {name}", x, y + T * K + 9, 8.6, (226, 232, 240), "Consolas"))
+    sy = y0 + grid_h + 44
+    labels.append(text_item("amostra montada por autotile (2×): sala em L, sala pequena, sala grande; corredor que "
+                            "sobe, vira à direita e sobe de novo; porta lateral, porta sul e portas seladas",
+                            pad, sy - 16, 13, (148, 163, 184), "Consolas", True))
+    blit(cv, upscale(sample, SK), pad, sy)
+    render_text_overlay(cv, labels, DOORS_PREVIEW_PNG)
+
+
+# ---------------------------------------------------------------------------
 # Manifest
 # ---------------------------------------------------------------------------
 
@@ -1240,16 +1759,21 @@ def main() -> None:
     write_png(TILES_PNG, assemble(tiles, T, T))
     write_png(PROPS_PNG, assemble(props, T, T))
     write_png(PROPS_TALL_PNG, assemble(tall, T, 64))
-    for p in (TILES_PNG, PROPS_PNG, PROPS_TALL_PNG):
+    doors = build_doors_sheet()
+    write_png(DOORS_PNG, assemble(doors, T, T))
+    for p in (TILES_PNG, PROPS_PNG, PROPS_TALL_PNG, DOORS_PNG):
         print(f"Gerado: {p}")
     update_manifest([
         ("dungeon_basic_tiles", T, T, [n for n, _ in tiles], {}),
+        ("dungeon_basic_doors", T, T, [n for n, _ in doors], {}),
         ("dungeon_basic_props", T, T, [n for n, _ in props],
          {"animations": {"torch": {"frames": [0, 1, 2, 3], "frameRate": 8, "repeat": -1}}}),
         ("dungeon_basic_props_tall", T, 64, [n for n, _ in tall], {"origin": {"x": 0.5, "y": 0.95}}),
     ])
     build_preview(tiles, props, tall)
     print(f"Gerado: {PREVIEW_PNG}")
+    build_doors_preview(tiles, doors, props)
+    print(f"Gerado: {DOORS_PREVIEW_PNG}")
 
 
 if __name__ == "__main__":
