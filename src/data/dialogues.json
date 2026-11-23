@@ -193,6 +193,62 @@
       "title": "Ato 1 — A Caçada Começa",
       "text": "Este é o Refúgio no Submundo, espelho em ruínas do lar que você perdeu. Atravesse a Fenda, abata os Generais do Inferno — começando pelo Carcereiro Infernal — e prove o valor do seu Selo.",
       "shortText": "Ato 1 iniciado: cace o Carcereiro Infernal através do Portal da Fenda."
+    },
+    "village_master_prologue_grotto": {
+      "id": "village_master_prologue_grotto",
+      "speaker": "Mestre de Armas",
+      "portraitId": "weapon_master",
+      "title": "Vila Natal — Primeira Missão",
+      "text": "Os limos e morcegos tomaram a Gruta da Cachoeira. Empunhe sua lâmina e limpe a nascente — o portão da vila já está liberado para você.",
+      "shortText": "Mestre de Armas: limpe a Gruta da Cachoeira. O portão da vila está liberado."
+    },
+    "village_master_prologue_mine": {
+      "id": "village_master_prologue_mine",
+      "speaker": "Mestre de Armas",
+      "portraitId": "weapon_master",
+      "title": "Vila Natal — Segunda Missão",
+      "text": "Você limpou a Gruta, mas mortos e feras agora rondam a Mina Abandonada. Siga pelo portão liberado e contenha a ameaça antes que chegue à vila.",
+      "shortText": "Mestre de Armas: siga pelo portão até a Mina Abandonada e contenha a ameaça."
+    },
+    "village_master_prologue_seal": {
+      "id": "village_master_prologue_seal",
+      "speaker": "Mestre de Armas",
+      "portraitId": "weapon_master",
+      "title": "Vila Natal — O Selo Antigo",
+      "text": "Não há tempo a perder! A terra treme sob a mina e O Selo Antigo está cedendo. Atravesse o portão agora e desça às profundezas antes que o pior desperte!",
+      "shortText": "Mestre de Armas: O Selo Antigo está cedendo no fundo da mina. Atravesse o portão agora!"
+    },
+    "village_master_idle": {
+      "id": "village_master_idle",
+      "speaker": "Mestre de Armas",
+      "portraitId": "weapon_master",
+      "title": "Mestre de Armas",
+      "text": "O portão já está liberado, guerreiro. Mantenha a guarda alta e marche quando estiver pronto.",
+      "shortText": "O portão já está liberado. Marche quando estiver pronto."
+    },
+    "village_lyra_talk": {
+      "id": "village_lyra_talk",
+      "speaker": "Lyra",
+      "portraitId": "system",
+      "title": "Lyra — Curandeira da Vila",
+      "text": "Que a luz guarde seus passos, guerreiro. Estou preparando ervas e poções para os feridos da vila — em breve terei frascos prontos para suas incursões.",
+      "shortText": "Lyra cuida dos feridos e prepara ervas e poções para a vila."
+    },
+    "village_gorran_talk": {
+      "id": "village_gorran_talk",
+      "speaker": "Gorran",
+      "portraitId": "village_blacksmith",
+      "title": "Gorran — Ferreiro da Vila",
+      "text": "O aço nunca dorme, jovem. Estou aquecendo a forja para afiar lâminas e reparar as armaduras da vila — volte quando a bigorna estiver pronta.",
+      "shortText": "Gorran prepara a forja para afiar lâminas e reparar armaduras da vila."
+    },
+    "village_gate_locked": {
+      "id": "village_gate_locked",
+      "speaker": "Sistema",
+      "portraitId": "system",
+      "title": "Portão da Vila",
+      "text": "O portão de saída ainda está fechado. Fale primeiro com o Mestre de Armas na praça da vila para receber sua missão.",
+      "shortText": "Fale com o Mestre de Armas antes de sair pelo portão da vila."
     }
   },
   "dungeon_enter": "As correntes do Submundo rangem, Guerreiro Espectral. Expurgue as quatro câmaras e reivindique a cabeça do Carcereiro Infernal.",
@@ -218,5 +274,12 @@
   "stage_seal_intro": "O Selo Antigo foi rompido no fundo da mina. Prepare-se para o pior!",
   "village_fall_boss": "Arauto do Abismo: 'Sua Vila Natal já arde em cinzas, mortal!'",
   "village_fall_pact": "Você tombou na vila, mas o Emissário Celestial cravou o Selo em sua alma.",
-  "act1_briefing": "Ato 1 iniciado: cace o Carcereiro Infernal através do Portal da Fenda."
+  "act1_briefing": "Ato 1 iniciado: cace o Carcereiro Infernal através do Portal da Fenda.",
+  "village_master_prologue_grotto": "Mestre de Armas: limpe a Gruta da Cachoeira. O portão da vila está liberado.",
+  "village_master_prologue_mine": "Mestre de Armas: siga pelo portão até a Mina Abandonada e contenha a ameaça.",
+  "village_master_prologue_seal": "Mestre de Armas: O Selo Antigo está cedendo no fundo da mina. Atravesse o portão agora!",
+  "village_master_idle": "O portão já está liberado. Marche quando estiver pronto.",
+  "village_lyra_talk": "Lyra cuida dos feridos e prepara ervas e poções para a vila.",
+  "village_gorran_talk": "Gorran prepara a forja para afiar lâminas e reparar armaduras da vila.",
+  "village_gate_locked": "Fale com o Mestre de Armas antes de sair pelo portão da vila."
 }

@@ -1,0 +1,50 @@
+{
+  "sprites": {
+    "npc_weapon_master": {
+      "key": "npc_weapon_master",
+      "file": "npc_weapon_master.png",
+      "width": 192,
+      "height": 48,
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "frames": [
+        "idle0",
+        "idle1",
+        "idle2",
+        "idle3"
+      ]
+    },
+    "npc_lyra": {
+      "key": "npc_lyra",
+      "file": "npc_lyra.png",
+      "width": 192,
+      "height": 48,
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "frames": [
+        "idle0",
+        "idle1",
+        "idle2",
+        "idle3"
+      ]
+    },
+    "npc_gorran": {
+      "key": "npc_gorran",
+      "file": "npc_gorran.png",
+      "width": 384,
+      "height": 48,
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "frames": [
+        "idle0",
+        "idle1",
+        "idle2",
+        "idle3",
+        "hammer0",
+        "hammer1",
+        "hammer2",
+        "hammer3"
+      ]
+    }
+  }
+}

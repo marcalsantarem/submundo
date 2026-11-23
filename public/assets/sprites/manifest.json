@@ -2013,6 +2013,182 @@
         "x": 0.5,
         "y": 0.95
       }
+    },
+    "village_hub_tiles": {
+      "key": "village_hub_tiles",
+      "file": "village_hub_tiles.png",
+      "width": 320,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "dirt_0",
+        "dirt_1",
+        "dirt_2",
+        "dirt_trail",
+        "grass_0",
+        "grass_1",
+        "dirt_grass_n",
+        "dirt_grass_s",
+        "dirt_ash",
+        "dirt_cobble"
+      ]
+    },
+    "village_hub_props": {
+      "key": "village_hub_props",
+      "file": "village_hub_props.png",
+      "width": 896,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "palisade_h",
+        "palisade_v_l",
+        "palisade_v_r",
+        "palisade_corner_t",
+        "palisade_corner_b",
+        "palisade_end",
+        "campfire_0",
+        "campfire_1",
+        "campfire_2",
+        "campfire_3",
+        "brazier_0",
+        "brazier_1",
+        "brazier_2",
+        "brazier_3",
+        "torch_post_0",
+        "torch_post_1",
+        "torch_post_2",
+        "torch_post_3",
+        "forge_0",
+        "forge_1",
+        "forge_2",
+        "forge_3",
+        "anvil",
+        "sign_exit",
+        "firewood",
+        "barrel",
+        "cart_wheel",
+        "wooden_cart"
+      ],
+      "animations": {
+        "campfire": {
+          "frames": [
+            6,
+            7,
+            8,
+            9
+          ],
+          "frameRate": 8,
+          "repeat": -1
+        },
+        "brazier": {
+          "frames": [
+            10,
+            11,
+            12,
+            13
+          ],
+          "frameRate": 8,
+          "repeat": -1
+        },
+        "torch_post": {
+          "frames": [
+            14,
+            15,
+            16,
+            17
+          ],
+          "frameRate": 8,
+          "repeat": -1
+        },
+        "forge": {
+          "frames": [
+            18,
+            19,
+            20,
+            21
+          ],
+          "frameRate": 7,
+          "repeat": -1
+        }
+      }
+    },
+    "village_hub_house": {
+      "key": "village_hub_house",
+      "file": "village_hub_house.png",
+      "width": 192,
+      "height": 160,
+      "frameWidth": 192,
+      "frameHeight": 160,
+      "frames": [
+        "house"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.88
+      }
+    },
+    "village_hub_gate": {
+      "key": "village_hub_gate",
+      "file": "village_hub_gate.png",
+      "width": 160,
+      "height": 128,
+      "frameWidth": 160,
+      "frameHeight": 128,
+      "frames": [
+        "gate"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.9
+      }
+    },
+    "npc_weapon_master": {
+      "key": "npc_weapon_master",
+      "file": "npc_weapon_master.png",
+      "width": 192,
+      "height": 48,
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "frames": [
+        "idle0",
+        "idle1",
+        "idle2",
+        "idle3"
+      ]
+    },
+    "npc_lyra": {
+      "key": "npc_lyra",
+      "file": "npc_lyra.png",
+      "width": 192,
+      "height": 48,
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "frames": [
+        "idle0",
+        "idle1",
+        "idle2",
+        "idle3"
+      ]
+    },
+    "npc_gorran": {
+      "key": "npc_gorran",
+      "file": "npc_gorran.png",
+      "width": 384,
+      "height": 48,
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "frames": [
+        "idle0",
+        "idle1",
+        "idle2",
+        "idle3",
+        "hammer0",
+        "hammer1",
+        "hammer2",
+        "hammer3"
+      ]
     }
   }
 }
