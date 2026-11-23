@@ -1,5 +1,15 @@
 import Phaser from 'phaser';
 import { Vector2D, ViewportConfig, resolveViewportConfig } from '../../core/index';
+import {
+  DF_FONTS,
+  DF_PALETTE,
+  DF_UI_ICONS_KEY,
+  DF_UI_ICON_FRAMES,
+  type OrnateButtonVariant,
+  drawOrnateButton,
+  drawOrnatePanel,
+  hasUiTextureFrame,
+} from './DarkFantasyUiBuilder';
 import { VirtualJoystick } from './VirtualJoystick';
 
 export interface HubHudSnapshot {
@@ -30,12 +40,16 @@ interface MovementKeys {
 interface ActionButtonView {
   container: Phaser.GameObjects.Container;
   bg: Phaser.GameObjects.Graphics;
+  icon: Phaser.GameObjects.Image | null;
+  iconFrame?: number;
   label: Phaser.GameObjects.Text;
   zone: Phaser.GameObjects.Zone;
-  fillColor: number;
-  strokeColor: number;
+  variant: OrnateButtonVariant;
   width: number;
   height: number;
+  hovered: boolean;
+  pressed: boolean;
+  disabled: boolean;
 }
 
 export interface HubHudCallbacks {
@@ -60,7 +74,11 @@ export class HubHud {
 
   private readonly topPanelBg: Phaser.GameObjects.Graphics;
   private readonly locationText: Phaser.GameObjects.Text;
+  private readonly soulsIcon: Phaser.GameObjects.Image | null;
+  private readonly soulsFallbackGraphic: Phaser.GameObjects.Graphics;
   private readonly soulsText: Phaser.GameObjects.Text;
+  private readonly essencesIcon: Phaser.GameObjects.Image | null;
+  private readonly essencesFallbackGraphic: Phaser.GameObjects.Graphics;
   private readonly essencesText: Phaser.GameObjects.Text;
   private readonly gearText: Phaser.GameObjects.Text;
 
@@ -91,8 +109,8 @@ export class HubHud {
     this.scene = scene;
     this.callbacks = callbacks;
     this.viewport = resolveViewportConfig(
-      scene.scale.width || 800,
-      scene.scale.height || 600
+      scene.scale.width || 960,
+      scene.scale.height || 540
     );
 
     const totalPointers = scene.input.manager?.pointersTotal ?? 2;
@@ -102,57 +120,117 @@ export class HubHud {
 
     this.joystick = new VirtualJoystick(scene);
 
-    // Top HUD Bar
+    // -------------------------------------------------------------------------
+    // TOP BAR (960x540 Landscape)
+    // -------------------------------------------------------------------------
     this.topPanelBg = scene.add.graphics().setScrollFactor(0).setDepth(1010);
 
     this.locationText = scene.add
       .text(0, 0, 'Refúgio do Submundo', {
-        fontFamily: 'monospace',
-        fontSize: '13px',
-        color: '#ffd166',
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '14px',
+        color: DF_PALETTE.textGold,
         fontStyle: 'bold',
+        stroke: '#07090e',
+        strokeThickness: 2,
+        resolution: 2,
       })
+      .setOrigin(0, 0.5)
       .setScrollFactor(0)
       .setDepth(1012);
+
+    this.soulsIcon = hasUiTextureFrame(
+      scene,
+      DF_UI_ICONS_KEY,
+      DF_UI_ICON_FRAMES.souls
+    )
+      ? scene.add
+          .image(0, 0, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.souls)
+          .setOrigin(0.5)
+          .setScrollFactor(0)
+          .setDepth(1012)
+      : null;
+
+    this.soulsFallbackGraphic = scene.add
+      .graphics()
+      .setScrollFactor(0)
+      .setDepth(1012);
+    this.drawResourceFallbackDiamond(this.soulsFallbackGraphic, 0x90e0ef);
 
     this.soulsText = scene.add
       .text(0, 0, 'Almas: 0', {
-        fontFamily: 'monospace',
+        fontFamily: DF_FONTS.BODY,
         fontSize: '12px',
-        color: '#90e0ef',
+        color: '#a5f3fc',
         fontStyle: 'bold',
+        stroke: '#07090e',
+        strokeThickness: 2,
+        resolution: 2,
       })
+      .setOrigin(0, 0.5)
       .setScrollFactor(0)
       .setDepth(1012);
 
+    this.essencesIcon = hasUiTextureFrame(
+      scene,
+      DF_UI_ICONS_KEY,
+      DF_UI_ICON_FRAMES.essence
+    )
+      ? scene.add
+          .image(0, 0, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.essence)
+          .setOrigin(0.5)
+          .setScrollFactor(0)
+          .setDepth(1012)
+      : null;
+
+    this.essencesFallbackGraphic = scene.add
+      .graphics()
+      .setScrollFactor(0)
+      .setDepth(1012);
+    this.drawResourceFallbackDiamond(
+      this.essencesFallbackGraphic,
+      DF_PALETTE.agedGold
+    );
+
     this.essencesText = scene.add
       .text(0, 0, 'Essências: 0', {
-        fontFamily: 'monospace',
+        fontFamily: DF_FONTS.BODY,
         fontSize: '12px',
-        color: '#f4a261',
+        color: DF_PALETTE.textGold,
         fontStyle: 'bold',
+        stroke: '#07090e',
+        strokeThickness: 2,
+        resolution: 2,
       })
+      .setOrigin(0, 0.5)
       .setScrollFactor(0)
       .setDepth(1012);
 
     this.gearText = scene.add
-      .text(0, 0, 'Equip: 0/4 | Baú: 0', {
-        fontFamily: 'monospace',
+      .text(0, 0, 'Equip: 0/6 | Baú: 0', {
+        fontFamily: DF_FONTS.BODY,
         fontSize: '11px',
-        color: '#cbd5e1',
+        color: DF_PALETTE.textLight,
+        stroke: '#07090e',
+        strokeThickness: 2,
+        resolution: 2,
       })
-      .setOrigin(1, 0)
+      .setOrigin(1, 0.5)
       .setScrollFactor(0)
       .setDepth(1012);
 
-    // Banner
+    // -------------------------------------------------------------------------
+    // STATUS / NARRATIVE BANNER
+    // -------------------------------------------------------------------------
     this.bannerBg = scene.add.graphics();
     this.bannerLabel = scene.add
       .text(0, 0, '', {
-        fontFamily: 'monospace',
+        fontFamily: DF_FONTS.BODY,
         fontSize: '11px',
-        color: '#e9ecef',
+        color: DF_PALETTE.textParchment,
         align: 'center',
+        wordWrap: { width: 472 },
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
     this.bannerContainer = scene.add
@@ -161,49 +239,48 @@ export class HubHud {
       .setDepth(1014)
       .setVisible(false);
 
-    // Action Buttons
+    // -------------------------------------------------------------------------
+    // ORNATE 2D CHAMFERED ACTION BUTTONS
+    // -------------------------------------------------------------------------
     this.altarBtn = this.createActionButton(
       'Altar',
-      0x16243a,
-      0x48cae4,
-      '#e0fbfc',
+      'iron',
+      DF_PALETTE.textLight,
       () => this.callbacks.onOpenAltar()
     );
     this.blacksmithBtn = this.createActionButton(
       'Ferreiro',
-      0x291a16,
-      0xf48c06,
-      '#fff1e6',
+      'gold',
+      DF_PALETTE.textParchment,
       () => this.callbacks.onOpenBlacksmith()
     );
     this.stashBtn = this.createActionButton(
-      'Baú (0)',
-      0x1a2035,
-      0x38bdf8,
-      '#e0f2fe',
-      () => this.callbacks.onOpenStash()
+      'Inventário',
+      'iron',
+      DF_PALETTE.textLight,
+      () => this.callbacks.onOpenStash(),
+      DF_UI_ICON_FRAMES.bag
     );
     this.enterBtn = this.createActionButton(
       'Entrar na Fenda',
-      0x7f1d1d,
-      0xffba08,
-      '#ffffff',
-      () => this.callbacks.onEnterDungeon()
+      'crimson',
+      DF_PALETTE.textParchment,
+      () => this.callbacks.onEnterDungeon(),
+      DF_UI_ICON_FRAMES.attack,
+      true
     );
     this.interactBtn = this.createActionButton(
-      'Interagir',
-      0x1b4332,
-      0x80ed99,
-      '#ffffff',
+      'Interagir [E]',
+      'emerald',
+      '#ecfdf5',
       () => this.callbacks.onInteract?.()
     );
     this.interactBtn.container.setVisible(false);
 
     this.stageBtn = this.createActionButton(
       'A Gruta da Cachoeira',
-      0x132238,
-      0x64748b,
-      '#e2e8f0',
+      'iron',
+      DF_PALETTE.textLight,
       () => {
         if (this.lastSnapshot.canCycleStage) {
           this.callbacks.onCycleStage?.();
@@ -213,22 +290,23 @@ export class HubHud {
     this.stageBtn.container.setVisible(false);
 
     this.muteBtn = this.createActionButton(
-      'Som',
-      0x0f172a,
-      0x38bdf8,
-      '#e0f2fe',
-      () => this.callbacks.onToggleMute?.()
+      'Áudio',
+      'iron',
+      DF_PALETTE.textLight,
+      () => this.callbacks.onToggleMute?.(),
+      DF_UI_ICON_FRAMES.audioOn
     );
 
     this.resetBtn = this.createActionButton(
       'Resetar',
-      0x1f1215,
-      0x7f1d1d,
-      '#fca5a5',
+      'crimson',
+      DF_PALETTE.textDanger,
       () => this.handleResetClick()
     );
 
-    // Movement Keys (WASD + Arrows)
+    // -------------------------------------------------------------------------
+    // MOVEMENT KEYS (WASD + ARROWS) & CONTEXTUAL INTERACT [E]
+    // -------------------------------------------------------------------------
     if (scene.input.keyboard) {
       this.movementKeys = {
         up: scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
@@ -295,29 +373,39 @@ export class HubHud {
     const isPrologue = Boolean(snap.isPrologue);
     const locationTitle =
       snap.locationTitle?.trim() ||
-      (isPrologue ? 'Vila Natal — Campo de Treino' : 'Refúgio do Submundo');
+      (isPrologue ? 'Vila Natal' : 'Refúgio do Submundo');
 
     this.locationText
       .setText(locationTitle)
-      .setColor(isPrologue ? '#a7f3d0' : '#ffd166');
+      .setColor(isPrologue ? DF_PALETTE.textSuccess : DF_PALETTE.textGold);
+
     this.soulsText.setText(`Almas: ${snap.souls}`);
     this.essencesText.setText(`Essências: ${snap.generalEssences}`);
-    this.gearText.setText(`Equip: ${snap.equippedCount}/4 | Baú: ${snap.stashCount}`);
-    this.stashBtn.label.setText(`Baú (${snap.stashCount})`);
+    this.syncResourceIcons();
+
+    this.gearText.setText(
+      `Equip: ${snap.equippedCount}/6 | Baú: ${snap.stashCount}`
+    );
+    this.stashBtn.label.setText(
+      snap.stashCount > 0 ? `Inventário (${snap.stashCount})` : 'Inventário'
+    );
     this.altarBtn.label.setText(isPrologue ? 'Santuário' : 'Altar');
     this.enterBtn.label.setText(
       isPrologue ? 'Iniciar Missão' : 'Entrar na Fenda'
     );
+    this.syncButtonIconLayout(this.stashBtn);
+    this.syncButtonIconLayout(this.enterBtn);
 
     const muted = Boolean(snap.isMuted);
+    this.muteBtn.iconFrame = muted
+      ? DF_UI_ICON_FRAMES.audioOff
+      : DF_UI_ICON_FRAMES.audioOn;
     this.muteBtn.label
-      .setText(muted ? 'Mudo' : 'Som')
-      .setColor(muted ? '#fca5a5' : '#e0f2fe');
-    this.redrawButtonGraphics(
-      this.muteBtn,
-      muted ? 0x1f2937 : 0x0f172a,
-      muted ? 0xef4444 : 0x38bdf8
-    );
+      .setText(muted ? 'Mudo' : 'Áudio')
+      .setColor(muted ? DF_PALETTE.textDanger : DF_PALETTE.textLight);
+    this.muteBtn.variant = muted ? 'crimson' : 'iron';
+    this.redrawButtonGraphics(this.muteBtn);
+    this.syncButtonIconLayout(this.muteBtn);
 
     const stageLabel = snap.stageLabel?.trim() ?? '';
     if (stageLabel.length > 0) {
@@ -325,12 +413,10 @@ export class HubHud {
       const canCycle = Boolean(snap.canCycleStage);
       this.stageBtn.label
         .setText(canCycle ? `⇄ ${stageLabel}` : stageLabel)
-        .setColor(canCycle ? '#fde68a' : '#cbd5e1');
-      this.redrawButtonGraphics(
-        this.stageBtn,
-        canCycle ? 0x1e293b : 0x111827,
-        canCycle ? 0xfbbf24 : 0x475569
-      );
+        .setColor(canCycle ? DF_PALETTE.textGold : DF_PALETTE.textMuted);
+      this.stageBtn.variant = canCycle ? 'gold' : 'iron';
+      this.stageBtn.disabled = !canCycle;
+      this.redrawButtonGraphics(this.stageBtn);
     } else {
       this.stageBtn.container.setVisible(false);
     }
@@ -338,11 +424,7 @@ export class HubHud {
     const station = snap.nearbyStationLabel?.trim() ?? '';
     if (station.length > 0) {
       this.interactBtn.container.setVisible(true);
-      const label =
-        this.viewport.mode === 'mobile_portrait'
-          ? `Interagir: ${station}`
-          : `[E] Interagir: ${station}`;
-      this.interactBtn.label.setText(label);
+      this.interactBtn.label.setText(`Interagir [E]: ${station}`);
     } else {
       this.interactBtn.container.setVisible(false);
     }
@@ -361,54 +443,61 @@ export class HubHud {
     this.viewport = viewport;
     this.joystick.resize(viewport);
 
-    const isMobile = viewport.mode === 'mobile_portrait';
     const w = viewport.width;
     const h = viewport.height;
 
-    const topBarHeight = isMobile ? 64 : 52;
+    // -------------------------------------------------------------------------
+    // TOP BAR (54px height, 960x540 landscape)
+    // -------------------------------------------------------------------------
+    const topBarHeight = 54;
+    const barMidY = Math.round(topBarHeight / 2);
+
     this.topPanelBg.clear();
-    this.topPanelBg.fillStyle(0x090c14, 0.85);
+    this.topPanelBg.fillStyle(DF_PALETTE.obsidianBg, 0.94);
     this.topPanelBg.fillRect(0, 0, w, topBarHeight);
-    this.topPanelBg.lineStyle(1, 0x2b3448, 0.9);
+    this.topPanelBg.fillStyle(DF_PALETTE.headerBg, 0.62);
+    this.topPanelBg.fillRect(0, 0, w, 24);
+    this.topPanelBg.lineStyle(1.5, DF_PALETTE.metalBorder, 0.92);
+    this.topPanelBg.lineBetween(0, topBarHeight - 2, w, topBarHeight - 2);
+    this.topPanelBg.lineStyle(1.2, DF_PALETTE.bronzeBorder, 0.95);
     this.topPanelBg.lineBetween(0, topBarHeight, w, topBarHeight);
 
-    if (isMobile) {
-      this.locationText.setFontSize(11).setPosition(12, 8);
-      this.soulsText.setFontSize(11).setPosition(12, 27);
-      this.essencesText.setFontSize(11).setPosition(112, 27);
-      this.gearText.setOrigin(0, 0).setFontSize(10).setPosition(12, 45);
-      this.layoutButton(this.resetBtn, w - 107, 18, 72, 22, 10);
-      this.layoutButton(this.muteBtn, w - 38, 18, 54, 22, 10);
+    // Left: Area title in Cinzel
+    this.locationText.setFontSize(14).setPosition(18, barMidY);
 
-      this.bannerContainer.setPosition(w / 2, 88);
-      this.bannerLabel.setWordWrapWidth(w - 32);
+    // Center-Right: Souls, Essences, and Equip/Stash summary
+    const resBaseX = Math.max(286, Math.round(w * 0.34));
+    this.soulsIcon?.setPosition(resBaseX, barMidY).setDisplaySize(17, 17);
+    this.soulsFallbackGraphic.setPosition(resBaseX, barMidY);
+    this.soulsText.setFontSize(12).setPosition(resBaseX + 14, barMidY);
 
-      // Action cluster on bottom-right, clear of left VirtualJoystick (x: 36..128)
-      this.layoutButton(this.interactBtn, w / 2, h - 224, 224, 36, 11);
-      this.layoutButton(this.altarBtn, 208, h - 168, 84, 38, 11);
-      this.layoutButton(this.blacksmithBtn, 302, h - 168, 90, 38, 11);
-      this.layoutButton(this.stashBtn, 255, h - 122, 184, 36, 11);
-      this.layoutButton(this.enterBtn, 255, h - 74, 184, 40, 12);
-      this.layoutButton(this.stageBtn, 255, h - 32, 184, 28, 10);
-    } else {
-      this.locationText.setFontSize(12).setPosition(16, 16);
-      this.soulsText.setFontSize(12).setPosition(236, 17);
-      this.essencesText.setFontSize(12).setPosition(340, 17);
-      this.gearText.setOrigin(1, 0).setFontSize(11).setPosition(w - 160, 18);
-      this.layoutButton(this.resetBtn, w - 114, 26, 74, 26, 10);
-      this.layoutButton(this.muteBtn, w - 42, 26, 58, 26, 10);
+    const essBaseX = resBaseX + 142;
+    this.essencesIcon?.setPosition(essBaseX, barMidY).setDisplaySize(17, 17);
+    this.essencesFallbackGraphic.setPosition(essBaseX, barMidY);
+    this.essencesText.setFontSize(12).setPosition(essBaseX + 14, barMidY);
 
-      this.bannerContainer.setPosition(w / 2, 78);
-      this.bannerLabel.setWordWrapWidth(480);
+    this.gearText.setFontSize(11).setPosition(w - 186, barMidY);
 
-      // Desktop bottom bar clear of left VirtualJoystick (x: 50..142)
-      this.layoutButton(this.interactBtn, w / 2, h - 110, 240, 36, 12);
-      this.layoutButton(this.altarBtn, 316, h - 48, 96, 42, 12);
-      this.layoutButton(this.blacksmithBtn, 422, h - 48, 102, 42, 12);
-      this.layoutButton(this.stashBtn, 530, h - 48, 98, 42, 12);
-      this.layoutButton(this.enterBtn, 684, h - 48, 192, 46, 13);
-      this.layoutButton(this.stageBtn, 684, h - 92, 192, 28, 10);
-    }
+    // Top-Right: Audio & Reset buttons
+    this.layoutButton(this.muteBtn, w - 132, barMidY, 78, 30, 11);
+    this.layoutButton(this.resetBtn, w - 48, barMidY, 76, 30, 11);
+
+    // Banner below top bar
+    this.bannerContainer.setPosition(w / 2, 80);
+    this.bannerLabel.setWordWrapWidth(Math.min(500, w - 64));
+
+    // -------------------------------------------------------------------------
+    // BOTTOM-RIGHT 2-HAND CLUSTER (Clear of left VirtualJoystick x <= 0.46*w)
+    // -------------------------------------------------------------------------
+    this.layoutButton(this.altarBtn, w - 352, h - 42, 100, 40, 12);
+    this.layoutButton(this.blacksmithBtn, w - 244, h - 42, 100, 40, 12);
+    this.layoutButton(this.enterBtn, w - 100, h - 42, 172, 44, 13);
+
+    this.layoutButton(this.stashBtn, w - 298, h - 92, 208, 38, 12);
+    this.layoutButton(this.stageBtn, w - 100, h - 92, 172, 38, 11);
+
+    // Contextual Interact [E] button cleanly above the right-hand cluster
+    this.layoutButton(this.interactBtn, w - 208, h - 140, 264, 36, 12);
 
     this.update(this.lastSnapshot);
   }
@@ -425,7 +514,11 @@ export class HubHud {
 
     this.topPanelBg.destroy();
     this.locationText.destroy();
+    this.soulsIcon?.destroy();
+    this.soulsFallbackGraphic.destroy();
     this.soulsText.destroy();
+    this.essencesIcon?.destroy();
+    this.essencesFallbackGraphic.destroy();
     this.essencesText.destroy();
     this.gearText.destroy();
     this.bannerContainer.destroy();
@@ -444,7 +537,8 @@ export class HubHud {
     if (!this.resetArmed) {
       this.resetArmed = true;
       this.resetBtn.label.setText('Confirmar?').setColor('#ffffff');
-      this.redrawButtonGraphics(this.resetBtn, 0x7f1d1d, 0xef4444);
+      this.resetBtn.variant = 'crimson';
+      this.redrawButtonGraphics(this.resetBtn);
 
       if (this.resetArmTimer !== undefined) {
         clearTimeout(this.resetArmTimer);
@@ -465,24 +559,33 @@ export class HubHud {
       this.resetArmTimer = undefined;
     }
     this.resetArmed = false;
-    this.resetBtn.label.setText('Resetar').setColor('#fca5a5');
-    this.redrawButtonGraphics(this.resetBtn, 0x1f1215, 0x7f1d1d);
+    this.resetBtn.label.setText('Resetar').setColor(DF_PALETTE.textDanger);
+    this.resetBtn.variant = 'crimson';
+    this.redrawButtonGraphics(this.resetBtn);
   }
 
   private createActionButton(
     text: string,
-    fillColor: number,
-    strokeColor: number,
+    variant: OrnateButtonVariant,
     textColor: string,
-    onClick: () => void
+    onClick: () => void,
+    iconFrame?: number,
+    useTitleFont = false
   ): ActionButtonView {
     const bg = this.scene.add.graphics();
+    const icon =
+      iconFrame !== undefined &&
+      hasUiTextureFrame(this.scene, DF_UI_ICONS_KEY, iconFrame)
+        ? this.scene.add.image(0, 0, DF_UI_ICONS_KEY, iconFrame).setOrigin(0.5)
+        : null;
+
     const label = this.scene.add
       .text(0, 0, text, {
-        fontFamily: 'monospace',
+        fontFamily: useTitleFont ? DF_FONTS.TITLE : DF_FONTS.BODY,
         fontSize: '12px',
         color: textColor,
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
     const zone = this.scene.add
@@ -490,6 +593,41 @@ export class HubHud {
       .setOrigin(0.5, 0.5)
       .setInteractive({ useHandCursor: true });
 
+    const children: Phaser.GameObjects.GameObject[] = [bg];
+    if (icon) {
+      children.push(icon);
+    }
+    children.push(label, zone);
+
+    const container = this.scene.add
+      .container(0, 0, children)
+      .setScrollFactor(0)
+      .setDepth(1020);
+
+    const btn: ActionButtonView = {
+      container,
+      bg,
+      icon,
+      iconFrame,
+      label,
+      zone,
+      variant,
+      width: 100,
+      height: 40,
+      hovered: false,
+      pressed: false,
+      disabled: false,
+    };
+
+    zone.on('pointerover', () => {
+      btn.hovered = true;
+      this.redrawButtonGraphics(btn);
+    });
+    zone.on('pointerout', () => {
+      btn.hovered = false;
+      btn.pressed = false;
+      this.redrawButtonGraphics(btn);
+    });
     zone.on(
       'pointerdown',
       (
@@ -499,25 +637,17 @@ export class HubHud {
         event?: Phaser.Types.Input.EventData
       ) => {
         event?.stopPropagation?.();
+        btn.pressed = true;
+        this.redrawButtonGraphics(btn);
         onClick();
       }
     );
+    zone.on('pointerup', () => {
+      btn.pressed = false;
+      this.redrawButtonGraphics(btn);
+    });
 
-    const container = this.scene.add
-      .container(0, 0, [bg, label, zone])
-      .setScrollFactor(0)
-      .setDepth(1020);
-
-    return {
-      container,
-      bg,
-      label,
-      zone,
-      fillColor,
-      strokeColor,
-      width: 100,
-      height: 40,
-    };
+    return btn;
   }
 
   private layoutButton(
@@ -533,32 +663,141 @@ export class HubHud {
     btn.container.setPosition(x, y);
     btn.zone.setSize(width, height);
     btn.label.setFontSize(fontSize);
-    this.redrawButtonGraphics(btn, btn.fillColor, btn.strokeColor);
+    this.redrawButtonGraphics(btn);
+    this.syncButtonIconLayout(btn);
   }
 
-  private redrawButtonGraphics(
-    btn: ActionButtonView,
-    fillColor: number,
-    strokeColor: number
-  ): void {
-    btn.fillColor = fillColor;
-    btn.strokeColor = strokeColor;
-    btn.bg.clear();
-    btn.bg.fillStyle(fillColor, 0.94);
-    btn.bg.fillRoundedRect(-btn.width / 2, -btn.height / 2, btn.width, btn.height, 6);
-    btn.bg.lineStyle(1.8, strokeColor, 0.95);
-    btn.bg.strokeRoundedRect(-btn.width / 2, -btn.height / 2, btn.width, btn.height, 6);
+  private syncButtonIconLayout(btn: ActionButtonView): void {
+    if (!btn.icon || btn.iconFrame === undefined) {
+      btn.label.setPosition(0, 0);
+      return;
+    }
+
+    const available = hasUiTextureFrame(
+      this.scene,
+      DF_UI_ICONS_KEY,
+      btn.iconFrame
+    );
+    btn.icon.setVisible(available);
+    if (!available) {
+      btn.label.setPosition(0, 0);
+      return;
+    }
+
+    btn.icon.setFrame(btn.iconFrame);
+    const iconSize = Math.max(12, Math.min(20, Math.round(btn.height * 0.52)));
+    btn.icon.setDisplaySize(iconSize, iconSize);
+
+    const textW = btn.label.width || 0;
+    const gap = btn.width <= 80 ? 4 : 6;
+    const totalW = iconSize + gap + textW;
+    const maxW = btn.width - 14;
+
+    if (totalW <= maxW) {
+      const startX = -totalW / 2;
+      btn.icon.setPosition(startX + iconSize / 2, 0);
+      btn.label.setPosition(startX + iconSize + gap + textW / 2, 0);
+    } else {
+      btn.icon.setPosition(-btn.width / 2 + iconSize / 2 + 7, 0);
+      btn.label.setPosition(iconSize / 2 + 3, 0);
+    }
+  }
+
+  private redrawButtonGraphics(btn: ActionButtonView): void {
+    const bevel = Math.min(7, Math.max(4, Math.round(btn.height * 0.2)));
+    const isArmedReset = btn === this.resetBtn && this.resetArmed;
+
+    drawOrnateButton(
+      btn.bg,
+      -btn.width / 2,
+      -btn.height / 2,
+      btn.width,
+      btn.height,
+      {
+        variant: btn.variant,
+        bevel,
+        hovered: btn.hovered,
+        pressed: btn.pressed,
+        disabled: btn.disabled,
+        ...(isArmedReset
+          ? { fillColor: 0x7f1d1d, borderColor: 0xef4444 }
+          : {}),
+        clear: true,
+      }
+    );
   }
 
   private drawBannerBox(): void {
-    const isMobile = this.viewport.mode === 'mobile_portrait';
-    const width = isMobile ? this.viewport.width - 20 : 500;
-    const height = isMobile ? 38 : 32;
+    const width = Math.min(520, this.viewport.width - 48);
+    const textHeight = this.bannerLabel.height || 16;
+    const height = Math.max(34, Math.min(54, Math.ceil(textHeight) + 16));
 
-    this.bannerBg.clear();
-    this.bannerBg.fillStyle(0x0b0f19, 0.86);
-    this.bannerBg.fillRoundedRect(-width / 2, -height / 2, width, height, 5);
-    this.bannerBg.lineStyle(1, 0x48cae4, 0.7);
-    this.bannerBg.strokeRoundedRect(-width / 2, -height / 2, width, height, 5);
+    drawOrnatePanel(this.bannerBg, {
+      x: -width / 2,
+      y: -height / 2,
+      width,
+      height,
+      bevel: 7,
+      fillColor: DF_PALETTE.obsidianBg,
+      fillAlpha: 0.92,
+      innerFillColor: DF_PALETTE.innerSurface,
+      outerBorderColor: DF_PALETTE.metalBorder,
+      innerBorderColor: DF_PALETTE.bronzeBorder,
+      accentColor: DF_PALETTE.agedGold,
+      shadow: true,
+      shadowOffsetX: 2,
+      shadowOffsetY: 3,
+      shadowAlpha: 0.45,
+      cornerOrnaments: false,
+      clear: true,
+    });
+  }
+
+  private syncResourceIcons(): void {
+    const hasSouls =
+      this.soulsIcon !== null &&
+      hasUiTextureFrame(this.scene, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.souls);
+    this.soulsIcon?.setVisible(hasSouls);
+    if (hasSouls && this.soulsIcon) {
+      this.soulsIcon.setFrame(DF_UI_ICON_FRAMES.souls);
+    }
+    this.soulsFallbackGraphic.setVisible(!hasSouls);
+
+    const hasEssence =
+      this.essencesIcon !== null &&
+      hasUiTextureFrame(this.scene, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.essence);
+    this.essencesIcon?.setVisible(hasEssence);
+    if (hasEssence && this.essencesIcon) {
+      this.essencesIcon.setFrame(DF_UI_ICON_FRAMES.essence);
+    }
+    this.essencesFallbackGraphic.setVisible(!hasEssence);
+  }
+
+  private drawResourceFallbackDiamond(
+    gfx: Phaser.GameObjects.Graphics,
+    color: number
+  ): void {
+    gfx.clear();
+    gfx.fillStyle(color, 0.95);
+    gfx.fillPoints(
+      [
+        { x: 0, y: -5 },
+        { x: 5, y: 0 },
+        { x: 0, y: 5 },
+        { x: -5, y: 0 },
+      ],
+      true
+    );
+    gfx.lineStyle(1, DF_PALETTE.obsidianBg, 0.9);
+    gfx.strokePoints(
+      [
+        { x: 0, y: -5 },
+        { x: 5, y: 0 },
+        { x: 0, y: 5 },
+        { x: -5, y: 0 },
+      ],
+      true,
+      true
+    );
   }
 }

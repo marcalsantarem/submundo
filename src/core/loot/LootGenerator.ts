@@ -32,7 +32,14 @@ const RARITY_SCORE_BONUS: Record<Rarity, number> = {
   legendary: 60,
 };
 
-const EQUIP_SLOTS: readonly EquipSlot[] = ['weapon', 'armor', 'amulet', 'ring'];
+const EQUIP_SLOTS: readonly EquipSlot[] = [
+  'weapon',
+  'armor',
+  'helm',
+  'boots',
+  'amulet',
+  'ring',
+];
 
 interface AffixesData {
   affixes: AffixDef[];

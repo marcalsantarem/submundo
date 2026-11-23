@@ -49,8 +49,14 @@ import {
   BlacksmithModal,
   type BlacksmithModalSnapshot,
 } from '../ui/BlacksmithModal';
-import { DialogueBox } from '../ui/DialogueBox';
 import { SceneCameraRig } from '../ui/CameraRig';
+import {
+  DF_EQUIP_SLOT_ORDER,
+  DF_FONTS,
+  DF_PALETTE,
+  hasUiTextureFrame,
+} from '../ui/DarkFantasyUiBuilder';
+import { DialogueBox } from '../ui/DialogueBox';
 import { HubHud, type HubHudSnapshot } from '../ui/HubHud';
 import {
   InventoryModal,
@@ -97,9 +103,12 @@ interface HubStationView {
   hitZone: Phaser.GameObjects.Zone;
 }
 
+const DEFAULT_HUB_WIDTH = 960;
+const DEFAULT_HUB_HEIGHT = 540;
+const HUB_WORLD_ZOOM = 1.45;
 const TILE_DISPLAY_SIZE = 32;
-const ARENA_PADDING_X = 36;
-const STATION_INTERACT_RADIUS = 58;
+const ARENA_PADDING_X = 40;
+const STATION_INTERACT_RADIUS = 62;
 const BANNER_DEFAULT_DURATION_MS = 6500;
 
 const VILLAGE_STATIONS: readonly HubStationConfig[] = [
@@ -223,8 +232,8 @@ export class HubScene extends Phaser.Scene {
     this.emissaryDialogueIndex = 0;
     this.lastFootstepFrame = -1;
 
-    const width = this.scale.width || 800;
-    const height = this.scale.height || 600;
+    const width = this.scale.width || DEFAULT_HUB_WIDTH;
+    const height = this.scale.height || DEFAULT_HUB_HEIGHT;
     this.viewport = resolveViewportConfig(width, height);
 
     this.ensureRequiredFallbackTextures();
@@ -430,7 +439,7 @@ export class HubScene extends Phaser.Scene {
     this.cameraRig = new SceneCameraRig(this, {
       width: this.viewport.width,
       height: this.viewport.height,
-      worldZoom: this.getWorldZoom(this.viewport.mode),
+      worldZoom: this.getWorldZoom(),
       boundsWidth: this.viewport.width,
       boundsHeight: this.viewport.height,
     });
@@ -757,11 +766,9 @@ export class HubScene extends Phaser.Scene {
 
   private buildBlacksmithSnapshot(): BlacksmithModalSnapshot {
     const catalog = getProgressionCatalog();
-    const equippedItems = (
-      ['weapon', 'armor', 'amulet', 'ring'] as const
-    )
-      .map((slot) => this.profile.equipped[slot])
-      .filter((item): item is NonNullable<typeof item> => item !== null);
+    const equippedItems = DF_EQUIP_SLOT_ORDER.map(
+      (slot) => this.profile.equipped[slot]
+    ).filter((item): item is NonNullable<typeof item> => item !== null);
 
     return {
       souls: this.profile.souls,
@@ -787,9 +794,9 @@ export class HubScene extends Phaser.Scene {
   }
 
   private updateHud(): void {
-    const equippedCount = (
-      ['weapon', 'armor', 'amulet', 'ring'] as const
-    ).filter((slot) => this.profile.equipped[slot] !== null).length;
+    const equippedCount = DF_EQUIP_SLOT_ORDER.filter(
+      (slot) => this.profile.equipped[slot] !== null
+    ).length;
 
     const nearbyStation = this.stations.find(
       (station) => station.config.id === this.nearbyStationId
@@ -1015,15 +1022,18 @@ export class HubScene extends Phaser.Scene {
     const npcTextureKey = isPrologue ? 'village_npcs' : 'hub_npcs';
     const positions = this.getStationPositions(viewport);
     const hasNpcTexture = this.textures.exists(npcTextureKey);
-    const npcTexture = hasNpcTexture ? this.textures.get(npcTextureKey) : null;
 
     for (const config of stationConfigs) {
       const pos = positions[config.id];
       const aura = this.add.graphics();
 
       let visual: Phaser.GameObjects.GameObject;
-      if (hasNpcTexture && npcTexture) {
-        const frameArg = npcTexture.has(String(config.frameIndex))
+      if (hasNpcTexture) {
+        const frameArg = hasUiTextureFrame(
+          this,
+          npcTextureKey,
+          config.frameIndex
+        )
           ? config.frameIndex
           : 0;
         visual = this.add
@@ -1040,24 +1050,26 @@ export class HubScene extends Phaser.Scene {
 
       const nameLabel = this.add
         .text(0, -34, config.label, {
-          fontFamily: 'monospace',
-          fontSize: viewport.mode === 'mobile_portrait' ? '10px' : '11px',
+          fontFamily: DF_FONTS.TITLE,
+          fontSize: '11px',
           color: config.accentHex,
           fontStyle: 'bold',
           stroke: '#05070d',
           strokeThickness: 3,
           align: 'center',
+          resolution: 2,
         })
         .setOrigin(0.5);
 
       const promptLabel = this.add
-        .text(0, 30, viewport.mode === 'mobile_portrait' ? '[Toque]' : '[E] Usar', {
-          fontFamily: 'monospace',
+        .text(0, 30, '[E / Toque] Usar', {
+          fontFamily: DF_FONTS.BODY,
           fontSize: '10px',
-          color: '#80ed99',
+          color: DF_PALETTE.textSuccess,
           fontStyle: 'bold',
           stroke: '#05070d',
           strokeThickness: 3,
+          resolution: 2,
         })
         .setOrigin(0.5)
         .setVisible(false);
@@ -1102,14 +1114,13 @@ export class HubScene extends Phaser.Scene {
 
   private layoutStations(viewport: ViewportConfig): void {
     const positions = this.getStationPositions(viewport);
-    const isMobile = viewport.mode === 'mobile_portrait';
 
     for (const station of this.stations) {
       const pos = positions[station.config.id];
       station.position = { ...pos };
       station.container.setPosition(pos.x, pos.y);
-      station.nameLabel.setFontSize(isMobile ? 10 : 11);
-      station.promptLabel.setText(isMobile ? '[Toque]' : '[E] Usar');
+      station.nameLabel.setFontSize(11);
+      station.promptLabel.setText('[E / Toque] Usar');
     }
   }
 
@@ -1218,9 +1229,8 @@ export class HubScene extends Phaser.Scene {
     this.lightingGraphics.lineStyle(1, isPrologue ? 0x6ee7b7 : 0xffd166, 0.16);
     this.lightingGraphics.strokeCircle(centerX, centerY, 42);
 
-    const brazierTopY = viewport.mode === 'mobile_portrait' ? 124 : 96;
-    const brazierBottomY =
-      viewport.mode === 'mobile_portrait' ? height - 246 : height - 118;
+    const brazierTopY = 92;
+    const brazierBottomY = height - 108;
     const braziers: Vector2D[] = [
       { x: TILE_DISPLAY_SIZE + 14, y: brazierTopY },
       { x: width - TILE_DISPLAY_SIZE - 14, y: brazierTopY },
@@ -1253,28 +1263,21 @@ export class HubScene extends Phaser.Scene {
   private getStationPositions(
     viewport: ViewportConfig
   ): Record<HubStationId, Vector2D> {
-    if (viewport.mode === 'mobile_portrait') {
-      return {
-        rift_portal: { x: 180, y: 152 },
-        soul_altar: { x: 76, y: 256 },
-        blacksmith: { x: 284, y: 256 },
-        emissary: { x: 180, y: 354 },
-      };
-    }
+    const w = viewport.width || DEFAULT_HUB_WIDTH;
+    const h = viewport.height || DEFAULT_HUB_HEIGHT;
 
     return {
-      rift_portal: { x: 400, y: 158 },
-      soul_altar: { x: 165, y: 274 },
-      blacksmith: { x: 635, y: 274 },
-      emissary: { x: 260, y: 392 },
+      rift_portal: { x: Math.round(w * 0.5), y: Math.round(h * 0.27) },
+      soul_altar: { x: Math.round(w * 0.2), y: Math.round(h * 0.5) },
+      blacksmith: { x: Math.round(w * 0.8), y: Math.round(h * 0.5) },
+      emissary: { x: Math.round(w * 0.34), y: Math.round(h * 0.72) },
     };
   }
 
   private getInitialHeroSpawn(viewport: ViewportConfig): Vector2D {
-    if (viewport.mode === 'mobile_portrait') {
-      return { x: 180, y: 256 };
-    }
-    return { x: 400, y: 294 };
+    const w = viewport.width || DEFAULT_HUB_WIDTH;
+    const h = viewport.height || DEFAULT_HUB_HEIGHT;
+    return { x: Math.round(w * 0.5), y: Math.round(h * 0.54) };
   }
 
   private getMovementBounds(viewport: ViewportConfig): {
@@ -1283,24 +1286,16 @@ export class HubScene extends Phaser.Scene {
     minY: number;
     maxY: number;
   } {
-    if (viewport.mode === 'mobile_portrait') {
-      return {
-        minX: ARENA_PADDING_X,
-        maxX: Math.max(ARENA_PADDING_X, viewport.width - ARENA_PADDING_X),
-        minY: 118,
-        maxY: Math.max(140, viewport.height - 246),
-      };
-    }
     return {
       minX: ARENA_PADDING_X,
       maxX: Math.max(ARENA_PADDING_X, viewport.width - ARENA_PADDING_X),
-      minY: 108,
-      maxY: Math.max(140, viewport.height - 120),
+      minY: 102,
+      maxY: Math.max(140, viewport.height - 108),
     };
   }
 
-  private getWorldZoom(mode: ViewportConfig['mode']): number {
-    return mode === 'mobile_portrait' ? 1.45 : 1.65;
+  private getWorldZoom(): number {
+    return HUB_WORLD_ZOOM;
   }
 
   private handleViewportResize(width: number, height: number): void {
@@ -1325,7 +1320,7 @@ export class HubScene extends Phaser.Scene {
     this.cameraRig?.resize(
       this.viewport.width,
       this.viewport.height,
-      this.getWorldZoom(this.viewport.mode),
+      this.getWorldZoom(),
       this.viewport.width,
       this.viewport.height
     );

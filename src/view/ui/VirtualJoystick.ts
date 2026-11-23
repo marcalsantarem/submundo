@@ -1,21 +1,22 @@
 import Phaser from 'phaser';
 import { Vector2D, ViewportConfig, resolveViewportConfig } from '../../core/index';
+import { DF_PALETTE } from './DarkFantasyUiBuilder';
 
 export class VirtualJoystick {
   private readonly scene: Phaser.Scene;
   private viewport: ViewportConfig;
-  private baseGraphic: Phaser.GameObjects.Graphics;
-  private thumbGraphic: Phaser.GameObjects.Graphics;
-  private hintText: Phaser.GameObjects.Text;
+  private readonly baseGraphic: Phaser.GameObjects.Graphics;
+  private readonly thumbGraphic: Phaser.GameObjects.Graphics;
 
   private activePointerId: number | null = null;
-  private originX = 0;
-  private originY = 0;
-  private currentX = 0;
-  private currentY = 0;
+  private originX = 104;
+  private originY = 436;
+  private currentX = 104;
+  private currentY = 436;
   private direction: Vector2D = { x: 0, y: 0 };
 
-  private readonly maxRadius = 46;
+  private readonly maxRadius = 54;
+  private readonly thumbRadius = 18;
   private readonly deadZone = 7;
 
   private readonly onPointerDownBound: (
@@ -27,7 +28,10 @@ export class VirtualJoystick {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    this.viewport = resolveViewportConfig(scene.scale.width || 800, scene.scale.height || 600);
+    this.viewport = resolveViewportConfig(
+      scene.scale.width || 960,
+      scene.scale.height || 540
+    );
 
     const totalPointers = scene.input.manager?.pointersTotal ?? 2;
     if (totalPointers < 4) {
@@ -42,22 +46,14 @@ export class VirtualJoystick {
     this.thumbGraphic.setScrollFactor(0);
     this.thumbGraphic.setDepth(1001);
 
-    this.hintText = scene.add
-      .text(0, 0, 'MOVER', {
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        color: '#9aa5b1',
-      })
-      .setOrigin(0.5, 0.5)
-      .setScrollFactor(0)
-      .setDepth(1001);
-
     this.onPointerDownBound = (
       pointer: Phaser.Input.Pointer,
       currentlyOver?: Phaser.GameObjects.GameObject[]
     ) => this.handlePointerDown(pointer, currentlyOver);
-    this.onPointerMoveBound = (pointer: Phaser.Input.Pointer) => this.handlePointerMove(pointer);
-    this.onPointerUpBound = (pointer: Phaser.Input.Pointer) => this.handlePointerUp(pointer);
+    this.onPointerMoveBound = (pointer: Phaser.Input.Pointer) =>
+      this.handlePointerMove(pointer);
+    this.onPointerUpBound = (pointer: Phaser.Input.Pointer) =>
+      this.handlePointerUp(pointer);
 
     scene.input.on('pointerdown', this.onPointerDownBound);
     scene.input.on('pointermove', this.onPointerMoveBound);
@@ -91,35 +87,19 @@ export class VirtualJoystick {
 
     this.baseGraphic.destroy();
     this.thumbGraphic.destroy();
-    this.hintText.destroy();
   }
 
   private resetRestingPosition(): void {
-    if (this.viewport.mode === 'mobile_portrait') {
-      this.originX = 82;
-      this.originY = this.viewport.height - 108;
-    } else {
-      this.originX = 96;
-      this.originY = this.viewport.height - 96;
-    }
+    this.originX = 104;
+    this.originY = this.viewport.height - 104;
     this.currentX = this.originX;
     this.currentY = this.originY;
   }
 
   private isEligibleTouchZone(x: number, y: number): boolean {
-    if (this.viewport.mode === 'mobile_portrait') {
-      const inTopHeader = y < 68;
-      const inActionCluster = x > this.viewport.width * 0.52 && y > this.viewport.height - 210;
-      return !inTopHeader && !inActionCluster;
-    }
-
-    const inActionClusterDesktop =
-      x > this.viewport.width - 300 && y > this.viewport.height - 140;
-    if (inActionClusterDesktop) {
-      return false;
-    }
-
-    return x <= this.viewport.width * 0.55 || y >= this.viewport.height * 0.45;
+    const w = this.viewport.width;
+    const h = this.viewport.height;
+    return x >= 0 && x <= w * 0.46 && y >= 90 && y <= h;
   }
 
   private syncActivePointer(): void {
@@ -226,22 +206,148 @@ export class VirtualJoystick {
 
   private render(): void {
     const isActive = this.activePointerId !== null;
-    const baseAlpha = isActive ? 0.55 : this.viewport.mode === 'mobile_portrait' ? 0.32 : 0.22;
-    const thumbAlpha = isActive ? 0.85 : this.viewport.mode === 'mobile_portrait' ? 0.48 : 0.32;
+    const outerR = this.maxRadius;
+    const innerRingRadius = Math.round(outerR * 0.44);
+    const baseFillAlpha = isActive ? 0.42 : 0.24;
+    const outerRingAlpha = isActive ? 0.68 : 0.34;
+    const innerRingAlpha = isActive ? 0.44 : 0.2;
 
+    // Translucent dark circular D-Pad base (matching ref_landscape_hud.jpg)
     this.baseGraphic.clear();
-    this.baseGraphic.fillStyle(0x0b0f19, baseAlpha);
-    this.baseGraphic.fillCircle(this.originX, this.originY, this.maxRadius);
-    this.baseGraphic.lineStyle(2, 0x48cae4, baseAlpha + 0.15);
-    this.baseGraphic.strokeCircle(this.originX, this.originY, this.maxRadius);
 
+    if (isActive) {
+      this.baseGraphic.fillStyle(DF_PALETTE.agedGold, 0.08);
+      this.baseGraphic.fillCircle(this.originX, this.originY, outerR + 4);
+    }
+
+    this.baseGraphic.fillStyle(0x0a0d14, baseFillAlpha);
+    this.baseGraphic.fillCircle(this.originX, this.originY, outerR);
+
+    // Subtle thin light translucent outer ring + hairline inner bevel
+    this.baseGraphic.lineStyle(
+      1.3,
+      isActive ? DF_PALETTE.goldBright : 0xd6dce6,
+      outerRingAlpha
+    );
+    this.baseGraphic.strokeCircle(this.originX, this.originY, outerR);
+    this.baseGraphic.lineStyle(1, 0x94a3b8, outerRingAlpha * 0.38);
+    this.baseGraphic.strokeCircle(this.originX, this.originY, outerR - 2.5);
+
+    // Subtle 4-way directional pad recesses between inner ring and outer rim
+    const padColor = isActive ? 0x161c28 : 0x111520;
+    const padFillAlpha = isActive ? 0.38 : 0.24;
+    const padBorderAlpha = isActive ? 0.34 : 0.16;
+    const padLong = 24;
+    const padShort = 21;
+    const padOffset = 37;
+    const padRects = [
+      { x: -padShort / 2, y: -padOffset - padLong / 2, w: padShort, h: padLong },
+      { x: -padShort / 2, y: padOffset - padLong / 2, w: padShort, h: padLong },
+      { x: -padOffset - padLong / 2, y: -padShort / 2, w: padLong, h: padShort },
+      { x: padOffset - padLong / 2, y: -padShort / 2, w: padLong, h: padShort },
+    ];
+    for (const rect of padRects) {
+      this.baseGraphic.fillStyle(padColor, padFillAlpha);
+      this.baseGraphic.fillRoundedRect(
+        this.originX + rect.x,
+        this.originY + rect.y,
+        rect.w,
+        rect.h,
+        5
+      );
+      this.baseGraphic.lineStyle(1, 0xcbd5e1, padBorderAlpha);
+      this.baseGraphic.strokeRoundedRect(
+        this.originX + rect.x,
+        this.originY + rect.y,
+        rect.w,
+        rect.h,
+        5
+      );
+    }
+
+    // Subtle inner guide ring
+    this.baseGraphic.lineStyle(
+      1,
+      isActive ? DF_PALETTE.agedGold : 0xcbd5e1,
+      innerRingAlpha
+    );
+    this.baseGraphic.strokeCircle(this.originX, this.originY, innerRingRadius);
+
+    // 4 subtle triangular directional arrows (Up, Down, Right, Left)
+    const arrowDist = 37;
+    const arrowTipOffset = 4.5;
+    const arrowBackOffset = 3;
+    const arrowHalfBase = 4.4;
+    const dirs: ReadonlyArray<{
+      dx: number;
+      dy: number;
+      active: boolean;
+    }> = [
+      { dx: 0, dy: -1, active: isActive && this.direction.y < -0.35 },
+      { dx: 0, dy: 1, active: isActive && this.direction.y > 0.35 },
+      { dx: 1, dy: 0, active: isActive && this.direction.x > 0.35 },
+      { dx: -1, dy: 0, active: isActive && this.direction.x < -0.35 },
+    ];
+
+    for (const dir of dirs) {
+      const cx = this.originX + dir.dx * arrowDist;
+      const cy = this.originY + dir.dy * arrowDist;
+      const tipX = cx + dir.dx * arrowTipOffset;
+      const tipY = cy + dir.dy * arrowTipOffset;
+      const baseX = cx - dir.dx * arrowBackOffset;
+      const baseY = cy - dir.dy * arrowBackOffset;
+      const perpX = -dir.dy * arrowHalfBase;
+      const perpY = dir.dx * arrowHalfBase;
+
+      const arrowColor = dir.active ? DF_PALETTE.goldBright : 0xcbd5e1;
+      const arrowAlpha = dir.active ? 0.94 : isActive ? 0.56 : 0.38;
+      this.baseGraphic.fillStyle(arrowColor, arrowAlpha);
+      this.baseGraphic.fillTriangle(
+        tipX,
+        tipY,
+        baseX + perpX,
+        baseY + perpY,
+        baseX - perpX,
+        baseY - perpY
+      );
+    }
+
+    // Translucent central circular thumbstick knob (r = 18)
+    const knobR = this.thumbRadius;
+    const thumbFillAlpha = isActive ? 0.68 : 0.36;
+    const thumbRimAlpha = isActive ? 0.88 : 0.42;
     this.thumbGraphic.clear();
-    this.thumbGraphic.fillStyle(0x48cae4, thumbAlpha);
-    this.thumbGraphic.fillCircle(this.currentX, this.currentY, 20);
-    this.thumbGraphic.lineStyle(2, 0xe0fbfc, thumbAlpha);
-    this.thumbGraphic.strokeCircle(this.currentX, this.currentY, 20);
 
-    this.hintText.setPosition(this.originX, this.originY + this.maxRadius + 14);
-    this.hintText.setAlpha(isActive ? 0 : 0.65);
+    if (isActive) {
+      this.thumbGraphic.fillStyle(DF_PALETTE.agedGold, 0.14);
+      this.thumbGraphic.fillCircle(this.currentX, this.currentY, knobR + 5);
+    }
+
+    this.thumbGraphic.fillStyle(
+      isActive ? 0x1e2534 : 0x141924,
+      thumbFillAlpha
+    );
+    this.thumbGraphic.fillCircle(this.currentX, this.currentY, knobR);
+
+    this.thumbGraphic.lineStyle(
+      1.4,
+      isActive ? DF_PALETTE.goldBright : 0xe2e8f0,
+      thumbRimAlpha
+    );
+    this.thumbGraphic.strokeCircle(this.currentX, this.currentY, knobR);
+
+    this.thumbGraphic.lineStyle(
+      1,
+      isActive ? DF_PALETTE.agedGold : 0x94a3b8,
+      thumbRimAlpha * 0.42
+    );
+    this.thumbGraphic.strokeCircle(this.currentX, this.currentY, knobR - 3.5);
+
+    // Subtle soft highlight inside central button
+    this.thumbGraphic.fillStyle(
+      isActive ? DF_PALETTE.goldBright : 0xe2e8f0,
+      thumbRimAlpha * 0.24
+    );
+    this.thumbGraphic.fillCircle(this.currentX - 4, this.currentY - 4, 4.8);
   }
 }

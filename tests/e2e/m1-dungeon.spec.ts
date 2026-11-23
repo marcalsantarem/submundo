@@ -1,12 +1,25 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { GAME_VERSION } from '../../src/version';
+import {
+  DESKTOP_VIEWPORT,
+  MOBILE_LANDSCAPE_VIEWPORT,
+  assertLandscapeCanvas,
+  ensureHubScene,
+  openMobileLandscapePage,
+} from './helpers/landscape';
 
-test.describe('SUBMUNDO M1 — Real Browser E2E Validation (PC 800x600 & Mobile 9:16)', () => {
-  test('renders DungeonScene without console/page errors, validates skills & 5-room Boss progression, and captures PC/Mobile screenshots', async ({
+const SCREENSHOT_DIR = resolve(process.cwd(), 'docs/qa/screenshots');
+
+test.describe('SUBMUNDO M1 — Real Browser E2E Validation (PC 960x540 & Mobile Landscape 844x390)', () => {
+  test('renders DungeonScene without console/page errors, validates skills & 5-room Boss progression, and captures PC/Mobile Landscape screenshots', async ({
     page,
+    browser,
+    baseURL,
   }) => {
+    mkdirSync(SCREENSHOT_DIR, { recursive: true });
+
     const consoleErrors: string[] = [];
     const pageErrors: string[] = [];
 
@@ -20,20 +33,14 @@ test.describe('SUBMUNDO M1 — Real Browser E2E Validation (PC 800x600 & Mobile 
       pageErrors.push(err.message);
     });
 
-    // 1. Desktop Landscape (800x600)
-    await page.setViewportSize({ width: 800, height: 600 });
+    // 1. Desktop Landscape (960x540, 16:9)
+    await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto('/');
-    await page.evaluate(() => {
-      window.localStorage.clear();
-    });
+    await ensureHubScene(page, { clearStorage: true });
 
-    await page.waitForFunction(
-      () => typeof window.__SUBMUNDO_HUB_DEBUG__ !== 'undefined',
-      undefined,
-      { timeout: 10000 }
-    );
     await page.evaluate(() => {
       const hub = window.__SUBMUNDO_HUB_DEBUG__!;
+      hub.getDialogueBox().close();
       hub.setCampaignPhase('act1', 'act1_submundo');
       hub.enterDungeon('act1_submundo');
     });
@@ -47,17 +54,15 @@ test.describe('SUBMUNDO M1 — Real Browser E2E Validation (PC 800x600 & Mobile 
       { timeout: 10000 }
     );
 
+    await assertLandscapeCanvas(page, DESKTOP_VIEWPORT);
+
     const initialCheck = await page.evaluate(() => {
       const dbg = window.__SUBMUNDO_DEBUG__!;
       const run = dbg.getRunState();
       const hero = dbg.getHero();
       const monsters = dbg.getMonsters();
-      const canvas = document.querySelector('canvas');
       return {
         title: document.title,
-        hasCanvas: Boolean(canvas),
-        canvasWidth: canvas?.width ?? 0,
-        canvasHeight: canvas?.height ?? 0,
         heroAlive: hero.isAlive,
         heroHp: hero.stats.hp,
         heroMaxHp: hero.stats.maxHp,
@@ -70,9 +75,6 @@ test.describe('SUBMUNDO M1 — Real Browser E2E Validation (PC 800x600 & Mobile 
     });
 
     expect(initialCheck.title).toContain(`SUBMUNDO v${GAME_VERSION}`);
-    expect(initialCheck.hasCanvas).toBe(true);
-    expect(initialCheck.canvasWidth).toBe(800);
-    expect(initialCheck.canvasHeight).toBe(600);
     expect(initialCheck.heroAlive).toBe(true);
     expect(initialCheck.heroHp).toBe(120);
     expect(initialCheck.potionCharges).toBe(3);
@@ -88,10 +90,7 @@ test.describe('SUBMUNDO M1 — Real Browser E2E Validation (PC 800x600 & Mobile 
     });
     await page.waitForTimeout(120);
 
-    const pcScreenshotPath = resolve(
-      process.cwd(),
-      'docs/qa/screenshots/m1-pc-800x600.png'
-    );
+    const pcScreenshotPath = resolve(SCREENSHOT_DIR, 'm1-pc-960x540.png');
     await page.screenshot({ path: pcScreenshotPath });
     expect(existsSync(pcScreenshotPath)).toBe(true);
     expect(statSync(pcScreenshotPath).size).toBeGreaterThan(5000);
@@ -174,37 +173,61 @@ test.describe('SUBMUNDO M1 — Real Browser E2E Validation (PC 800x600 & Mobile 
     expect(progressionCheck.monstersKilled).toBe(21);
     expect(progressionCheck.soulsCollected).toBeGreaterThanOrEqual(250);
 
-    // 4. Mobile Portrait (360x640, 9:16 aspect ratio)
-    await page.setViewportSize({ width: 360, height: 640 });
-    await page.evaluate(() => {
-      window.__SUBMUNDO_DEBUG__!.restartRun();
-    });
-    await page.waitForTimeout(250);
+    // 4. Mobile Landscape (844x390, hasTouch: true, Phaser.Scale.FIT 16:9)
+    const { context: mobileContext, page: mobilePage } =
+      await openMobileLandscapePage(browser, {
+        baseURL,
+        consoleErrors,
+        pageErrors,
+      });
 
-    const mobileCheck = await page.evaluate(() => {
-      const canvas = document.querySelector('canvas');
-      const dbg = window.__SUBMUNDO_DEBUG__!;
-      dbg.triggerSkill('infernal_eruption');
-      return {
-        canvasWidth: canvas?.width ?? 0,
-        canvasHeight: canvas?.height ?? 0,
-        roomIndex: dbg.getRunState().currentRoomIndex,
-        status: dbg.getRunState().status,
-      };
-    });
+    try {
+      await mobilePage.goto('/');
+      await ensureHubScene(mobilePage, { clearStorage: true });
 
-    expect(mobileCheck.canvasWidth).toBe(360);
-    expect(mobileCheck.canvasHeight).toBe(640);
-    expect(mobileCheck.roomIndex).toBe(0);
+      await mobilePage.evaluate(() => {
+        const hub = window.__SUBMUNDO_HUB_DEBUG__!;
+        hub.getDialogueBox().close();
+        hub.setCampaignPhase('act1', 'act1_submundo');
+        hub.enterDungeon('act1_submundo');
+      });
 
-    await page.waitForTimeout(120);
-    const mobileScreenshotPath = resolve(
-      process.cwd(),
-      'docs/qa/screenshots/m1-mobile-360x640.png'
-    );
-    await page.screenshot({ path: mobileScreenshotPath });
-    expect(existsSync(mobileScreenshotPath)).toBe(true);
-    expect(statSync(mobileScreenshotPath).size).toBeGreaterThan(4000);
+      await mobilePage.waitForFunction(
+        () =>
+          typeof window.__SUBMUNDO_DEBUG__ !== 'undefined' &&
+          window.__SUBMUNDO_DEBUG__.getHero()?.isAlive === true &&
+          window.__SUBMUNDO_DEBUG__.getRunState()?.totalRooms === 5,
+        undefined,
+        { timeout: 10000 }
+      );
+
+      await mobilePage.waitForTimeout(200);
+      await assertLandscapeCanvas(mobilePage, MOBILE_LANDSCAPE_VIEWPORT);
+
+      const mobileCheck = await mobilePage.evaluate(() => {
+        const dbg = window.__SUBMUNDO_DEBUG__!;
+        dbg.triggerSkill('infernal_eruption');
+        return {
+          maxTouchPoints: navigator.maxTouchPoints,
+          roomIndex: dbg.getRunState().currentRoomIndex,
+          status: dbg.getRunState().status,
+        };
+      });
+
+      expect(mobileCheck.maxTouchPoints).toBeGreaterThan(0);
+      expect(mobileCheck.roomIndex).toBe(0);
+
+      await mobilePage.waitForTimeout(120);
+      const mobileScreenshotPath = resolve(
+        SCREENSHOT_DIR,
+        'm1-mobile-844x390.png'
+      );
+      await mobilePage.screenshot({ path: mobileScreenshotPath });
+      expect(existsSync(mobileScreenshotPath)).toBe(true);
+      expect(statSync(mobileScreenshotPath).size).toBeGreaterThan(4000);
+    } finally {
+      await mobileContext.close();
+    }
 
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);

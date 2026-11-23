@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { DF_FONTS, formatStatNumber } from '../ui/DarkFantasyUiBuilder';
 
 export type SkillForceVfx = 'inferno' | 'submundo' | 'empireo' | 'none';
 
@@ -325,43 +326,126 @@ export class CombatVfxManager {
     isHeroDamage = false,
   ): void {
     const rounded = Math.max(1, Math.round(amount));
-    const label = isHeroDamage
-      ? `-${rounded}`
-      : isCrit
-        ? `${rounded}!`
-        : `${rounded}`;
+    const formatted = formatStatNumber(rounded);
+    const showCritBanner = isCrit && !isHeroDamage;
+    const label = isHeroDamage ? `-${formatted}` : formatted;
 
     const color = isHeroDamage
       ? '#ef4444'
-      : isCrit
-        ? '#facc15'
+      : showCritBanner
+        ? '#fef08a'
         : '#f4f4f5';
 
-    const fontSize = isCrit ? '16px' : '13px';
+    const fontSize = showCritBanner ? '20px' : '14px';
     const offsetX = ((rounded * 7) % 11) - 5;
 
-    const text = this.scene.add
-      .text(x + offsetX, y - 12, label, {
-        fontFamily: 'monospace',
-        fontSize,
-        fontStyle: 'bold',
-        color,
-        stroke: '#09090b',
-        strokeThickness: 3,
-      })
-      .setOrigin(0.5)
-      .setDepth(45);
+    if (showCritBanner) {
+      const critLabel = this.scene.add
+        .text(x + offsetX, y - 30, 'CRÍTICO!', {
+          fontFamily: DF_FONTS.TITLE,
+          fontSize: '12px',
+          fontStyle: 'bold',
+          color: '#fde047',
+          stroke: '#09090b',
+          strokeThickness: 4,
+          shadow: {
+            offsetX: 0,
+            offsetY: 2,
+            color: '#000000',
+            blur: 3,
+            fill: true,
+          },
+          resolution: 2,
+        })
+        .setOrigin(0.5)
+        .setDepth(46)
+        .setScale(0.75);
 
-    if (isCrit) {
-      text.setScale(1.25);
+      this.scene.tweens.add({
+        targets: critLabel,
+        scaleX: 1.14,
+        scaleY: 1.14,
+        duration: 110,
+        ease: 'Back.easeOut',
+        onComplete: () => {
+          if (!critLabel.active) {
+            return;
+          }
+          this.scene.tweens.add({
+            targets: critLabel,
+            y: y - 58,
+            alpha: 0,
+            scaleX: 1.0,
+            scaleY: 1.0,
+            duration: 560,
+            ease: 'Cubic.easeOut',
+            onComplete: () => {
+              critLabel.destroy();
+            },
+          });
+        },
+      });
+    }
+
+    const damageStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: DF_FONTS.TITLE,
+      fontSize,
+      fontStyle: 'bold',
+      color,
+      stroke: '#09090b',
+      strokeThickness: showCritBanner ? 4 : 3,
+      resolution: 2,
+    };
+    if (showCritBanner) {
+      damageStyle.shadow = {
+        offsetX: 0,
+        offsetY: 2,
+        color: '#000000',
+        blur: 4,
+        fill: true,
+      };
+    }
+
+    const text = this.scene.add
+      .text(x + offsetX, y - (showCritBanner ? 14 : 12), label, damageStyle)
+      .setOrigin(0.5)
+      .setDepth(showCritBanner ? 46 : 45);
+
+    if (showCritBanner) {
+      text.setScale(0.8);
+      this.scene.tweens.add({
+        targets: text,
+        scaleX: 1.28,
+        scaleY: 1.28,
+        duration: 110,
+        ease: 'Back.easeOut',
+        onComplete: () => {
+          if (!text.active) {
+            return;
+          }
+          this.scene.tweens.add({
+            targets: text,
+            y: y - 42,
+            alpha: 0,
+            scaleX: 1.02,
+            scaleY: 1.02,
+            duration: 560,
+            ease: 'Cubic.easeOut',
+            onComplete: () => {
+              text.destroy();
+            },
+          });
+        },
+      });
+      return;
     }
 
     this.scene.tweens.add({
       targets: text,
-      y: y - (isCrit ? 38 : 28),
+      y: y - 28,
       alpha: 0,
-      scale: isCrit ? 1.0 : 0.9,
-      duration: isCrit ? 620 : 480,
+      scale: 0.9,
+      duration: 480,
       ease: 'Cubic.easeOut',
       onComplete: () => {
         text.destroy();
@@ -391,13 +475,14 @@ export class CombatVfxManager {
     });
 
     const text = this.scene.add
-      .text(x, y - 16, `+${rounded}`, {
-        fontFamily: 'monospace',
+      .text(x, y - 16, `+${formatStatNumber(rounded)}`, {
+        fontFamily: DF_FONTS.TITLE,
         fontSize: '14px',
         fontStyle: 'bold',
         color: '#38bdf8',
         stroke: '#09090b',
         strokeThickness: 3,
+        resolution: 2,
       })
       .setOrigin(0.5)
       .setDepth(46);
@@ -571,13 +656,14 @@ export class CombatVfxManager {
     });
 
     const label = this.scene.add
-      .text(fromX, fromY - 10, `+${count} Alma${count > 1 ? 's' : ''}`, {
-        fontFamily: 'monospace',
+      .text(fromX, fromY - 10, `+${formatStatNumber(count)} Alma${count > 1 ? 's' : ''}`, {
+        fontFamily: DF_FONTS.BODY,
         fontSize: '12px',
         fontStyle: 'bold',
         color: '#e0f2fe',
         stroke: '#0284c7',
         strokeThickness: 3,
+        resolution: 2,
       })
       .setOrigin(0.5)
       .setDepth(45);
@@ -741,37 +827,42 @@ export class CombatVfxManager {
     y: number,
     rarity: 'common' | 'magic' | 'rare' | 'legendary',
   ): void {
-    const beamConfig: Record<
-      'common' | 'magic' | 'rare' | 'legendary',
-      { color: number; height: number; width: number }
-    > = {
-      common: { color: 0xe4e4e7, height: 34, width: 6 },
-      magic: { color: 0x38bdf8, height: 48, width: 8 },
-      rare: { color: 0xfacc15, height: 64, width: 10 },
-      legendary: { color: 0xf97316, height: 84, width: 12 },
+    const ringColorMap: Record<'common' | 'magic' | 'rare' | 'legendary', number> = {
+      common: 0xe4e4e7,
+      magic: 0x60a5fa,
+      rare: 0xfacc15,
+      legendary: 0xf97316,
     };
 
-    const cfg = beamConfig[rarity];
-    const beam = this.scene.add.graphics({ x, y }).setDepth(39);
+    const color = ringColorMap[rarity];
+    const effect = this.scene.add.graphics({ x, y }).setDepth(39);
 
-    // Outer rarity column
-    beam.fillStyle(cfg.color, 0.28);
-    beam.fillRect(-cfg.width / 2, -cfg.height, cfg.width, cfg.height);
-    // Bright inner core pillar
-    beam.fillStyle(0xffffff, 0.65);
-    beam.fillRect(-1.5, -cfg.height * 0.85, 3, cfg.height * 0.85);
-    // Base ring on the dungeon floor
-    beam.lineStyle(2, cfg.color, 0.95);
-    beam.strokeEllipse(0, 0, cfg.width * 2.2, cfg.width * 0.9);
+    // Pilar vertical de luz EXCLUSIVAMENTE em itens Lendários (regra inegociável do dono)
+    if (rarity === 'legendary') {
+      const height = 160;
+      effect.fillStyle(0xf97316, 0.28);
+      effect.fillRect(-10, -height, 20, height);
+      effect.fillStyle(0xfde047, 0.48);
+      effect.fillRect(-4, -height * 0.9, 8, height * 0.9);
+      effect.fillStyle(0xfffbeb, 0.85);
+      effect.fillRect(-1.5, -height * 0.82, 3, height * 0.82);
+    }
+
+    // Anel sutil na base do drop no chão (todos os itens)
+    const ringWidth = rarity === 'legendary' ? 32 : 20;
+    const ringHeight = rarity === 'legendary' ? 13 : 8;
+    effect.lineStyle(rarity === 'legendary' ? 2.2 : 1.5, color, 0.9);
+    effect.strokeEllipse(0, 0, ringWidth, ringHeight);
 
     this.scene.tweens.add({
-      targets: beam,
-      scaleY: 1.18,
+      targets: effect,
+      scaleX: rarity === 'legendary' ? 1.15 : 1.35,
+      scaleY: rarity === 'legendary' ? 1.15 : 1.35,
       alpha: 0,
-      duration: rarity === 'legendary' ? 900 : 680,
+      duration: rarity === 'legendary' ? 760 : 480,
       ease: 'Cubic.easeOut',
       onComplete: () => {
-        beam.destroy();
+        effect.destroy();
       },
     });
   }
@@ -785,12 +876,13 @@ export class CombatVfxManager {
     const safeColor = colorHex && colorHex.trim().length > 0 ? colorHex : '#e4e4e7';
     const banner = this.scene.add
       .text(x, y - 16, label, {
-        fontFamily: 'monospace',
+        fontFamily: DF_FONTS.TITLE,
         fontSize: '12px',
         fontStyle: 'bold',
         color: safeColor,
         stroke: '#09090b',
         strokeThickness: 4,
+        resolution: 2,
       })
       .setOrigin(0.5)
       .setDepth(48);

@@ -25,3 +25,7 @@ test-results/
 
 # Clones e symlinks do ambiente
 marcalsantarem/
+
+# Python bytecode
+__pycache__/
+*.pyc

@@ -72,6 +72,7 @@ import {
 } from '../sprites/CombatVfx';
 import { HeroWeaponRig } from '../sprites/HeroWeaponRig';
 import { SceneCameraRig } from '../ui/CameraRig';
+import { DF_FONTS, DF_RARITY_THEME } from '../ui/DarkFantasyUiBuilder';
 import { DungeonHud, type HudSnapshot } from '../ui/DungeonHud';
 import {
   InventoryModal,
@@ -116,6 +117,9 @@ interface GroundDrop {
   position: Vector2D;
   sprite: Phaser.GameObjects.Sprite;
   glow: Phaser.GameObjects.Graphics;
+  labelContainer: Phaser.GameObjects.Container;
+  pillar?: Phaser.GameObjects.Graphics;
+  pillarTween?: Phaser.Tweens.Tween;
 }
 
 export interface SubmundoDebugApi {
@@ -143,9 +147,23 @@ const TILE_DISPLAY_SIZE = 32;
 const ARENA_PADDING = 36;
 const ROOM_CLEAR_AUTO_ADVANCE_MS = 1200;
 const DROP_PICKUP_RADIUS = 34;
+const GROUND_DROP_TAG_OFFSET_Y = 26;
+const GROUND_DROP_TAG_COLORS: Record<Rarity, string> = {
+  common: '#cbd5e1',
+  magic: '#60a5fa',
+  rare: '#facc15',
+  legendary: '#f97316',
+};
 const HERO_ATTACK_CANCEL_FRAME = 12;
 const HERO_HIT_CANCEL_FRAME = 21;
-const EQUIP_SLOTS: readonly EquipSlot[] = ['weapon', 'armor', 'amulet', 'ring'];
+const EQUIP_SLOTS: readonly EquipSlot[] = [
+  'weapon',
+  'armor',
+  'helm',
+  'boots',
+  'amulet',
+  'ring',
+];
 
 const RARITY_DROP_FRAME: Record<Rarity, number> = {
   common: 0,
@@ -173,7 +191,7 @@ export class DungeonScene extends Phaser.Scene {
   private hud!: DungeonHud;
   private inventoryModal!: InventoryModal;
   private cameraRig?: SceneCameraRig;
-  private viewport = resolveViewportConfig(800, 600);
+  private viewport = resolveViewportConfig(960, 540);
 
   private arenaLayer!: Phaser.GameObjects.Container;
   private lightingGraphics!: Phaser.GameObjects.Graphics;
@@ -201,6 +219,9 @@ export class DungeonScene extends Phaser.Scene {
   private isTestArena = false;
   private testArenaWave = 1;
   private testArenaWave2TriggerAtMs?: number;
+  private autoAttackEnabled = true;
+  private manualAttackQueued = false;
+  private manualAttackReadyAtMs = 0;
   private runSeedCounter = 1337;
   private lootSummaryText?: string;
   private runLootResolved = false;
@@ -223,6 +244,9 @@ export class DungeonScene extends Phaser.Scene {
     this.isTestArena = Boolean(data?.testArena);
     this.testArenaWave = 1;
     this.testArenaWave2TriggerAtMs = undefined;
+    this.autoAttackEnabled = true;
+    this.manualAttackQueued = false;
+    this.manualAttackReadyAtMs = 0;
     this.cameras.main.setBackgroundColor(
       this.isTestArena ? '#000000' : '#09090b'
     );
@@ -250,6 +274,20 @@ export class DungeonScene extends Phaser.Scene {
       onToggleInventory: () => {
         this.toggleInventoryModal();
       },
+      onBasicAttack: () => {
+        this.handleManualBasicAttack();
+      },
+      onToggleAutoAttack: () => {
+        this.autoAttackEnabled = !this.autoAttackEnabled;
+        if (this.autoAttackEnabled && this.hero) {
+          this.hero.basicAttackReadyAtMs = Math.min(
+            this.hero.basicAttackReadyAtMs,
+            this.elapsedTimeMs
+          );
+        }
+        soundManager.play('ui_click');
+        this.updateHud(this.elapsedTimeMs);
+      },
     });
 
     this.inventoryModal = new InventoryModal(this, {
@@ -265,13 +303,13 @@ export class DungeonScene extends Phaser.Scene {
     });
 
     this.viewport = resolveViewportConfig(
-      this.scale.width || 800,
-      this.scale.height || 600
+      this.scale.width || 960,
+      this.scale.height || 540
     );
     this.cameraRig = new SceneCameraRig(this, {
       width: this.viewport.width,
       height: this.viewport.height,
-      worldZoom: this.getWorldZoom(this.viewport.mode),
+      worldZoom: this.getWorldZoom(),
       boundsWidth: this.viewport.width,
       boundsHeight: this.viewport.height,
     });
@@ -312,6 +350,9 @@ export class DungeonScene extends Phaser.Scene {
       this.isTestArena = false;
       this.testArenaWave = 1;
       this.testArenaWave2TriggerAtMs = undefined;
+      this.autoAttackEnabled = true;
+      this.manualAttackQueued = false;
+      this.manualAttackReadyAtMs = 0;
       this.cameraRig?.destroy();
       this.cameraRig = undefined;
       this.inventoryModal?.destroy();
@@ -357,8 +398,8 @@ export class DungeonScene extends Phaser.Scene {
     const nowMs = this.elapsedTimeMs;
 
     const bounds = {
-      width: this.scale.width || 800,
-      height: this.scale.height || 600,
+      width: this.scale.width || 960,
+      height: this.scale.height || 540,
       padding: ARENA_PADDING,
     };
 
@@ -379,6 +420,20 @@ export class DungeonScene extends Phaser.Scene {
       moveHero(this.hero, moveDir, clampedDelta, bounds);
       if (!this.isTestArena) {
         this.collectNearbyDrops();
+      }
+
+      if (!this.autoAttackEnabled) {
+        if (this.manualAttackQueued) {
+          this.manualAttackQueued = false;
+          this.hero.basicAttackReadyAtMs = 0;
+        } else {
+          this.hero.basicAttackReadyAtMs = Math.max(
+            this.hero.basicAttackReadyAtMs,
+            nowMs + 120
+          );
+        }
+      } else {
+        this.manualAttackQueued = false;
       }
 
       const events = tickCombat(
@@ -426,8 +481,8 @@ export class DungeonScene extends Phaser.Scene {
 
     const nowMs = this.elapsedTimeMs;
     const bounds = {
-      width: this.scale.width || 800,
-      height: this.scale.height || 600,
+      width: this.scale.width || 960,
+      height: this.scale.height || 540,
       padding: ARENA_PADDING,
     };
     const moveDir = this.hud.getMoveVector();
@@ -458,6 +513,75 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     return events;
+  }
+
+  private handleManualBasicAttack(): void {
+    if (
+      !this.hero ||
+      !this.hero.isAlive ||
+      !this.runState ||
+      this.inventoryModal?.isOpen() ||
+      this.runState.status !== 'in_progress'
+    ) {
+      return;
+    }
+
+    const nowMs = this.elapsedTimeMs;
+    if (nowMs < this.manualAttackReadyAtMs) {
+      return;
+    }
+
+    const cooldownMs = Math.max(
+      220,
+      Math.round(this.hero.stats.attackCooldownMs * 0.65)
+    );
+    this.manualAttackReadyAtMs = nowMs + cooldownMs;
+
+    const reach = this.hero.stats.attackRange + 28;
+    let nearestTarget: MonsterInstance | undefined;
+    let nearestDist = Number.POSITIVE_INFINITY;
+    for (const monster of this.monsters) {
+      if (!monster.isAlive || monster.hp <= 0) {
+        continue;
+      }
+      const dist = distanceBetween(this.hero.position, monster.position);
+      if (dist <= reach && dist < nearestDist) {
+        nearestDist = dist;
+        nearestTarget = monster;
+      }
+    }
+
+    if (nearestTarget) {
+      const dx = nearestTarget.position.x - this.hero.position.x;
+      if (
+        Math.abs(dx) > 0.5 &&
+        (!this.heroIsMoving || this.lastMoveDirX === 0)
+      ) {
+        this.heroFlipX = dx < 0;
+        this.heroSprite?.setFlipX(this.heroFlipX);
+      }
+
+      if (this.autoAttackEnabled) {
+        this.hero.basicAttackReadyAtMs = Math.min(
+          this.hero.basicAttackReadyAtMs,
+          nowMs
+        );
+      } else {
+        this.manualAttackQueued = true;
+        this.hero.basicAttackReadyAtMs = 0;
+      }
+
+      if (nearestDist <= this.hero.stats.attackRange) {
+        return;
+      }
+    }
+
+    const facingLeft = this.heroSprite?.flipX ?? this.heroFlipX;
+    soundManager.play('attack');
+    if (!this.heroIsMoving && this.currentHeroActionAnim !== 'dash') {
+      this.playHeroActionAnim('attack');
+    }
+    this.weaponRig?.playAttackSwing(facingLeft, false);
   }
 
   public forceClearRoom(): void {
@@ -520,12 +644,15 @@ export class DungeonScene extends Phaser.Scene {
     stageId?: CampaignStageId;
     testArena?: boolean;
   }): void {
-    const width = this.scale.width || 800;
-    const height = this.scale.height || 600;
+    const width = this.scale.width || 960;
+    const height = this.scale.height || 540;
 
     this.isTestArena = Boolean(data?.testArena);
     this.testArenaWave = 1;
     this.testArenaWave2TriggerAtMs = undefined;
+    this.autoAttackEnabled = true;
+    this.manualAttackQueued = false;
+    this.manualAttackReadyAtMs = 0;
     this.cameras.main.setBackgroundColor(
       this.isTestArena ? '#000000' : '#09090b'
     );
@@ -634,8 +761,8 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private loadCurrentRoom(): void {
-    const width = this.scale.width || 800;
-    const height = this.scale.height || 600;
+    const width = this.scale.width || 960;
+    const height = this.scale.height || 540;
     const currentRoom = getCurrentRoom(this.runState);
 
     this.destroyPortal();
@@ -1151,8 +1278,8 @@ export class DungeonScene extends Phaser.Scene {
     spawns: ReadonlyArray<{ id: string; dx: number; dy: number }>,
     waveNum: number
   ): void {
-    const width = this.scale.width || 800;
-    const height = this.scale.height || 600;
+    const width = this.scale.width || 960;
+    const height = this.scale.height || 540;
     this.monsters = [];
     for (const spec of spawns) {
       const def = this.monsterDefMap.get(spec.id);
@@ -1315,8 +1442,8 @@ export class DungeonScene extends Phaser.Scene {
   private spawnRoomPortal(): void {
     this.destroyPortal();
 
-    const width = this.scale.width || 800;
-    const height = this.scale.height || 600;
+    const width = this.scale.width || 960;
+    const height = this.scale.height || 540;
     const portalX = Math.round(width / 2);
     const portalY = Math.round(Math.max(88, height * 0.24));
 
@@ -1337,11 +1464,13 @@ export class DungeonScene extends Phaser.Scene {
 
     const label = this.add
       .text(0, -28, 'Portal Espectral', {
-        fontFamily: 'monospace',
+        fontFamily: DF_FONTS.TITLE,
         fontSize: '11px',
+        fontStyle: 'bold',
         color: '#e0f2fe',
         stroke: '#09090b',
         strokeThickness: 3,
+        resolution: 2,
       })
       .setOrigin(0.5);
 
@@ -1518,10 +1647,24 @@ export class DungeonScene extends Phaser.Scene {
 
   private updateHud(nowMs: number): void {
     const currentRoom = getCurrentRoom(this.runState);
-    const bossMonster = currentRoom.isBossRoom
-      ? (this.monsters.find((m) => m.type === 'boss') ??
-        this.monsters.find((m) => m.defId === this.activeStage?.bossId))
-      : undefined;
+    const livingBosses = this.monsters.filter(
+      (m) => m.isAlive && m.hp > 0 && m.type === 'boss'
+    );
+    let bossMonster: MonsterInstance | undefined;
+    if (livingBosses.length > 0) {
+      let nearestBossDist = Number.POSITIVE_INFINITY;
+      for (const candidate of livingBosses) {
+        const dist = distanceBetween(this.hero.position, candidate.position);
+        if (dist < nearestBossDist) {
+          nearestBossDist = dist;
+          bossMonster = candidate;
+        }
+      }
+    } else if (currentRoom.isBossRoom) {
+      bossMonster =
+        this.monsters.find((m) => m.type === 'boss') ??
+        this.monsters.find((m) => m.defId === this.activeStage?.bossId);
+    }
 
     const skillCooldownsMs: Record<string, number> = {};
     for (const skill of this.skillsCatalog) {
@@ -1538,16 +1681,53 @@ export class DungeonScene extends Phaser.Scene {
         : undefined;
 
     const equippedCount = (
-      ['weapon', 'armor', 'amulet', 'ring'] as const
+      ['weapon', 'armor', 'helm', 'boots', 'amulet', 'ring'] as const
     ).filter((slot) => this.inventory.equipped[slot] !== null).length;
+
+    const heroLevel =
+      1 +
+      (this.activeProfile
+        ? Object.values(this.activeProfile.altarLevels).reduce(
+            (a, b) => a + b,
+            0
+          )
+        : 0);
+
+    const missionObjective = this.isTestArena
+      ? this.testArenaWave >= 2
+        ? 'Arena de Teste — Onda 2 (Bosses)'
+        : 'Arena de Teste — Onda 1 (Monstros)'
+      : `${currentRoom.roomNumber}/${this.runState.totalRooms} — ${currentRoom.title}`;
+
+    const minimap = {
+      heroX: this.hero.position.x,
+      heroY: this.hero.position.y,
+      arenaWidth: this.scale.width || 960,
+      arenaHeight: this.scale.height || 540,
+      enemies: this.monsters
+        .filter((m) => m.isAlive)
+        .map((m) => ({
+          x: m.position.x,
+          y: m.position.y,
+          isBoss: m.type === 'boss',
+        })),
+    };
 
     const snapshot: HudSnapshot = {
       hp: this.hero.stats.hp,
       maxHp: this.hero.stats.maxHp,
       souls: this.hero.souls,
+      essences: this.essencesCollected,
+      heroPortraitFrame: this.heroSpriteKey === 'hero_wraith' ? 1 : 0,
+      heroName: this.heroSpriteKey === 'hero_wraith' ? 'ESPECTRO' : 'GUERREIRO',
+      heroLevel,
+      autoAttackEnabled: this.autoAttackEnabled,
+      isTestArena: this.isTestArena,
+      missionObjective,
+      minimap,
       roomNumber: currentRoom.roomNumber,
       totalRooms: this.runState.totalRooms,
-      isBossRoom: currentRoom.isBossRoom,
+      isBossRoom: currentRoom.isBossRoom || livingBosses.length > 0,
       roomTitle: currentRoom.title,
       stageName: this.activeStage?.name,
       bossHp: bossMonster?.hp,
@@ -1566,8 +1746,8 @@ export class DungeonScene extends Phaser.Scene {
     this.hud.update(snapshot);
   }
 
-  private getWorldZoom(mode: 'desktop_landscape' | 'mobile_portrait'): number {
-    return mode === 'mobile_portrait' ? 1.45 : 1.65;
+  private getWorldZoom(): number {
+    return 1.45;
   }
 
   private handleViewportResize(width: number, height: number): void {
@@ -1617,12 +1797,17 @@ export class DungeonScene extends Phaser.Scene {
       );
       drop.sprite.setPosition(drop.position.x, drop.position.y);
       drop.glow.setPosition(drop.position.x, drop.position.y);
+      drop.labelContainer.setPosition(
+        drop.position.x,
+        drop.position.y - GROUND_DROP_TAG_OFFSET_Y
+      );
+      drop.pillar?.setPosition(drop.position.x, drop.position.y);
     }
 
     this.cameraRig?.resize(
       viewport.width,
       viewport.height,
-      this.getWorldZoom(viewport.mode),
+      this.getWorldZoom(),
       viewport.width,
       viewport.height
     );
@@ -1726,9 +1911,119 @@ export class DungeonScene extends Phaser.Scene {
     };
   }
 
+  private createLegendaryLootPillar(
+    x: number,
+    y: number
+  ): { pillar: Phaser.GameObjects.Graphics; tween: Phaser.Tweens.Tween } {
+    const pillar = this.add.graphics({ x, y }).setDepth(15);
+    const totalHeight = 190;
+    const segments = 10;
+    const segmentHeight = totalHeight / segments;
+
+    // Camadas verticais douradas/alaranjadas com decaimento suave de alpha
+    for (let i = 0; i < segments; i++) {
+      const t = i / segments;
+      const fade = Math.pow(1 - t, 1.55);
+      const segY = -(i + 1) * segmentHeight;
+      const overlap = 1;
+
+      const outerWidth = 26 * (1 - t * 0.42);
+      pillar.fillStyle(0xf97316, 0.22 * fade);
+      pillar.fillRect(
+        -outerWidth / 2,
+        segY,
+        outerWidth,
+        segmentHeight + overlap
+      );
+
+      const midWidth = 12 * (1 - t * 0.48);
+      pillar.fillStyle(0xfde047, 0.36 * fade);
+      pillar.fillRect(-midWidth / 2, segY, midWidth, segmentHeight + overlap);
+
+      const coreWidth = Math.max(2, 4 * (1 - t * 0.5));
+      pillar.fillStyle(0xfffbeb, 0.72 * fade);
+      pillar.fillRect(-coreWidth / 2, segY, coreWidth, segmentHeight + overlap);
+    }
+
+    // Anel radiante na base do item lendário no chão
+    pillar.fillStyle(0xf97316, 0.22);
+    pillar.fillEllipse(0, 2, 42, 16);
+    pillar.fillStyle(0xfde047, 0.34);
+    pillar.fillEllipse(0, 1, 26, 10);
+    pillar.lineStyle(1.8, 0xfde047, 0.85);
+    pillar.strokeEllipse(0, 2, 34, 13);
+    pillar.lineStyle(1.2, 0xfffbeb, 0.9);
+    pillar.strokeEllipse(0, 2, 20, 8);
+
+    const tween = this.tweens.add({
+      targets: pillar,
+      alpha: { from: 0.82, to: 1 },
+      scaleX: { from: 0.94, to: 1.06 },
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    return { pillar, tween };
+  }
+
+  private createGroundDropLabel(
+    item: ItemInstance,
+    x: number,
+    y: number,
+    rarityNum: number
+  ): Phaser.GameObjects.Container {
+    const rarityLabel = DF_RARITY_THEME[item.rarity].label;
+    const tagText = this.add
+      .text(0, 0, `[${item.name} (${rarityLabel})]`, {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: GROUND_DROP_TAG_COLORS[item.rarity],
+        stroke: '#090b10',
+        strokeThickness: 2,
+        resolution: 2,
+      })
+      .setOrigin(0.5);
+
+    const padX = 7;
+    const padY = 3;
+    const boxW = Math.ceil(tagText.width) + padX * 2;
+    const boxH = Math.ceil(tagText.height) + padY * 2;
+    const tagBg = this.add.graphics();
+    tagBg.fillStyle(0x090b10, 0.78);
+    tagBg.fillRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 4);
+    tagBg.lineStyle(
+      1,
+      item.rarity === 'legendary' ? 0xf97316 : rarityNum,
+      item.rarity === 'legendary' ? 0.65 : 0.32
+    );
+    tagBg.strokeRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 4);
+
+    return this.add
+      .container(x, y - GROUND_DROP_TAG_OFFSET_Y, [tagBg, tagText])
+      .setDepth(28);
+  }
+
+  private destroyGroundDropVisuals(drop: GroundDrop): void {
+    if (drop.pillarTween) {
+      drop.pillarTween.stop();
+      drop.pillarTween = undefined;
+    }
+    if (drop.pillar) {
+      this.tweens?.killTweensOf(drop.pillar);
+      drop.pillar.destroy();
+      drop.pillar = undefined;
+    }
+    drop.labelContainer.destroy(true);
+    drop.sprite.destroy();
+    drop.glow.destroy();
+  }
+
   private spawnGroundDrop(item: ItemInstance, rawPosition: Vector2D): void {
-    const width = this.scale.width || 800;
-    const height = this.scale.height || 600;
+    const width = this.scale.width || 960;
+    const height = this.scale.height || 540;
     const x = Math.max(
       ARENA_PADDING,
       Math.min(width - ARENA_PADDING, rawPosition.x)
@@ -1757,6 +2052,17 @@ export class DungeonScene extends Phaser.Scene {
       .setScale(1.5)
       .setDepth(16);
 
+    const labelContainer = this.createGroundDropLabel(item, x, y, rarityNum);
+
+    // REGRA INEGOCIÁVEL: pilar de luz vertical EXCLUSIVAMENTE em itens Lendários
+    let pillar: Phaser.GameObjects.Graphics | undefined;
+    let pillarTween: Phaser.Tweens.Tween | undefined;
+    if (item.rarity === 'legendary') {
+      const created = this.createLegendaryLootPillar(x, y);
+      pillar = created.pillar;
+      pillarTween = created.tween;
+    }
+
     soundManager.play(
       item.rarity === 'legendary' ? 'loot_legendary' : 'loot_drop'
     );
@@ -1766,6 +2072,9 @@ export class DungeonScene extends Phaser.Scene {
       position: { x, y },
       sprite,
       glow,
+      labelContainer,
+      pillar,
+      pillarTween,
     });
   }
 
@@ -1797,8 +2106,7 @@ export class DungeonScene extends Phaser.Scene {
           remaining.push(drop);
           continue;
         }
-        drop.sprite.destroy();
-        drop.glow.destroy();
+        this.destroyGroundDropVisuals(drop);
         if (this.inventory.equipped[drop.item.slot] === null) {
           equipItemFromBag(this.inventory, drop.item.instanceId);
           this.recalculateHeroGear();
@@ -1837,16 +2145,14 @@ export class DungeonScene extends Phaser.Scene {
           RARITY_COLORS[drop.item.rarity]
         );
       }
-      drop.sprite.destroy();
-      drop.glow.destroy();
+      this.destroyGroundDropVisuals(drop);
     }
     this.groundDrops = [];
   }
 
   private clearGroundDrops(): void {
     for (const drop of this.groundDrops) {
-      drop.sprite.destroy();
-      drop.glow.destroy();
+      this.destroyGroundDropVisuals(drop);
     }
     this.groundDrops = [];
   }

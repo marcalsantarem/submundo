@@ -298,10 +298,66 @@ describe('LootGenerator & Run Inventory (T-017)', () => {
     expect(deathInv.equipped).toEqual({
       weapon: null,
       armor: null,
+      helm: null,
+      boots: null,
       amulet: null,
       ring: null,
     });
     expect(deathInv.bag).toHaveLength(0);
     expect(hero.souls).toBe(75);
+  });
+
+  it('generates and equips helm and boots across all 6 equipment slots (T-108a)', () => {
+    const rng = createSeededRng(3030);
+    const inv = createRunInventory();
+    const hero = createHero({ x: 0, y: 0 });
+    const baseStats = { ...DEFAULT_HERO_STATS };
+
+    const helm = generateItemDrop({
+      rng,
+      forcedRarity: 'rare',
+      forcedSlot: 'helm',
+    });
+    const boots = generateItemDrop({
+      rng,
+      forcedRarity: 'legendary',
+      forcedSlot: 'boots',
+    });
+
+    expect(helm.slot).toBe('helm');
+    expect(helm.affixes.length).toBeGreaterThanOrEqual(2);
+    expect(helm.affixes.every((a) => a.allowedSlots.includes('helm'))).toBe(
+      true
+    );
+
+    expect(boots.slot).toBe('boots');
+    expect(boots.affixes).toHaveLength(3);
+    expect(boots.affixes.every((a) => a.allowedSlots.includes('boots'))).toBe(
+      true
+    );
+    expect(boots.legendaryPower).toBeDefined();
+
+    expect(addItemToBag(inv, helm)).toBe(true);
+    expect(addItemToBag(inv, boots)).toBe(true);
+
+    expect(equipItemFromBag(inv, helm.instanceId)).toEqual({
+      equipped: helm,
+      previous: null,
+    });
+    expect(equipItemFromBag(inv, boots.instanceId)).toEqual({
+      equipped: boots,
+      previous: null,
+    });
+
+    expect(inv.equipped.helm?.instanceId).toBe(helm.instanceId);
+    expect(inv.equipped.boots?.instanceId).toBe(boots.instanceId);
+
+    const bonuses = computeGearBonuses(inv.equipped);
+    expect(bonuses.defense).toBeGreaterThan(0);
+    expect(bonuses.moveSpeed).toBeGreaterThan(0);
+
+    const nextStats = applyGearToHero(hero, baseStats, inv.equipped);
+    expect(nextStats.defense).toBeGreaterThan(baseStats.defense);
+    expect(nextStats.moveSpeed).toBeGreaterThan(baseStats.moveSpeed);
   });
 });

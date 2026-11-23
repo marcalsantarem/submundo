@@ -15,8 +15,8 @@ export interface RoomSpec {
   difficultyScale?: number;
 }
 
-const DEFAULT_ARENA_WIDTH = 800;
-const DEFAULT_ARENA_HEIGHT = 600;
+const DEFAULT_ARENA_WIDTH = 960;
+const DEFAULT_ARENA_HEIGHT = 540;
 const DEFAULT_SEED = 1337;
 const SAFE_BORDER_MARGIN = 48;
 const SAFE_HERO_RADIUS = 110;

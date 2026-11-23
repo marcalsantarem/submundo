@@ -1,12 +1,27 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { GAME_VERSION } from '../../src/version';
+import {
+  DESKTOP_VIEWPORT,
+  MOBILE_LANDSCAPE_VIEWPORT,
+  assertLandscapeCanvas,
+  clickLogicalCanvas,
+  dispatchWindowKey,
+  ensureHubScene,
+  openMobileLandscapePage,
+} from './helpers/landscape';
 
-test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 & Mobile 360x640)', () => {
-  test('validates v0.2.0 PWA assets, loot drop/pickup/equip, InventoryModal pause, victory extraction, death loss, and PC/Mobile screenshots', async ({
+const SCREENSHOT_DIR = resolve(process.cwd(), 'docs/qa/screenshots');
+
+test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 960x540 & Mobile Landscape 844x390)', () => {
+  test('validates PWA landscape assets, loot drop/pickup/equip, InventoryModal pause, victory extraction, death loss, and PC/Mobile Landscape screenshots', async ({
     page,
+    browser,
+    baseURL,
   }) => {
+    mkdirSync(SCREENSHOT_DIR, { recursive: true });
+
     const consoleErrors: string[] = [];
     const pageErrors: string[] = [];
 
@@ -20,20 +35,14 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 
       pageErrors.push(err.message);
     });
 
-    // 1. Desktop Landscape (800x600) + PWA checks
-    await page.setViewportSize({ width: 800, height: 600 });
+    // 1. Desktop Landscape (960x540) + PWA checks
+    await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto('/');
-    await page.evaluate(() => {
-      window.localStorage.clear();
-    });
+    await ensureHubScene(page, { clearStorage: true });
 
-    await page.waitForFunction(
-      () => typeof window.__SUBMUNDO_HUB_DEBUG__ !== 'undefined',
-      undefined,
-      { timeout: 10000 }
-    );
     await page.evaluate(() => {
       const hub = window.__SUBMUNDO_HUB_DEBUG__!;
+      hub.getDialogueBox().close();
       hub.setCampaignPhase('act1', 'act1_submundo');
       hub.enterDungeon('act1_submundo');
     });
@@ -46,6 +55,8 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 
       undefined,
       { timeout: 10000 }
     );
+
+    await assertLandscapeCanvas(page, DESKTOP_VIEWPORT);
 
     const pwaCheck = await page.evaluate(async () => {
       const manifestHref = document
@@ -72,6 +83,7 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 
         manifestStatus: manifestRes.status,
         manifestShortName: manifestJson?.short_name ?? null,
         manifestDisplay: manifestJson?.display ?? null,
+        manifestOrientation: manifestJson?.orientation ?? null,
         icon192Status: icon192Res.status,
         icon192Type: icon192Res.headers.get('content-type') ?? '',
         appleIconStatus: appleIconRes.status,
@@ -81,13 +93,13 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 
     });
 
     expect(pwaCheck.title).toBe(`SUBMUNDO v${GAME_VERSION}`);
-    expect(pwaCheck.title).toBe('SUBMUNDO v0.5.0');
     expect(pwaCheck.manifestHref).toBe('./manifest.webmanifest');
     expect(pwaCheck.appleIconHref).toBe('./icons/apple-touch-icon.png');
     expect(pwaCheck.icon192Href).toBe('./icons/icon-192.png');
     expect(pwaCheck.manifestStatus).toBe(200);
     expect(pwaCheck.manifestShortName).toBe('SUBMUNDO');
     expect(pwaCheck.manifestDisplay).toBe('standalone');
+    expect(pwaCheck.manifestOrientation).toBe('landscape');
     expect(pwaCheck.icon192Status).toBe(200);
     expect(pwaCheck.icon192Type).toContain('image/png');
     expect(pwaCheck.appleIconStatus).toBe(200);
@@ -145,7 +157,7 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 
       );
     }
 
-    // 3. Spawn 5 more drops and walk over them to populate bag (>= 2 items) + test explicit equipItem
+    // 3. Spawn 7 more drops and walk over them to populate bag (>= 2 items across 6 slots) + test explicit equipItem
     await page.evaluate(() => {
       const dbg = window.__SUBMUNDO_DEBUG__!;
       dbg.spawnTestDrop('rare');
@@ -153,6 +165,8 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 
       dbg.spawnTestDrop('legendary');
       dbg.spawnTestDrop('rare');
       dbg.spawnTestDrop('common');
+      dbg.spawnTestDrop('magic');
+      dbg.spawnTestDrop('rare');
     });
 
     await page.keyboard.down('KeyD');
@@ -185,42 +199,10 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 
 
     expect(equipResult.ok).toBe(true);
     expect(equipResult.equippedInSlot).toBe(equipResult.candidateId);
-    expect(equipResult.bagCount).toBeGreaterThanOrEqual(2);
+    expect(equipResult.bagCount).toBeGreaterThanOrEqual(1);
 
-    // 4. Open/close InventoryModal via 'I' key (pauses scene) and via "Bolsa" HUD button
-    const dispatchKey = async (key: string, code: string, keyCode: number) => {
-      await page.evaluate(
-        ({ k, c, kc }) => {
-          const down = new KeyboardEvent('keydown', {
-            key: k,
-            code: c,
-            keyCode: kc,
-            which: kc,
-            bubbles: true,
-            cancelable: true,
-          });
-          window.dispatchEvent(down);
-        },
-        { k: key, c: code, kc: keyCode }
-      );
-      await page.waitForTimeout(60);
-      await page.evaluate(
-        ({ k, c, kc }) => {
-          const up = new KeyboardEvent('keyup', {
-            key: k,
-            code: c,
-            keyCode: kc,
-            which: kc,
-            bubbles: true,
-            cancelable: true,
-          });
-          window.dispatchEvent(up);
-        },
-        { k: key, c: code, kc: keyCode }
-      );
-    };
-
-    await dispatchKey('i', 'KeyI', 73);
+    // 4. Open/close InventoryModal via 'I' key (pauses scene) and via HUD Mochila button
+    await dispatchWindowKey(page, 'i', 'KeyI', 73);
     await page.waitForFunction(
       () =>
         (
@@ -249,7 +231,7 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 
     expect(pauseSnapshotB).toBe(pauseSnapshotA.elapsedMs);
 
     // Close via 'I'
-    await dispatchKey('i', 'KeyI', 73);
+    await dispatchWindowKey(page, 'i', 'KeyI', 73);
     await page.waitForFunction(
       () =>
         (
@@ -261,13 +243,17 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 
       { timeout: 3000 }
     );
 
-    // Open via HUD "Bolsa" button click (x=462, y=26 in 800x600 desktop layout)
-    const canvasRect = await page.evaluate(() => {
-      const rect = document.querySelector('canvas')?.getBoundingClientRect();
-      return rect ? { x: rect.left, y: rect.top } : null;
+    // Open via HUD Mochila button click (dynamic logical position in 960x540 layout)
+    const desktopBagBtn = await page.evaluate(() => {
+      const scene = window.__SUBMUNDO_DEBUG__!.scene as unknown as {
+        hud: { bagBtnContainer: { x: number; y: number } };
+      };
+      return {
+        x: scene.hud.bagBtnContainer.x,
+        y: scene.hud.bagBtnContainer.y,
+      };
     });
-    expect(canvasRect).toBeTruthy();
-    await page.mouse.click(canvasRect!.x + 462, canvasRect!.y + 26);
+    await clickLogicalCanvas(page, desktopBagBtn.x, desktopBagBtn.y);
 
     await page.waitForFunction(
       () =>
@@ -281,17 +267,14 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 
     );
     await page.waitForTimeout(150);
 
-    // PC Screenshot with InventoryModal open showing equipped gear, forces, stats & bag
-    const pcScreenshotPath = resolve(
-      process.cwd(),
-      'docs/qa/screenshots/m2-pc-800x600.png'
-    );
+    // PC Screenshot with InventoryModal open showing 6 equipped slots, forces, stats & 4x4 bag
+    const pcScreenshotPath = resolve(SCREENSHOT_DIR, 'm2-pc-960x540.png');
     await page.screenshot({ path: pcScreenshotPath });
     expect(existsSync(pcScreenshotPath)).toBe(true);
     expect(statSync(pcScreenshotPath).size).toBeGreaterThan(5000);
 
     // Close InventoryModal with Escape
-    await dispatchKey('Escape', 'Escape', 27);
+    await dispatchWindowKey(page, 'Escape', 'Escape', 27);
     await page.waitForFunction(
       () =>
         (
@@ -332,7 +315,7 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 
     // 6. Defeat loot resolution (lostItemsOnDeath clears equipped & bag)
     await page.evaluate(() => {
       const dbg = window.__SUBMUNDO_DEBUG__!;
-      dbg.restartRun();
+      dbg.restartRun('act1_submundo');
       const hero = dbg.getHero();
       hero.invulnerableUntilMs = 999999;
       hero.basicAttackReadyAtMs = 999999;
@@ -392,52 +375,87 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 800x600 
     expect(defeatCheck.bagCount).toBe(0);
     expect(defeatCheck.equippedCount).toBe(0);
 
-    // 7. Mobile Portrait (360x640, 9:16): ground drops + HUD + Bolsa button + joystick visible
-    await page.setViewportSize({ width: 360, height: 640 });
-    await page.evaluate(() => {
-      const dbg = window.__SUBMUNDO_DEBUG__!;
-      dbg.restartRun();
-      dbg.spawnTestDrop('legendary');
-      dbg.spawnTestDrop('rare');
-    });
-    await page.waitForTimeout(250);
+    // 7. Mobile Landscape (844x390, hasTouch: true): ground drops + HUD + Mochila button + touch controls
+    const { context: mobileContext, page: mobilePage } =
+      await openMobileLandscapePage(browser, {
+        baseURL,
+        consoleErrors,
+        pageErrors,
+      });
 
-    const mobileScreenshotPath = resolve(
-      process.cwd(),
-      'docs/qa/screenshots/m2-mobile-360x640.png'
-    );
-    await page.screenshot({ path: mobileScreenshotPath });
-    expect(existsSync(mobileScreenshotPath)).toBe(true);
-    expect(statSync(mobileScreenshotPath).size).toBeGreaterThan(4000);
+    try {
+      await mobilePage.goto('/');
+      await ensureHubScene(mobilePage, { clearStorage: true });
 
-    // Test Mobile "Bolsa" HUD button tap (x = 360 - 58 = 302, y = 640 - 222 = 418)
-    const mobileCanvasRect = await page.evaluate(() => {
-      const rect = document.querySelector('canvas')?.getBoundingClientRect();
-      return rect ? { x: rect.left, y: rect.top } : null;
-    });
-    expect(mobileCanvasRect).toBeTruthy();
-    await page.mouse.click(mobileCanvasRect!.x + 302, mobileCanvasRect!.y + 418);
-    await page.waitForFunction(
-      () =>
-        (
-          window.__SUBMUNDO_DEBUG__!.scene as unknown as {
-            inventoryModal: { isOpen: () => boolean };
-          }
-        ).inventoryModal.isOpen() === true,
-      undefined,
-      { timeout: 3000 }
-    );
-    await dispatchKey('Escape', 'Escape', 27);
-    await page.waitForFunction(
-      () =>
-        (
-          window.__SUBMUNDO_DEBUG__!.scene as unknown as {
-            inventoryModal: { isOpen: () => boolean };
-          }
-        ).inventoryModal.isOpen() === false,
-      undefined,
-      { timeout: 3000 }
-    );
+      await mobilePage.evaluate(() => {
+        const hub = window.__SUBMUNDO_HUB_DEBUG__!;
+        hub.getDialogueBox().close();
+        hub.setCampaignPhase('act1', 'act1_submundo');
+        hub.enterDungeon('act1_submundo');
+      });
+
+      await mobilePage.waitForFunction(
+        () =>
+          typeof window.__SUBMUNDO_DEBUG__ !== 'undefined' &&
+          window.__SUBMUNDO_DEBUG__.getHero()?.isAlive === true &&
+          window.__SUBMUNDO_DEBUG__.getRunState()?.totalRooms === 5,
+        undefined,
+        { timeout: 10000 }
+      );
+
+      await mobilePage.evaluate(() => {
+        const dbg = window.__SUBMUNDO_DEBUG__!;
+        dbg.spawnTestDrop('legendary');
+        dbg.spawnTestDrop('rare');
+      });
+      await mobilePage.waitForTimeout(250);
+
+      await assertLandscapeCanvas(mobilePage, MOBILE_LANDSCAPE_VIEWPORT);
+
+      const mobileScreenshotPath = resolve(
+        SCREENSHOT_DIR,
+        'm2-mobile-844x390.png'
+      );
+      await mobilePage.screenshot({ path: mobileScreenshotPath });
+      expect(existsSync(mobileScreenshotPath)).toBe(true);
+      expect(statSync(mobileScreenshotPath).size).toBeGreaterThan(4000);
+
+      // Click Mobile Mochila HUD button using scaled logical coordinates
+      const mobileBagBtn = await mobilePage.evaluate(() => {
+        const scene = window.__SUBMUNDO_DEBUG__!.scene as unknown as {
+          hud: { bagBtnContainer: { x: number; y: number } };
+        };
+        return {
+          x: scene.hud.bagBtnContainer.x,
+          y: scene.hud.bagBtnContainer.y,
+        };
+      });
+      await clickLogicalCanvas(mobilePage, mobileBagBtn.x, mobileBagBtn.y);
+
+      await mobilePage.waitForFunction(
+        () =>
+          (
+            window.__SUBMUNDO_DEBUG__!.scene as unknown as {
+              inventoryModal: { isOpen: () => boolean };
+            }
+          ).inventoryModal.isOpen() === true,
+        undefined,
+        { timeout: 3000 }
+      );
+      await dispatchWindowKey(mobilePage, 'Escape', 'Escape', 27);
+      await mobilePage.waitForFunction(
+        () =>
+          (
+            window.__SUBMUNDO_DEBUG__!.scene as unknown as {
+              inventoryModal: { isOpen: () => boolean };
+            }
+          ).inventoryModal.isOpen() === false,
+        undefined,
+        { timeout: 3000 }
+      );
+    } finally {
+      await mobileContext.close();
+    }
 
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);

@@ -461,10 +461,10 @@
     "portraits": {
       "key": "portraits",
       "file": "portraits.png",
-      "width": 512,
-      "height": 64,
-      "frameWidth": 64,
-      "frameHeight": 64,
+      "width": 1024,
+      "height": 128,
+      "frameWidth": 128,
+      "frameHeight": 128,
       "frames": [
         "hero_living",
         "hero_wraith",
@@ -742,6 +742,34 @@
         "death1",
         "death2",
         "death3"
+      ]
+    },
+    "ui_icons": {
+      "key": "ui_icons",
+      "file": "ui_icons.png",
+      "width": 1152,
+      "height": 64,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "frames": [
+        "attack",
+        "dash",
+        "skill_inferno",
+        "skill_empireo",
+        "skill_submundo",
+        "potion",
+        "bag",
+        "settings",
+        "audio_on",
+        "audio_off",
+        "souls",
+        "essence",
+        "slot_weapon",
+        "slot_armor",
+        "slot_amulet",
+        "slot_ring",
+        "slot_helm",
+        "slot_boots"
       ]
     }
   }

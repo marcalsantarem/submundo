@@ -4,7 +4,7 @@
       "id": "of_vitality",
       "name": "da Vitalidade",
       "force": "none",
-      "allowedSlots": ["armor", "amulet", "ring"],
+      "allowedSlots": ["armor", "helm", "boots", "amulet", "ring"],
       "minRarity": "magic",
       "bonuses": {
         "maxHp": 18
@@ -15,7 +15,7 @@
       "id": "of_iron_skin",
       "name": "da Pele Férrea",
       "force": "none",
-      "allowedSlots": ["armor", "amulet"],
+      "allowedSlots": ["armor", "helm", "boots", "amulet"],
       "minRarity": "magic",
       "bonuses": {
         "defense": 2,
@@ -27,7 +27,7 @@
       "id": "of_swift_steps",
       "name": "dos Passos Céleres",
       "force": "none",
-      "allowedSlots": ["ring", "armor"],
+      "allowedSlots": ["ring", "armor", "helm", "boots"],
       "minRarity": "magic",
       "bonuses": {
         "moveSpeed": 12
@@ -49,7 +49,7 @@
       "id": "of_fortune",
       "name": "da Fortuna Sombria",
       "force": "none",
-      "allowedSlots": ["ring", "amulet"],
+      "allowedSlots": ["ring", "amulet", "boots"],
       "minRarity": "magic",
       "bonuses": {
         "luck": 0.1
@@ -95,7 +95,7 @@
       "id": "of_slag_fortitude",
       "name": "da Escória",
       "force": "inferno",
-      "allowedSlots": ["armor"],
+      "allowedSlots": ["armor", "helm", "boots"],
       "minRarity": "magic",
       "bonuses": {
         "maxHp": 22,
@@ -107,7 +107,7 @@
       "id": "of_infernal_haste",
       "name": "da Fúria Ígnea",
       "force": "inferno",
-      "allowedSlots": ["amulet", "ring"],
+      "allowedSlots": ["amulet", "ring", "boots"],
       "minRarity": "magic",
       "bonuses": {
         "cooldownReduction": 0.06,
@@ -131,7 +131,7 @@
       "id": "of_hellfire_dominion",
       "name": "do Fogo Abissal",
       "force": "inferno",
-      "allowedSlots": ["weapon", "armor", "amulet", "ring"],
+      "allowedSlots": ["weapon", "armor", "helm", "boots", "amulet", "ring"],
       "minRarity": "rare",
       "bonuses": {
         "attack": 4,
@@ -155,7 +155,7 @@
       "id": "of_crimson_veins",
       "name": "das Veias Carmesins",
       "force": "submundo",
-      "allowedSlots": ["armor", "amulet"],
+      "allowedSlots": ["armor", "helm", "amulet"],
       "minRarity": "magic",
       "bonuses": {
         "maxHp": 20,
@@ -167,7 +167,7 @@
       "id": "of_spectral_mist",
       "name": "da Névoa Umbral",
       "force": "submundo",
-      "allowedSlots": ["armor", "ring"],
+      "allowedSlots": ["armor", "helm", "boots", "ring"],
       "minRarity": "magic",
       "bonuses": {
         "moveSpeed": 10,
@@ -179,7 +179,7 @@
       "id": "of_soul_harvest",
       "name": "da Colheita de Almas",
       "force": "submundo",
-      "allowedSlots": ["amulet", "ring"],
+      "allowedSlots": ["amulet", "ring", "boots"],
       "minRarity": "magic",
       "bonuses": {
         "cooldownReduction": 0.06,
@@ -203,7 +203,7 @@
       "id": "of_grave_ward",
       "name": "da Proteção Tumular",
       "force": "submundo",
-      "allowedSlots": ["armor", "amulet"],
+      "allowedSlots": ["armor", "helm", "boots", "amulet"],
       "minRarity": "rare",
       "bonuses": {
         "maxHp": 28,
@@ -226,7 +226,7 @@
       "id": "of_zeal",
       "name": "do Zelo Celestial",
       "force": "empireo",
-      "allowedSlots": ["amulet", "ring"],
+      "allowedSlots": ["amulet", "ring", "boots"],
       "minRarity": "magic",
       "bonuses": {
         "cooldownReduction": 0.08
@@ -248,7 +248,7 @@
       "id": "of_seraph_ward",
       "name": "da Guarda Seráfica",
       "force": "empireo",
-      "allowedSlots": ["armor", "amulet"],
+      "allowedSlots": ["armor", "helm", "boots", "amulet"],
       "minRarity": "magic",
       "bonuses": {
         "defense": 3,
@@ -272,7 +272,7 @@
       "id": "of_radiant_aegis",
       "name": "do Esplendor Corrompido",
       "force": "empireo",
-      "allowedSlots": ["armor", "ring"],
+      "allowedSlots": ["armor", "helm", "boots", "ring"],
       "minRarity": "rare",
       "bonuses": {
         "defense": 4,
@@ -285,7 +285,7 @@
       "id": "of_tempered_steel",
       "name": "do Aço Temperado",
       "force": "none",
-      "allowedSlots": ["weapon", "armor"],
+      "allowedSlots": ["weapon", "armor", "helm"],
       "minRarity": "magic",
       "bonuses": {
         "attack": 2,
@@ -309,7 +309,7 @@
       "id": "of_relentless_stride",
       "name": "do Passo Incansável",
       "force": "none",
-      "allowedSlots": ["armor", "amulet", "ring"],
+      "allowedSlots": ["armor", "helm", "boots", "amulet", "ring"],
       "minRarity": "rare",
       "bonuses": {
         "moveSpeed": 14,
@@ -333,7 +333,7 @@
       "id": "of_charred_plate",
       "name": "da Placa Carbonizada",
       "force": "inferno",
-      "allowedSlots": ["armor", "amulet"],
+      "allowedSlots": ["armor", "helm", "boots", "amulet"],
       "minRarity": "magic",
       "bonuses": {
         "defense": 3,
@@ -381,7 +381,7 @@
       "id": "of_abyssal_vigil",
       "name": "da Vigília Abissal",
       "force": "submundo",
-      "allowedSlots": ["armor", "amulet", "ring"],
+      "allowedSlots": ["armor", "helm", "boots", "amulet", "ring"],
       "minRarity": "rare",
       "bonuses": {
         "maxHp": 24,
@@ -406,7 +406,7 @@
       "id": "of_halo_grace",
       "name": "da Graça do Halo",
       "force": "empireo",
-      "allowedSlots": ["armor", "ring"],
+      "allowedSlots": ["armor", "helm", "boots", "ring"],
       "minRarity": "magic",
       "bonuses": {
         "moveSpeed": 10,

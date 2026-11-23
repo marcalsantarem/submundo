@@ -53,36 +53,30 @@ export interface HeroStats {
   critMultiplier: number;
 }
 
-export type ViewportMode = 'desktop_landscape' | 'mobile_portrait';
+export type ViewportMode = 'landscape';
 
 export interface ViewportConfig {
   mode: ViewportMode;
   width: number;
   height: number;
   aspectRatio: string;
+  isPortraitWindow?: boolean;
 }
 
 export function resolveViewportConfig(
   windowWidth: number,
   windowHeight: number
 ): ViewportConfig {
-  if (windowWidth >= windowHeight) {
-    return {
-      mode: 'desktop_landscape',
-      width: 800,
-      height: 600,
-      aspectRatio: '4:3',
-    };
-  }
   return {
-    mode: 'mobile_portrait',
-    width: 360,
-    height: 640,
-    aspectRatio: '9:16',
+    mode: 'landscape',
+    width: 960,
+    height: 540,
+    aspectRatio: '16:9',
+    isPortraitWindow: windowWidth < windowHeight,
   };
 }
 
-export type EquipSlot = 'weapon' | 'armor' | 'amulet' | 'ring';
+export type EquipSlot = 'weapon' | 'armor' | 'helm' | 'boots' | 'amulet' | 'ring';
 
 export type Rarity = 'common' | 'magic' | 'rare' | 'legendary';
 

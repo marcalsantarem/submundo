@@ -1,4 +1,4 @@
-const CACHE_NAME = 'submundo-static-v0.5.0-r2';
+const CACHE_NAME = 'submundo-cache-v0.7.0-landscape';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting());

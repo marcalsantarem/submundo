@@ -1,15 +1,27 @@
 import Phaser from 'phaser';
 import {
   BlacksmithForgeDef,
-  EquipSlot,
-  ForceType,
   ItemInstance,
-  Rarity,
   StatBonus,
   ViewportConfig,
   resolveViewportConfig,
 } from '../../core/index';
 import dialoguesData from '../../data/dialogues.json';
+import {
+  DF_FONTS,
+  DF_FORCE_THEME,
+  DF_PALETTE,
+  DF_RARITY_THEME,
+  DF_SLOT_META,
+  DF_UI_ICONS_KEY,
+  DF_UI_ICON_FRAMES,
+  drawOrnamentalDivider,
+  drawOrnateButton,
+  drawOrnatePanel,
+  drawRaritySlotFrame,
+  formatStatNumber,
+  hasUiTextureFrame,
+} from './DarkFantasyUiBuilder';
 
 export interface BlacksmithModalSnapshot {
   souls: number;
@@ -24,6 +36,8 @@ export interface BlacksmithModalSnapshot {
 interface BlacksmithItemRowView {
   container: Phaser.GameObjects.Container;
   bg: Phaser.GameObjects.Graphics;
+  slotFrameBg: Phaser.GameObjects.Graphics;
+  slotIcon: Phaser.GameObjects.Image | null;
   nameText: Phaser.GameObjects.Text;
   levelText: Phaser.GameObjects.Text;
   statsText: Phaser.GameObjects.Text;
@@ -39,6 +53,7 @@ interface BlacksmithItemRowView {
 interface ForgeCardView {
   container: Phaser.GameObjects.Container;
   bg: Phaser.GameObjects.Graphics;
+  essenceIcon: Phaser.GameObjects.Image | null;
   titleText: Phaser.GameObjects.Text;
   descText: Phaser.GameObjects.Text;
   costText: Phaser.GameObjects.Text;
@@ -49,34 +64,6 @@ interface ForgeCardView {
   boundRecipeId: string | null;
   canForge: boolean;
 }
-
-const SLOT_LABELS: Record<EquipSlot, string> = {
-  weapon: 'Arma',
-  armor: 'Armadura',
-  amulet: 'Amuleto',
-  ring: 'Anel',
-};
-
-const RARITY_HEX: Record<Rarity, string> = {
-  common: '#e4e4e7',
-  magic: '#38bdf8',
-  rare: '#facc15',
-  legendary: '#f97316',
-};
-
-const RARITY_NUM: Record<Rarity, number> = {
-  common: 0xe4e4e7,
-  magic: 0x38bdf8,
-  rare: 0xfacc15,
-  legendary: 0xf97316,
-};
-
-const FORCE_LABELS: Record<ForceType, string> = {
-  inferno: 'Inferno',
-  submundo: 'Submundo',
-  empireo: 'Empíreo',
-  none: 'Neutro',
-};
 
 const MAX_ITEM_ROWS = 4;
 const MAX_FORGE_CARDS = 2;
@@ -109,8 +96,11 @@ export class BlacksmithModal {
   private readonly balancesBgGraphic: Phaser.GameObjects.Graphics;
   private readonly tipBgGraphic: Phaser.GameObjects.Graphics;
 
+  private readonly soulsIcon: Phaser.GameObjects.Image | null;
+  private readonly essenceIcon: Phaser.GameObjects.Image | null;
   private readonly titleText: Phaser.GameObjects.Text;
-  private readonly balancesText: Phaser.GameObjects.Text;
+  private readonly soulsBalanceText: Phaser.GameObjects.Text;
+  private readonly essenceBalanceText: Phaser.GameObjects.Text;
   private readonly itemsHeaderText: Phaser.GameObjects.Text;
   private readonly forgeHeaderText: Phaser.GameObjects.Text;
   private readonly emptyItemsText: Phaser.GameObjects.Text;
@@ -148,8 +138,8 @@ export class BlacksmithModal {
     this.scene = scene;
     this.callbacks = callbacks;
     this.viewport = resolveViewportConfig(
-      scene.scale.width || 800,
-      scene.scale.height || 600
+      scene.scale.width || 960,
+      scene.scale.height || 540
     );
 
     this.backdropGraphic = scene.add.graphics();
@@ -174,32 +164,69 @@ export class BlacksmithModal {
     this.balancesBgGraphic = scene.add.graphics();
     this.tipBgGraphic = scene.add.graphics();
 
-    this.titleText = scene.add.text(0, 0, 'FERREIRO ESPIRITUAL', {
-      fontFamily: 'monospace',
-      fontSize: '15px',
-      color: '#ffd166',
-      fontStyle: 'bold',
-    });
+    this.soulsIcon = hasUiTextureFrame(
+      scene,
+      DF_UI_ICONS_KEY,
+      DF_UI_ICON_FRAMES.souls
+    )
+      ? scene.add
+          .image(0, 0, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.souls)
+          .setOrigin(0.5)
+      : null;
+    this.essenceIcon = hasUiTextureFrame(
+      scene,
+      DF_UI_ICONS_KEY,
+      DF_UI_ICON_FRAMES.essence
+    )
+      ? scene.add
+          .image(0, 0, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.essence)
+          .setOrigin(0.5)
+      : null;
 
-    this.balancesText = scene.add.text(0, 0, 'Almas: 0 | Essências de General: 0', {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: '#90e0ef',
-      fontStyle: 'bold',
-    });
+    this.titleText = scene.add
+      .text(0, 0, 'FERREIRO ESPIRITUAL', {
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '17px',
+        color: DF_PALETTE.textGold,
+        fontStyle: 'bold',
+        resolution: 2,
+      })
+      .setOrigin(0, 0.5);
+
+    this.soulsBalanceText = scene.add
+      .text(0, 0, 'Almas: 0', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '12px',
+        color: DF_PALETTE.textBlue,
+        fontStyle: 'bold',
+        resolution: 2,
+      })
+      .setOrigin(0, 0.5);
+
+    this.essenceBalanceText = scene.add
+      .text(0, 0, 'Essências de General: 0', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '12px',
+        color: DF_RARITY_THEME.legendary.accentHex,
+        fontStyle: 'bold',
+        resolution: 2,
+      })
+      .setOrigin(0, 0.5);
 
     this.itemsHeaderText = scene.add.text(0, 0, 'APRIMORAR ITENS (0)', {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: '#94a3b8',
+      fontFamily: DF_FONTS.TITLE,
+      fontSize: '12px',
+      color: DF_PALETTE.textParchment,
       fontStyle: 'bold',
+      resolution: 2,
     });
 
     this.forgeHeaderText = scene.add.text(0, 0, 'FORJAR RELÍQUIAS', {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: '#94a3b8',
+      fontFamily: DF_FONTS.TITLE,
+      fontSize: '12px',
+      color: DF_PALETTE.textGold,
       fontStyle: 'bold',
+      resolution: 2,
     });
 
     this.emptyItemsText = scene.add
@@ -208,10 +235,11 @@ export class BlacksmithModal {
         0,
         'Nenhum item equipado ou no baú.\nForje um equipamento ou explore a Fenda.',
         {
-          fontFamily: 'monospace',
-          fontSize: '10px',
-          color: '#64748b',
+          fontFamily: DF_FONTS.BODY,
+          fontSize: '11px',
+          color: DF_PALETTE.textMuted,
           align: 'center',
+          resolution: 2,
         }
       )
       .setOrigin(0.5, 0.5);
@@ -221,26 +249,31 @@ export class BlacksmithModal {
       0,
       dialoguesData.entries.blacksmith_intro.shortText,
       {
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        color: '#cbd5e1',
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '11px',
+        color: DF_PALETTE.textLight,
+        lineSpacing: 3,
+        resolution: 2,
       }
     );
 
-    // Close Button
+    // Botão Fechar
     this.closeBtnBg = scene.add.graphics();
     this.closeBtnText = scene.add
       .text(0, 0, 'Fechar', {
-        fontFamily: 'monospace',
+        fontFamily: DF_FONTS.TITLE,
         fontSize: '12px',
-        color: '#f8fafc',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
     this.closeBtnZone = scene.add
-      .zone(0, 0, 84, 28)
+      .zone(0, 0, 88, 28)
       .setOrigin(0.5, 0.5)
       .setInteractive({ useHandCursor: true });
+    this.closeBtnZone.on('pointerover', () => this.drawCloseButton(true));
+    this.closeBtnZone.on('pointerout', () => this.drawCloseButton(false));
     this.closeBtnZone.on(
       'pointerdown',
       (
@@ -263,18 +296,19 @@ export class BlacksmithModal {
       this.closeBtnZone,
     ]);
 
-    // Pagination Controls for Item Upgrade List
+    // Controles de paginação da lista de aprimoramento
     this.prevPageBg = scene.add.graphics();
     this.prevPageText = scene.add
-      .text(0, 0, '< Ant', {
-        fontFamily: 'monospace',
+      .text(0, 0, '◄ Ant', {
+        fontFamily: DF_FONTS.BODY,
         fontSize: '11px',
-        color: '#f8fafc',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
     this.prevPageZone = scene.add
-      .zone(0, 0, 68, 24)
+      .zone(0, 0, 74, 26)
       .setOrigin(0.5, 0.5)
       .setInteractive({ useHandCursor: true });
     this.prevPageZone.on(
@@ -301,15 +335,16 @@ export class BlacksmithModal {
 
     this.nextPageBg = scene.add.graphics();
     this.nextPageText = scene.add
-      .text(0, 0, 'Próx >', {
-        fontFamily: 'monospace',
+      .text(0, 0, 'Próx ►', {
+        fontFamily: DF_FONTS.BODY,
         fontSize: '11px',
-        color: '#f8fafc',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
     this.nextPageZone = scene.add
-      .zone(0, 0, 68, 24)
+      .zone(0, 0, 74, 26)
       .setOrigin(0.5, 0.5)
       .setInteractive({ useHandCursor: true });
     this.nextPageZone.on(
@@ -339,9 +374,11 @@ export class BlacksmithModal {
 
     this.pageInfoText = scene.add
       .text(0, 0, '1/1', {
-        fontFamily: 'monospace',
+        fontFamily: DF_FONTS.BODY,
         fontSize: '11px',
-        color: '#cbd5e1',
+        color: DF_PALETTE.textMuted,
+        fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
 
@@ -352,7 +389,8 @@ export class BlacksmithModal {
       this.balancesBgGraphic,
       this.tipBgGraphic,
       this.titleText,
-      this.balancesText,
+      this.soulsBalanceText,
+      this.essenceBalanceText,
       this.itemsHeaderText,
       this.forgeHeaderText,
       this.emptyItemsText,
@@ -362,62 +400,90 @@ export class BlacksmithModal {
       this.nextPageContainer,
       this.pageInfoText,
     ];
+    if (this.soulsIcon) {
+      rootChildren.push(this.soulsIcon);
+    }
+    if (this.essenceIcon) {
+      rootChildren.push(this.essenceIcon);
+    }
 
-    // Build Item Upgrade Rows
-    for (let i = 0; i < MAX_ITEM_ROWS; i++) {
+    // Linhas de Aprimoramento de Itens (suporta os 6 slots via DF_SLOT_META)
+    for (let i = 0; i < MAX_ITEM_ROWS; i += 1) {
       const bg = scene.add.graphics();
+      const slotFrameBg = scene.add.graphics();
+      const slotIcon = hasUiTextureFrame(
+        scene,
+        DF_UI_ICONS_KEY,
+        DF_SLOT_META.weapon.iconFrame
+      )
+        ? scene.add
+            .image(0, 0, DF_UI_ICONS_KEY, DF_SLOT_META.weapon.iconFrame)
+            .setOrigin(0.5)
+        : null;
       const nameText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        color: '#f8fafc',
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '12px',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
+        resolution: 2,
       });
       const levelText = scene.add
         .text(0, 0, '', {
-          fontFamily: 'monospace',
-          fontSize: '10px',
-          color: '#ffd166',
+          fontFamily: DF_FONTS.BODY,
+          fontSize: '11px',
+          color: DF_PALETTE.textGold,
           fontStyle: 'bold',
+          resolution: 2,
         })
         .setOrigin(1, 0);
       const statsText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
+        fontFamily: DF_FONTS.BODY,
         fontSize: '10px',
-        color: '#cbd5e1',
+        color: DF_PALETTE.textLight,
+        resolution: 2,
       });
       const costText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
+        fontFamily: DF_FONTS.BODY,
         fontSize: '10px',
-        color: '#90e0ef',
+        color: DF_PALETTE.textBlue,
         fontStyle: 'bold',
+        resolution: 2,
       });
 
       const btnBg = scene.add.graphics();
       const btnText = scene.add
         .text(0, 0, 'Aprimorar', {
-          fontFamily: 'monospace',
-          fontSize: '10px',
-          color: '#ffffff',
+          fontFamily: DF_FONTS.BODY,
+          fontSize: '11px',
+          color: DF_PALETTE.textParchment,
           fontStyle: 'bold',
+          resolution: 2,
         })
         .setOrigin(0.5, 0.5);
       const btnZone = scene.add
-        .zone(0, 0, 92, 26)
+        .zone(0, 0, 98, 28)
         .setOrigin(0.5, 0.5)
         .setInteractive({ useHandCursor: true });
 
       const btnContainer = scene.add.container(0, 0, [btnBg, btnText, btnZone]);
 
+      const rowChildren: Phaser.GameObjects.GameObject[] = [bg, slotFrameBg];
+      if (slotIcon) {
+        rowChildren.push(slotIcon);
+      }
+      rowChildren.push(
+        nameText,
+        levelText,
+        statsText,
+        costText,
+        btnContainer
+      );
+
       const rowView: BlacksmithItemRowView = {
-        container: scene.add.container(0, 0, [
-          bg,
-          nameText,
-          levelText,
-          statsText,
-          costText,
-          btnContainer,
-        ]),
+        container: scene.add.container(0, 0, rowChildren),
         bg,
+        slotFrameBg,
+        slotIcon,
         nameText,
         levelText,
         statsText,
@@ -450,52 +516,67 @@ export class BlacksmithModal {
       rootChildren.push(rowView.container);
     }
 
-    // Build Forge Recipe Cards
-    for (let i = 0; i < MAX_FORGE_CARDS; i++) {
+    // Cards de Forja de Relíquias (Coluna Direita)
+    for (let i = 0; i < MAX_FORGE_CARDS; i += 1) {
       const bg = scene.add.graphics();
+      const essenceIcon = hasUiTextureFrame(
+        scene,
+        DF_UI_ICONS_KEY,
+        DF_UI_ICON_FRAMES.essence
+      )
+        ? scene.add
+            .image(0, 0, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.essence)
+            .setOrigin(0.5)
+        : null;
       const titleText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        color: '#facc15',
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '12px',
+        color: DF_RARITY_THEME.rare.hex,
         fontStyle: 'bold',
+        resolution: 2,
       });
       const descText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
-        fontSize: '9px',
-        color: '#cbd5e1',
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '10px',
+        color: DF_PALETTE.textLight,
+        lineSpacing: 2,
+        resolution: 2,
       });
       const costText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        color: '#f4a261',
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '11px',
+        color: DF_PALETTE.textGold,
         fontStyle: 'bold',
+        resolution: 2,
       });
 
       const btnBg = scene.add.graphics();
       const btnText = scene.add
         .text(0, 0, 'Forjar', {
-          fontFamily: 'monospace',
-          fontSize: '10px',
-          color: '#ffffff',
+          fontFamily: DF_FONTS.TITLE,
+          fontSize: '11px',
+          color: DF_PALETTE.textParchment,
           fontStyle: 'bold',
+          resolution: 2,
         })
         .setOrigin(0.5, 0.5);
       const btnZone = scene.add
-        .zone(0, 0, 86, 26)
+        .zone(0, 0, 96, 30)
         .setOrigin(0.5, 0.5)
         .setInteractive({ useHandCursor: true });
 
       const btnContainer = scene.add.container(0, 0, [btnBg, btnText, btnZone]);
 
+      const cardChildren: Phaser.GameObjects.GameObject[] = [bg];
+      if (essenceIcon) {
+        cardChildren.push(essenceIcon);
+      }
+      cardChildren.push(titleText, descText, costText, btnContainer);
+
       const cardView: ForgeCardView = {
-        container: scene.add.container(0, 0, [
-          bg,
-          titleText,
-          descText,
-          costText,
-          btnContainer,
-        ]),
+        container: scene.add.container(0, 0, cardChildren),
         bg,
+        essenceIcon,
         titleText,
         descText,
         costText,
@@ -576,157 +657,214 @@ export class BlacksmithModal {
     this.viewport = viewport;
     const w = viewport.width;
     const h = viewport.height;
-    const isMobile = viewport.mode === 'mobile_portrait';
 
     this.rootContainer.setPosition(w / 2, h / 2);
 
     this.backdropGraphic.clear();
-    this.backdropGraphic.fillStyle(0x04060a, 0.82);
+    this.backdropGraphic.fillStyle(0x04060a, 0.84);
     this.backdropGraphic.fillRect(-w / 2, -h / 2, w, h);
     this.backdropZone.setSize(w, h);
 
-    const boxW = isMobile ? w - 20 : 720;
-    const boxH = isMobile ? h - 44 : 524;
+    // Painel Paisagem Amplo 860x470 centralizado em 960x540
+    const boxW = Math.min(860, w - 24);
+    const boxH = Math.min(470, h - 24);
+    const headerH = 42;
 
-    this.panelGraphic.clear();
-    this.panelGraphic.fillStyle(0x0f1420, 0.97);
-    this.panelGraphic.fillRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 8);
-    this.panelGraphic.lineStyle(2, 0x3b4252, 1);
-    this.panelGraphic.strokeRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 8);
+    drawOrnatePanel(this.panelGraphic, {
+      x: -boxW / 2,
+      y: -boxH / 2,
+      width: boxW,
+      height: boxH,
+      bevel: 12,
+      fillColor: DF_PALETTE.obsidianBg,
+      fillAlpha: 0.98,
+      innerFillColor: DF_PALETTE.innerSurface,
+      outerBorderColor: DF_PALETTE.bronzeBorder,
+      innerBorderColor: DF_PALETTE.metalBorder,
+      accentColor: DF_PALETTE.agedGold,
+      headerHeight: headerH,
+      headerColor: DF_PALETTE.headerBg,
+      headerGlowColor: DF_RARITY_THEME.legendary.headerGlow,
+      headerGlowAlpha: 0.16,
+      shadow: true,
+      cornerOrnaments: true,
+      clear: true,
+    });
 
-    const leftEdge = -boxW / 2 + 16;
-    const rightEdge = boxW / 2 - 16;
-    const topEdge = -boxH / 2 + 14;
-    const innerW = boxW - 32;
+    const leftEdge = -boxW / 2 + 18;
+    const rightEdge = boxW / 2 - 18;
+    const topEdge = -boxH / 2;
+    const innerW = boxW - 36;
 
-    this.titleText.setText(isMobile ? 'FERREIRO' : 'FERREIRO ESPIRITUAL');
-    this.titleText.setFontSize(isMobile ? 14 : 15);
-    this.titleText.setPosition(leftEdge, topEdge + 2);
+    this.titleText.setPosition(leftEdge, topEdge + headerH / 2 + 4);
 
-    const closeW = isMobile ? 72 : 84;
-    const closeH = isMobile ? 26 : 28;
-    this.closeBtnContainer.setPosition(rightEdge - closeW / 2, topEdge + 12);
+    const closeW = 88;
+    const closeH = 28;
+    this.closeBtnContainer.setPosition(
+      rightEdge - closeW / 2,
+      topEdge + headerH / 2 + 4
+    );
     this.closeBtnZone.setSize(closeW, closeH);
-    this.closeBtnBg.clear();
-    this.closeBtnBg.fillStyle(0x7f1d1d, 0.92);
-    this.closeBtnBg.fillRoundedRect(-closeW / 2, -closeH / 2, closeW, closeH, 5);
-    this.closeBtnBg.lineStyle(1.5, 0xfca5a5, 0.85);
-    this.closeBtnBg.strokeRoundedRect(-closeW / 2, -closeH / 2, closeW, closeH, 5);
+    this.drawCloseButton(false);
 
-    const balY = topEdge + (isMobile ? 30 : 34);
-    const balH = isMobile ? 24 : 26;
-    this.balancesBgGraphic.clear();
-    this.balancesBgGraphic.fillStyle(0x161d2e, 0.92);
-    this.balancesBgGraphic.fillRoundedRect(leftEdge, balY, innerW, balH, 5);
-    this.balancesBgGraphic.lineStyle(1, 0x2b3448, 0.9);
-    this.balancesBgGraphic.strokeRoundedRect(leftEdge, balY, innerW, balH, 5);
+    // Barra de Saldos (Almas + Essências de General)
+    const balY = topEdge + headerH + 12;
+    const balH = 28;
+    drawOrnatePanel(this.balancesBgGraphic, {
+      x: leftEdge,
+      y: balY,
+      width: innerW,
+      height: balH,
+      bevel: 5,
+      fillColor: DF_PALETTE.deepRecess,
+      fillAlpha: 0.95,
+      innerFillColor: DF_PALETTE.obsidianBg,
+      outerBorderColor: DF_PALETTE.metalBorder,
+      innerBorderColor: DF_PALETTE.metalDark,
+      shadow: false,
+      cornerOrnaments: false,
+      clear: true,
+    });
 
-    this.balancesText.setFontSize(isMobile ? 10 : 11);
-    this.balancesText.setPosition(leftEdge + 10, balY + (isMobile ? 5 : 6));
+    const balCenterY = balY + balH / 2;
+    const balIconSize = 16;
+    const hasSoulsIcon =
+      this.soulsIcon !== null &&
+      hasUiTextureFrame(this.scene, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.souls);
+    const hasEssenceIcon =
+      this.essenceIcon !== null &&
+      hasUiTextureFrame(this.scene, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.essence);
 
-    if (isMobile) {
-      // Stacked on Mobile: Forge Cards top, Item Upgrade Rows bottom
-      const forgeHeaderY = balY + balH + 8;
-      this.forgeHeaderText.setFontSize(10);
-      this.forgeHeaderText.setPosition(leftEdge, forgeHeaderY);
-
-      const forgeTop = forgeHeaderY + 16;
-      const forgeH = 74;
-      this.forgeCards.forEach((card, idx) => {
-        const cy = forgeTop + idx * (forgeH + 6) + forgeH / 2;
-        this.layoutForgeCard(card, 0, cy, innerW, forgeH, true);
-      });
-
-      const itemsHeaderY = forgeTop + forgeH * MAX_FORGE_CARDS + 14;
-      this.itemsHeaderText.setFontSize(10);
-      this.itemsHeaderText.setPosition(leftEdge, itemsHeaderY);
-
-      const itemsTop = itemsHeaderY + 16;
-      const rowH = 84;
-      this.itemRows.forEach((row, idx) => {
-        const cy = itemsTop + idx * (rowH + 6) + rowH / 2;
-        this.layoutItemRow(row, 0, cy, innerW, rowH, true);
-      });
-
-      this.emptyItemsText.setPosition(0, itemsTop + 115);
-
-      this.tipBgGraphic.clear();
-      this.tipBgGraphic.setVisible(false);
-      this.tipText.setVisible(false);
-
-      const pageY = boxH / 2 - 20;
-      this.prevPageContainer.setPosition(-76, pageY);
-      this.pageInfoText.setPosition(0, pageY);
-      this.nextPageContainer.setPosition(76, pageY);
-    } else {
-      // Split Two-Column on Desktop 800x600
-      const bodyHeaderY = balY + balH + 12;
-      const leftColW = 390;
-      const rightColLeft = leftEdge + leftColW + 16;
-      const rightColW = rightEdge - rightColLeft;
-
-      this.itemsHeaderText.setFontSize(11);
-      this.itemsHeaderText.setPosition(leftEdge, bodyHeaderY);
-      this.forgeHeaderText.setFontSize(11);
-      this.forgeHeaderText.setPosition(rightColLeft, bodyHeaderY);
-
-      const listTop = bodyHeaderY + 18;
-      const rowH = 84;
-      const leftCenterX = leftEdge + leftColW / 2;
-      this.itemRows.forEach((row, idx) => {
-        const cy = listTop + idx * (rowH + 8) + rowH / 2;
-        this.layoutItemRow(row, leftCenterX, cy, leftColW, rowH, false);
-      });
-
-      this.emptyItemsText.setPosition(leftCenterX, listTop + 150);
-
-      const rightCenterX = rightColLeft + rightColW / 2;
-      const forgeH = 124;
-      this.forgeCards.forEach((card, idx) => {
-        const cy = listTop + idx * (forgeH + 10) + forgeH / 2;
-        this.layoutForgeCard(card, rightCenterX, cy, rightColW, forgeH, false);
-      });
-
-      const tipY = listTop + forgeH * MAX_FORGE_CARDS + 26;
-      const tipH = 82;
-      this.tipBgGraphic.setVisible(true);
-      this.tipBgGraphic.clear();
-      this.tipBgGraphic.fillStyle(0x131a2b, 0.9);
-      this.tipBgGraphic.fillRoundedRect(rightColLeft, tipY, rightColW, tipH, 6);
-      this.tipBgGraphic.lineStyle(1, 0x2b3448, 0.9);
-      this.tipBgGraphic.strokeRoundedRect(rightColLeft, tipY, rightColW, tipH, 6);
-
-      this.tipText.setVisible(true);
-      this.tipText.setFontSize(10);
-      this.tipText.setWordWrapWidth(rightColW - 18);
-      this.tipText.setPosition(rightColLeft + 9, tipY + 10);
-      this.setTextClamped(
-        this.tipText,
-        dialoguesData.entries.blacksmith_intro.shortText,
-        4
-      );
-
-      const pageY = boxH / 2 - 22;
-      this.prevPageContainer.setPosition(leftCenterX - 78, pageY);
-      this.pageInfoText.setPosition(leftCenterX, pageY);
-      this.nextPageContainer.setPosition(leftCenterX + 78, pageY);
+    if (this.soulsIcon) {
+      this.soulsIcon
+        .setVisible(hasSoulsIcon)
+        .setPosition(leftEdge + 16, balCenterY)
+        .setDisplaySize(balIconSize, balIconSize);
     }
+    this.soulsBalanceText.setPosition(
+      leftEdge + (hasSoulsIcon ? 28 : 12),
+      balCenterY
+    );
+
+    const essenceColX = leftEdge + 220;
+    if (this.essenceIcon) {
+      this.essenceIcon
+        .setVisible(hasEssenceIcon)
+        .setPosition(essenceColX, balCenterY)
+        .setDisplaySize(balIconSize, balIconSize);
+    }
+    this.essenceBalanceText.setPosition(
+      essenceColX + (hasEssenceIcon ? 14 : 0),
+      balCenterY
+    );
+
+    // Layout 2 Colunas: Aprimorar Itens (Esquerda) + Forjar Relíquias (Direita)
+    const bodyHeaderY = balY + balH + 12;
+    const colGap = 18;
+    const leftColW = Math.round((innerW - colGap) * 0.56);
+    const rightColLeft = leftEdge + leftColW + colGap;
+    const rightColW = rightEdge - rightColLeft;
+
+    // Divisória vertical sutil entre as 2 colunas
+    const divX = leftEdge + leftColW + colGap / 2;
+    this.panelGraphic.lineStyle(1.2, DF_PALETTE.bronzeDark, 0.85);
+    this.panelGraphic.lineBetween(divX, bodyHeaderY, divX, boxH / 2 - 16);
+
+    this.itemsHeaderText.setPosition(leftEdge, bodyHeaderY);
+    this.forgeHeaderText.setPosition(rightColLeft, bodyHeaderY);
+
+    drawOrnamentalDivider(
+      this.panelGraphic,
+      leftEdge,
+      bodyHeaderY + 17,
+      leftColW
+    );
+    drawOrnamentalDivider(
+      this.panelGraphic,
+      rightColLeft,
+      bodyHeaderY + 17,
+      rightColW
+    );
+
+    const listTop = bodyHeaderY + 26;
+    const rowH = 72;
+    const rowGap = 7;
+    const leftCenterX = leftEdge + leftColW / 2;
+    this.itemRows.forEach((row, idx) => {
+      const cy = listTop + idx * (rowH + rowGap) + rowH / 2;
+      this.layoutItemRow(row, leftCenterX, cy, leftColW, rowH);
+    });
+
+    this.emptyItemsText.setPosition(leftCenterX, listTop + 130);
+
+    const rightCenterX = rightColLeft + rightColW / 2;
+    const forgeH = 112;
+    const forgeGap = 10;
+    this.forgeCards.forEach((card, idx) => {
+      const cy = listTop + idx * (forgeH + forgeGap) + forgeH / 2;
+      this.layoutForgeCard(card, rightCenterX, cy, rightColW, forgeH);
+    });
+
+    // Painel de dica/lore do Ferreiro na base da coluna direita
+    const tipY = listTop + MAX_FORGE_CARDS * forgeH + forgeGap + 12;
+    const tipH = Math.max(66, boxH / 2 - 16 - tipY);
+    this.tipBgGraphic.setVisible(true);
+    drawOrnatePanel(this.tipBgGraphic, {
+      x: rightColLeft,
+      y: tipY,
+      width: rightColW,
+      height: tipH,
+      bevel: 6,
+      fillColor: DF_PALETTE.deepRecess,
+      fillAlpha: 0.92,
+      innerFillColor: DF_PALETTE.obsidianBg,
+      outerBorderColor: DF_PALETTE.bronzeDark,
+      innerBorderColor: DF_PALETTE.metalDark,
+      shadow: false,
+      cornerOrnaments: false,
+      clear: true,
+    });
+
+    this.tipText.setVisible(true);
+    this.tipText.setWordWrapWidth(rightColW - 22);
+    this.tipText.setPosition(rightColLeft + 11, tipY + 10);
+    this.setTextClamped(
+      this.tipText,
+      dialoguesData.entries.blacksmith_intro.shortText,
+      3
+    );
+
+    const pageY = boxH / 2 - 22;
+    this.prevPageContainer.setPosition(leftCenterX - 80, pageY);
+    this.pageInfoText.setPosition(leftCenterX, pageY);
+    this.nextPageContainer.setPosition(leftCenterX + 80, pageY);
 
     this.renderSnapshot();
   }
 
   public destroy(): void {
     this.scene.input.keyboard?.off('keydown', this.keydownHandler);
-    this.rootContainer.destroy();
+    this.rootContainer.destroy(true);
   }
 
   private getPageSize(): number {
-    return this.viewport.mode === 'mobile_portrait' ? 3 : 4;
+    return MAX_ITEM_ROWS;
   }
 
   private getTotalPages(): number {
-    const pageSize = this.getPageSize();
-    return Math.max(1, Math.ceil(this.lastSnapshot.items.length / pageSize));
+    return Math.max(
+      1,
+      Math.ceil(this.lastSnapshot.items.length / this.getPageSize())
+    );
+  }
+
+  private drawCloseButton(hovered: boolean): void {
+    drawOrnateButton(this.closeBtnBg, -44, -14, 88, 28, {
+      variant: 'crimson',
+      bevel: 5,
+      hovered,
+      clear: true,
+    });
   }
 
   private layoutItemRow(
@@ -734,8 +872,7 @@ export class BlacksmithModal {
     cx: number,
     cy: number,
     w: number,
-    h: number,
-    isMobile: boolean
+    h: number
   ): void {
     row.container.setPosition(cx, cy);
     row.container.setData('rowW', w);
@@ -744,26 +881,31 @@ export class BlacksmithModal {
     const left = -w / 2 + 10;
     const right = w / 2 - 10;
     const top = -h / 2 + 7;
-    const bottom = h / 2 - 8;
+    const bottom = h / 2 - 7;
 
-    const btnW = isMobile ? 86 : 94;
-    const btnH = isMobile ? 26 : 28;
+    const btnW = 98;
+    const btnH = 28;
+    const slotBoxSize = 42;
     row.container.setData('btnW', btnW);
     row.container.setData('btnH', btnH);
+    row.container.setData('leftX', left);
+    row.container.setData('topY', top);
+    row.container.setData('slotBoxSize', slotBoxSize);
 
-    row.nameText.setFontSize(isMobile ? 10 : 11);
-    row.nameText.setWordWrapWidth(w - 94);
-    row.nameText.setPosition(left, top);
+    const slotCenterX = left + slotBoxSize / 2;
+    row.slotIcon?.setPosition(slotCenterX, 0);
+    row.slotIcon?.setDisplaySize(slotBoxSize - 12, slotBoxSize - 12);
 
-    row.levelText.setFontSize(isMobile ? 10 : 11);
+    const textLeft = left + slotBoxSize + 10;
+    row.nameText.setPosition(textLeft, top);
+    row.nameText.setWordWrapWidth(w - slotBoxSize - 110);
+
     row.levelText.setPosition(right, top);
 
-    row.statsText.setFontSize(isMobile ? 9 : 10);
-    row.statsText.setWordWrapWidth(w - btnW - 24);
-    row.statsText.setPosition(left, top + 20);
+    row.statsText.setPosition(textLeft, top + 19);
+    row.statsText.setWordWrapWidth(w - slotBoxSize - btnW - 32);
 
-    row.costText.setFontSize(isMobile ? 9 : 10);
-    row.costText.setPosition(left, bottom - 14);
+    row.costText.setPosition(textLeft, bottom - 15);
 
     row.btnContainer.setPosition(right - btnW / 2, bottom - btnH / 2 + 1);
     row.btnZone.setSize(btnW, btnH);
@@ -774,66 +916,53 @@ export class BlacksmithModal {
     cx: number,
     cy: number,
     w: number,
-    h: number,
-    isMobile: boolean
+    h: number
   ): void {
     card.container.setPosition(cx, cy);
     card.container.setData('cardW', w);
     card.container.setData('cardH', h);
 
-    const left = -w / 2 + 10;
-    const right = w / 2 - 10;
-    const top = -h / 2 + 7;
-    const bottom = h / 2 - 7;
+    const left = -w / 2 + 12;
+    const right = w / 2 - 12;
+    const top = -h / 2 + 9;
+    const bottom = h / 2 - 9;
 
-    const btnW = isMobile ? 76 : 96;
-    const btnH = isMobile ? 26 : 28;
+    const btnW = 94;
+    const btnH = 30;
     card.container.setData('btnW', btnW);
     card.container.setData('btnH', btnH);
+    card.container.setData('leftX', left);
 
-    card.titleText.setFontSize(isMobile ? 10 : 11);
-    card.titleText.setWordWrapWidth(w - 20);
+    card.titleText.setWordWrapWidth(w - 24);
     card.titleText.setPosition(left, top);
 
-    if (isMobile) {
-      card.descText.setFontSize(9);
-      card.descText.setWordWrapWidth(w - btnW - 24);
-      card.descText.setPosition(left, top + 16);
+    card.descText.setWordWrapWidth(w - 24);
+    card.descText.setPosition(left, top + 20);
 
-      card.costText.setFontSize(9);
-      card.costText.setOrigin(0, 0);
-      card.costText.setWordWrapWidth(w - btnW - 24);
-      card.costText.setPosition(left, bottom - 13);
+    const iconSize = 15;
+    const footerCenterY = bottom - btnH / 2;
+    card.essenceIcon
+      ?.setPosition(left + iconSize / 2, footerCenterY)
+      .setDisplaySize(iconSize, iconSize);
+    card.container.setData('costY', footerCenterY);
 
-      card.btnContainer.setPosition(right - btnW / 2, bottom - btnH / 2 + 1);
-    } else {
-      card.descText.setFontSize(10);
-      card.descText.setWordWrapWidth(w - 20);
-      card.descText.setPosition(left, top + 20);
+    card.costText.setOrigin(0, 0.5);
+    card.costText.setWordWrapWidth(w - btnW - 48);
 
-      card.costText.setFontSize(10);
-      card.costText.setOrigin(0, 0.5);
-      card.costText.setWordWrapWidth(w - btnW - 30);
-      card.costText.setPosition(left, bottom - btnH / 2);
-
-      card.btnContainer.setPosition(right - btnW / 2, bottom - btnH / 2);
-    }
-
+    card.btnContainer.setPosition(right - btnW / 2, footerCenterY);
     card.btnZone.setSize(btnW, btnH);
   }
 
   private renderSnapshot(): void {
     const snap = this.lastSnapshot;
-    const isMobile = this.viewport.mode === 'mobile_portrait';
 
-    this.balancesText.setText(
-      isMobile
-        ? `Almas: ${snap.souls}  |  Essências: ${snap.generalEssences}`
-        : `Almas: ${snap.souls}   |   Essências de General: ${snap.generalEssences}`
+    this.soulsBalanceText.setText(`Almas: ${formatStatNumber(snap.souls)}`);
+    this.essenceBalanceText.setText(
+      `Essências de General: ${formatStatNumber(snap.generalEssences)}`
     );
 
-    // Render Forge Cards
-    for (let i = 0; i < this.forgeCards.length; i++) {
+    // Renderizar Cards de Forja
+    for (let i = 0; i < this.forgeCards.length; i += 1) {
       const card = this.forgeCards[i];
       const recipe = snap.forgeRecipes[i];
       if (!recipe) {
@@ -851,44 +980,76 @@ export class BlacksmithModal {
         snap.generalEssences >= recipe.essenceCost;
       card.canForge = canAfford;
 
-      const cardW = (card.container.getData('cardW') as number) || 280;
-      const cardH = (card.container.getData('cardH') as number) || 74;
-      const btnW = (card.container.getData('btnW') as number) || 76;
-      const btnH = (card.container.getData('btnH') as number) || 26;
+      const cardW = (card.container.getData('cardW') as number) || 320;
+      const cardH = (card.container.getData('cardH') as number) || 112;
+      const btnW = (card.container.getData('btnW') as number) || 94;
+      const btnH = (card.container.getData('btnH') as number) || 30;
+      const leftX = (card.container.getData('leftX') as number) ?? -cardW / 2 + 12;
+      const costY = (card.container.getData('costY') as number) ?? 0;
 
-      const rarityNum = RARITY_NUM[recipe.rarity];
-      const rarityHex = RARITY_HEX[recipe.rarity];
+      const rarityTheme = DF_RARITY_THEME[recipe.rarity];
 
-      card.bg.clear();
-      card.bg.fillStyle(0x141b2d, 0.94);
-      card.bg.fillRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 6);
-      card.bg.lineStyle(1.5, rarityNum, canAfford ? 0.95 : 0.45);
-      card.bg.strokeRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 6);
+      drawOrnatePanel(card.bg, {
+        x: -cardW / 2,
+        y: -cardH / 2,
+        width: cardW,
+        height: cardH,
+        bevel: 7,
+        fillColor: DF_PALETTE.deepRecess,
+        fillAlpha: 0.96,
+        innerFillColor: DF_PALETTE.innerSurface,
+        outerBorderColor: canAfford
+          ? rarityTheme.border
+          : DF_PALETTE.metalBorder,
+        innerBorderColor: canAfford
+          ? rarityTheme.innerBorder
+          : DF_PALETTE.metalDark,
+        accentColor: rarityTheme.gemColor,
+        shadow: false,
+        cornerOrnaments: false,
+        clear: true,
+      });
 
       this.setTextClamped(card.titleText, recipe.name, 1);
-      card.titleText.setColor(rarityHex);
+      card.titleText.setColor(rarityTheme.hex);
 
-      this.setTextClamped(card.descText, recipe.description, isMobile ? 2 : 3);
+      this.setTextClamped(card.descText, recipe.description, 2);
+
+      const hasEssenceIcon =
+        recipe.essenceCost > 0 &&
+        card.essenceIcon !== null &&
+        hasUiTextureFrame(
+          this.scene,
+          DF_UI_ICONS_KEY,
+          DF_UI_ICON_FRAMES.essence
+        );
+      card.essenceIcon?.setVisible(hasEssenceIcon);
+      card.costText.setPosition(leftX + (hasEssenceIcon ? 20 : 0), costY);
 
       const costParts: string[] = [];
       if (recipe.essenceCost > 0) {
-        costParts.push(`${recipe.essenceCost} Essência`);
+        costParts.push(`${formatStatNumber(recipe.essenceCost)} Essência`);
       }
       if (recipe.soulCost > 0) {
-        costParts.push(`${recipe.soulCost} Almas`);
+        costParts.push(`${formatStatNumber(recipe.soulCost)} Almas`);
       }
       card.costText.setText(`Custo: ${costParts.join(' + ')}`);
-      card.costText.setColor(canAfford ? '#ffd166' : '#f87171');
+      card.costText.setColor(
+        canAfford ? DF_PALETTE.textGold : DF_PALETTE.textDanger
+      );
 
-      card.btnBg.clear();
-      card.btnBg.fillStyle(canAfford ? 0x7c2d12 : 0x1e293b, 0.95);
-      card.btnBg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 5);
-      card.btnBg.lineStyle(1.5, canAfford ? rarityNum : 0x475569, 0.9);
-      card.btnBg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 5);
-      card.btnText.setColor(canAfford ? '#ffffff' : '#64748b');
+      drawOrnateButton(card.btnBg, -btnW / 2, -btnH / 2, btnW, btnH, {
+        variant: recipe.rarity === 'legendary' ? 'gold' : 'crimson',
+        bevel: 5,
+        disabled: !canAfford,
+        clear: true,
+      });
+      card.btnText.setColor(
+        canAfford ? DF_PALETTE.textParchment : DF_PALETTE.textMuted
+      );
     }
 
-    // Render Item Upgrade List
+    // Renderizar Lista de Aprimoramento de Itens (6 slots)
     this.itemsHeaderText.setText(
       `APRIMORAR ITENS (${snap.items.length} — até +${snap.maxUpgradeLevel})`
     );
@@ -899,7 +1060,7 @@ export class BlacksmithModal {
     const startIdx = this.itemPage * pageSize;
     const pageItems = snap.items.slice(startIdx, startIdx + pageSize);
 
-    for (let i = 0; i < this.itemRows.length; i++) {
+    for (let i = 0; i < this.itemRows.length; i += 1) {
       const row = this.itemRows[i];
       const item = pageItems[i];
       if (!item || i >= pageSize) {
@@ -918,66 +1079,112 @@ export class BlacksmithModal {
       const canAfford = !isMax && snap.souls >= cost;
       row.canUpgrade = canAfford;
 
-      const rowW = (row.container.getData('rowW') as number) || 308;
-      const rowH = (row.container.getData('rowH') as number) || 84;
-      const btnW = (row.container.getData('btnW') as number) || 86;
-      const btnH = (row.container.getData('btnH') as number) || 26;
+      const rowW = (row.container.getData('rowW') as number) || 460;
+      const rowH = (row.container.getData('rowH') as number) || 72;
+      const btnW = (row.container.getData('btnW') as number) || 98;
+      const btnH = (row.container.getData('btnH') as number) || 28;
+      const leftX = (row.container.getData('leftX') as number) ?? -rowW / 2 + 10;
+      const slotBoxSize = (row.container.getData('slotBoxSize') as number) || 42;
 
-      const borderNum = RARITY_NUM[item.rarity];
-      const borderHex = RARITY_HEX[item.rarity];
+      const rarityTheme = DF_RARITY_THEME[item.rarity];
+      const slotMeta = DF_SLOT_META[item.slot];
+      const forceTheme = DF_FORCE_THEME[item.force];
 
-      row.bg.clear();
-      row.bg.fillStyle(0x141b2d, 0.94);
-      row.bg.fillRoundedRect(-rowW / 2, -rowH / 2, rowW, rowH, 6);
-      row.bg.lineStyle(1.5, borderNum, 0.9);
-      row.bg.strokeRoundedRect(-rowW / 2, -rowH / 2, rowW, rowH, 6);
+      drawOrnatePanel(row.bg, {
+        x: -rowW / 2,
+        y: -rowH / 2,
+        width: rowW,
+        height: rowH,
+        bevel: 6,
+        fillColor: DF_PALETTE.deepRecess,
+        fillAlpha: 0.95,
+        innerFillColor: DF_PALETTE.innerSurface,
+        outerBorderColor: rarityTheme.border,
+        innerBorderColor: rarityTheme.innerBorder,
+        shadow: false,
+        cornerOrnaments: false,
+        clear: true,
+      });
+
+      drawRaritySlotFrame(row.slotFrameBg, {
+        x: leftX,
+        y: -slotBoxSize / 2,
+        width: slotBoxSize,
+        height: slotBoxSize,
+        rarity: item.rarity,
+        bevel: 5,
+        gemColor:
+          item.force !== 'none' ? forceTheme.color : rarityTheme.gemColor,
+        showTopGem: false,
+        showCornerGem: true,
+        clear: true,
+      });
+
+      const hasSlotIcon =
+        row.slotIcon !== null &&
+        hasUiTextureFrame(this.scene, DF_UI_ICONS_KEY, slotMeta.iconFrame);
+      if (row.slotIcon) {
+        row.slotIcon.setVisible(hasSlotIcon);
+        if (hasSlotIcon) {
+          row.slotIcon.setFrame(slotMeta.iconFrame);
+        }
+      }
 
       const suffix =
         level > 0 && !item.name.includes(`(+${level})`) ? ` (+${level})` : '';
       this.setTextClamped(
         row.nameText,
-        `[${SLOT_LABELS[item.slot]}] ${item.name}${suffix}`,
+        `[${slotMeta.labelTitle}] ${item.name}${suffix}`,
         1
       );
-      row.nameText.setColor(borderHex);
+      row.nameText.setColor(rarityTheme.hex);
 
       row.levelText.setText(`+${level}/+${snap.maxUpgradeLevel}`);
-      row.levelText.setColor(isMax ? '#ffd166' : '#cbd5e1');
+      row.levelText.setColor(
+        isMax ? DF_PALETTE.textGold : DF_PALETTE.textLight
+      );
 
-      const bonuses = this.formatItemBonuses(item, isMobile ? 2 : 3);
-      const statsLine = `${FORCE_LABELS[item.force]} · ${bonuses || `Poder ${item.powerScore}`}`;
-      this.setTextClamped(row.statsText, statsLine, isMobile ? 2 : 1);
+      const bonuses = this.formatItemBonuses(item, 3);
+      const statsLine = `${forceTheme.label} · ${bonuses || `Poder ${formatStatNumber(item.powerScore)}`}`;
+      this.setTextClamped(row.statsText, statsLine, 1);
 
       if (isMax) {
         row.costText.setText('Aprimoramento Máximo');
-        row.costText.setColor('#ffd166');
+        row.costText.setColor(DF_PALETTE.textGold);
       } else {
-        row.costText.setText(`Custo: ${cost} Almas`);
-        row.costText.setColor(canAfford ? '#90e0ef' : '#f87171');
+        row.costText.setText(`Custo: ${formatStatNumber(cost)} Almas`);
+        row.costText.setColor(
+          canAfford ? DF_PALETTE.textBlue : DF_PALETTE.textDanger
+        );
       }
 
-      row.btnBg.clear();
       if (isMax) {
-        row.btnBg.fillStyle(0x1e293b, 0.92);
-        row.btnBg.lineStyle(1, 0x64748b, 0.8);
-        row.btnText.setText('Máximo');
-        row.btnText.setColor('#ffd166');
+        drawOrnateButton(row.btnBg, -btnW / 2, -btnH / 2, btnW, btnH, {
+          variant: 'gold',
+          bevel: 5,
+          disabled: true,
+          clear: true,
+        });
+        row.btnText.setText('Máximo').setColor(DF_PALETTE.textGold);
       } else if (canAfford) {
-        row.btnBg.fillStyle(0x155e75, 0.96);
-        row.btnBg.lineStyle(1.5, 0x48cae4, 1);
-        row.btnText.setText('Aprimorar');
-        row.btnText.setColor('#ffffff');
+        drawOrnateButton(row.btnBg, -btnW / 2, -btnH / 2, btnW, btnH, {
+          variant: 'blue',
+          bevel: 5,
+          clear: true,
+        });
+        row.btnText.setText('Aprimorar').setColor(DF_PALETTE.textParchment);
       } else {
-        row.btnBg.fillStyle(0x1e293b, 0.78);
-        row.btnBg.lineStyle(1, 0x475569, 0.75);
-        row.btnText.setText('Aprimorar');
-        row.btnText.setColor('#64748b');
+        drawOrnateButton(row.btnBg, -btnW / 2, -btnH / 2, btnW, btnH, {
+          variant: 'iron',
+          bevel: 5,
+          disabled: true,
+          clear: true,
+        });
+        row.btnText.setText('Aprimorar').setColor(DF_PALETTE.textMuted);
       }
-      row.btnBg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 5);
-      row.btnBg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 5);
     }
 
-    // Pagination buttons
+    // Paginação
     const showPagination = snap.items.length > pageSize;
     this.prevPageContainer.setVisible(showPagination);
     this.nextPageContainer.setVisible(showPagination);
@@ -999,12 +1206,13 @@ export class BlacksmithModal {
     label: Phaser.GameObjects.Text,
     enabled: boolean
   ): void {
-    bg.clear();
-    bg.fillStyle(enabled ? 0x1e293b : 0x0f172a, 0.95);
-    bg.fillRoundedRect(-34, -12, 68, 24, 4);
-    bg.lineStyle(1, enabled ? 0x64748b : 0x334155, 0.9);
-    bg.strokeRoundedRect(-34, -12, 68, 24, 4);
-    label.setColor(enabled ? '#f8fafc' : '#475569');
+    drawOrnateButton(bg, -37, -13, 74, 26, {
+      variant: 'iron',
+      bevel: 4,
+      disabled: !enabled,
+      clear: true,
+    });
+    label.setColor(enabled ? DF_PALETTE.textParchment : DF_PALETTE.textMuted);
   }
 
   private formatItemBonuses(item: ItemInstance, maxEntries: number): string {
@@ -1020,10 +1228,11 @@ export class BlacksmithModal {
     }
 
     const parts: string[] = [];
-    if (totals.attack) parts.push(`ATQ +${Math.round(totals.attack)}`);
-    if (totals.maxHp) parts.push(`HP +${Math.round(totals.maxHp)}`);
-    if (totals.defense) parts.push(`DEF +${Math.round(totals.defense)}`);
-    if (totals.moveSpeed) parts.push(`VEL +${Math.round(totals.moveSpeed)}`);
+    if (totals.attack) parts.push(`ATQ +${formatStatNumber(totals.attack)}`);
+    if (totals.maxHp) parts.push(`HP +${formatStatNumber(totals.maxHp)}`);
+    if (totals.defense) parts.push(`DEF +${formatStatNumber(totals.defense)}`);
+    if (totals.moveSpeed)
+      parts.push(`VEL +${formatStatNumber(totals.moveSpeed)}`);
     if (totals.critChance)
       parts.push(`CRIT +${Math.round(totals.critChance * 100)}%`);
     if (totals.lifeSteal)

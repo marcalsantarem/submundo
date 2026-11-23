@@ -19,19 +19,18 @@ Este arquivo define o papel do agente principal, a visão técnica do projeto **
 - **Pitch:** Guerreiro morto em uma invasão demoníaca renasce como Espectro por um pacto celestial para caçar os Generais do Inferno em masmorras rápidas de 3 a 5 minutos (4 salas + 1 Boss) — até descobrir a traição do próprio Céu.
 - **Loop e Risco:** Ao morrer na masmorra, o jogador retorna ao Hub mantendo as **Almas** coletadas, mas perdendo os equipamentos dropados naquela incursão. Extrair após vencer o Boss garante todos os itens e Essências.
 - **Ordem de Construção (Decisão #3):** Validar primeiro o Combate/Masmorra e o Hub principal (Refúgio no Submundo), deixando o Prólogo (Vila Natal e transição narrativa) para os marcos de História.
-- **Plataformas e Câmera Adaptativa:**
-  - **Web Desktop (PC):** Modo Paisagem centralizado (`800x600`) com moldura sombria, controles `WASD`/Setas + teclas de ação.
-  - **Web Mobile & Futuro Nativo:** Modo Retrato vertical (`9:16`), controles para 1 polegar (joystick virtual flutuante + botões de ação).
+- **Plataformas e Câmera (Modo Paisagem Exclusivo — Decisão #16):**
+  - **Web Desktop (PC) & Mobile (2 mãos):** Modo **Paisagem Exclusivo (`960×540`, `16:9`)** centralizado com moldura sombria. No PC: `WASD`/Setas + teclas de ação. No Mobile: controles para 2 mãos em paisagem (joystick virtual à esquerda + ataque e arco de skills à direita) com aviso para girar o aparelho caso aberto em retrato.
   - **Ataque Básico:** Automático contra o inimigo mais próximo no alcance da arma; foco do jogador em posicionamento, **Esquiva Espectral (Dash)**, **2 Habilidades Ativas** e **Poção de Alma**.
 - **Direção de Arte e Áudio:**
-  - **Estilo Híbrido:** Gameplay em Pixel Art Dark Fantasy (16/32-bit) com iluminação dinâmica 2D + Retratos de diálogos e ícones de loot em Arte 2D estilizada.
+  - **Estilo Híbrido:** Gameplay em Pixel Art Dark Fantasy (16/32-bit) com iluminação dinâmica 2D + Telas de UI, modais, inventário, cards de item, retratos de diálogos e ícones de loot em Arte 2D estilizada de alta definição (não-pixelart).
   - **Pipeline Inicial 100% via Código:** Spritesheets/tilesets `.png` gerados via scripts (Canvas/Node/Python), VFX/partículas/luzes via código no Phaser 3 e efeitos sonoros (SFX) procedurais via **Web Audio API**.
 - **Stack, Testes e Arquitetura Desacoplada (`core` / `view`):**
   - **Stack:** TypeScript + Phaser 3 + Vite.
   - **Testes (Decisão #4):** **Vitest** para testes unitários/integração de `src/core/` e **Playwright** para validação em navegador real e capturas PC (`800x600`) / Mobile (`9:16`) pelo `AG03 (QA)`.
   - **`src/core/` (100% TypeScript puro, ZERO Phaser):**
     - `entities/`: Estado do herói, monstros, atributos e fórmulas de dano.
-    - `loot/`: Gerador de itens (4 slots: Arma, Armadura, Amuleto, Anel; 4 raridades: Comum, Mágico, Raro, Lendário), afixos e inventário.
+    - `loot/`: Gerador de itens (6 slots: Arma, Armadura, Elmo, Bota, Amuleto, Anel; 4 raridades: Comum, Mágico, Raro, Lendário), afixos e inventário.
     - `combat/`: Cooldowns, skills e sinergias das 3 Forças (🔥 **Inferno** / Brasa, 🩸 **Submundo** / Sangramento & Roubo de Vida, ⚡ **Empíreo** / Julgamento & Raio).
     - `dungeon/`: Gerador de salas (4 salas + 1 Boss), ondas de monstros e semente da Fenda Diária.
     - `progression/`: Save/Load (`LocalStorage`), Almas, Essência de General, Altar de Almas, Ferreiro, Hub, diálogos e quests.

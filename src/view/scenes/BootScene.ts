@@ -104,8 +104,8 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
   {
     key: 'portraits',
     file: 'assets/sprites/portraits.png',
-    frameWidth: 64,
-    frameHeight: 64,
+    frameWidth: 128,
+    frameHeight: 128,
     fallbackColor: 0x64748b,
   },
   {
@@ -178,7 +178,16 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
     frameHeight: 96,
     fallbackColor: 0x991b1b,
   },
+  {
+    key: 'ui_icons',
+    file: 'assets/sprites/ui_icons.png',
+    frameWidth: 64,
+    frameHeight: 64,
+    fallbackColor: 0x334155,
+  },
 ];
+
+const LINEAR_TEXTURE_KEYS: readonly string[] = ['ui_icons', 'portraits'];
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -200,6 +209,7 @@ export class BootScene extends Phaser.Scene {
 
   public create(): void {
     this.ensureFallbackTextures();
+    this.applyTextureFilters();
 
     const { width, height } = this.scale;
     this.cameras.main.setBackgroundColor('#09090b');
@@ -224,6 +234,18 @@ export class BootScene extends Phaser.Scene {
       this.scene.start('DungeonScene', { testArena: true });
     } else if ('HubScene' in this.scene.manager.keys) {
       this.scene.start('HubScene');
+    }
+  }
+
+  private applyTextureFilters(): void {
+    for (const spec of SPRITESHEET_SPECS) {
+      if (!this.textures.exists(spec.key)) {
+        continue;
+      }
+      const mode = LINEAR_TEXTURE_KEYS.includes(spec.key)
+        ? Phaser.Textures.FilterMode.LINEAR
+        : Phaser.Textures.FilterMode.NEAREST;
+      this.textures.get(spec.key).setFilter(mode);
     }
   }
 

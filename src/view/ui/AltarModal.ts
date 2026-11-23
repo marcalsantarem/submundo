@@ -7,6 +7,18 @@ import {
   resolveViewportConfig,
 } from '../../core/index';
 import dialoguesData from '../../data/dialogues.json';
+import {
+  DF_FONTS,
+  DF_PALETTE,
+  DF_UI_ICONS_KEY,
+  DF_UI_ICON_FRAMES,
+  drawOrnamentalDivider,
+  drawOrnateButton,
+  drawOrnatePanel,
+  drawSkullCrest,
+  formatStatNumber,
+  hasUiTextureFrame,
+} from './DarkFantasyUiBuilder';
 
 export interface AltarModalSnapshot {
   souls: number;
@@ -61,6 +73,8 @@ export class AltarModal {
   private readonly backdropZone: Phaser.GameObjects.Zone;
   private readonly panelGraphic: Phaser.GameObjects.Graphics;
   private readonly soulsBgGraphic: Phaser.GameObjects.Graphics;
+  private readonly soulsIcon: Phaser.GameObjects.Image | null;
+  private readonly soulsFallbackGraphic: Phaser.GameObjects.Graphics;
 
   private readonly titleText: Phaser.GameObjects.Text;
   private readonly soulsText: Phaser.GameObjects.Text;
@@ -97,8 +111,8 @@ export class AltarModal {
     this.scene = scene;
     this.callbacks = callbacks;
     this.viewport = resolveViewportConfig(
-      scene.scale.width || 800,
-      scene.scale.height || 600
+      scene.scale.width || 960,
+      scene.scale.height || 540
     );
 
     this.backdropGraphic = scene.add.graphics();
@@ -122,49 +136,78 @@ export class AltarModal {
     this.panelGraphic = scene.add.graphics();
     this.soulsBgGraphic = scene.add.graphics();
 
-    this.titleText = scene.add.text(0, 0, 'ALTAR DE ALMAS', {
-      fontFamily: 'monospace',
-      fontSize: '15px',
-      color: '#ffd166',
-      fontStyle: 'bold',
-    });
+    this.soulsIcon = hasUiTextureFrame(
+      scene,
+      DF_UI_ICONS_KEY,
+      DF_UI_ICON_FRAMES.souls
+    )
+      ? scene.add
+          .image(0, 0, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.souls)
+          .setOrigin(0.5)
+      : null;
 
-    this.soulsText = scene.add.text(0, 0, 'Almas disponíveis: 0', {
-      fontFamily: 'monospace',
-      fontSize: '12px',
-      color: '#90e0ef',
-      fontStyle: 'bold',
-    });
+    this.soulsFallbackGraphic = scene.add.graphics();
+    this.drawSoulsFallbackDiamond();
 
-    this.introText = scene.add.text(0, 0, dialoguesData.entries.altar_intro.shortText, {
-      fontFamily: 'monospace',
-      fontSize: '10px',
-      color: '#cbd5e1',
-    });
+    this.titleText = scene.add
+      .text(0, 0, 'ALTAR DE ALMAS', {
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '17px',
+        color: DF_PALETTE.textGold,
+        fontStyle: 'bold',
+        resolution: 2,
+      })
+      .setOrigin(0, 0.5);
+
+    this.soulsText = scene.add
+      .text(0, 0, 'Almas disponíveis: 0', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '12px',
+        color: DF_PALETTE.textBlue,
+        fontStyle: 'bold',
+        resolution: 2,
+      })
+      .setOrigin(0, 0.5);
+
+    this.introText = scene.add.text(
+      0,
+      0,
+      dialoguesData.entries.altar_intro.shortText,
+      {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '11px',
+        color: DF_PALETTE.textLight,
+        resolution: 2,
+      }
+    );
 
     this.emptyText = scene.add
       .text(0, 0, 'Nenhuma bênção disponível no Altar.', {
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        color: '#64748b',
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '12px',
+        color: DF_PALETTE.textMuted,
         align: 'center',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
 
-    // Close Button
+    // Botão Fechar
     this.closeBtnBg = scene.add.graphics();
     this.closeBtnText = scene.add
       .text(0, 0, 'Fechar', {
-        fontFamily: 'monospace',
+        fontFamily: DF_FONTS.TITLE,
         fontSize: '12px',
-        color: '#f8fafc',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
     this.closeBtnZone = scene.add
-      .zone(0, 0, 84, 28)
+      .zone(0, 0, 88, 28)
       .setOrigin(0.5, 0.5)
       .setInteractive({ useHandCursor: true });
+    this.closeBtnZone.on('pointerover', () => this.drawCloseButton(true));
+    this.closeBtnZone.on('pointerout', () => this.drawCloseButton(false));
 
     this.closeBtnZone.on(
       'pointerdown',
@@ -189,18 +232,19 @@ export class AltarModal {
       this.closeBtnZone,
     ]);
 
-    // Pagination Controls (used only if > 5 upgrades exist)
+    // Paginação (exibida apenas se houver mais de 5 bênçãos)
     this.prevPageBg = scene.add.graphics();
     this.prevPageText = scene.add
-      .text(0, 0, '< Ant', {
-        fontFamily: 'monospace',
+      .text(0, 0, '◄ Ant', {
+        fontFamily: DF_FONTS.BODY,
         fontSize: '11px',
-        color: '#f8fafc',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
     this.prevPageZone = scene.add
-      .zone(0, 0, 68, 24)
+      .zone(0, 0, 74, 24)
       .setOrigin(0.5, 0.5)
       .setInteractive({ useHandCursor: true });
     this.prevPageZone.on(
@@ -227,15 +271,16 @@ export class AltarModal {
 
     this.nextPageBg = scene.add.graphics();
     this.nextPageText = scene.add
-      .text(0, 0, 'Próx >', {
-        fontFamily: 'monospace',
+      .text(0, 0, 'Próx ►', {
+        fontFamily: DF_FONTS.BODY,
         fontSize: '11px',
-        color: '#f8fafc',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
     this.nextPageZone = scene.add
-      .zone(0, 0, 68, 24)
+      .zone(0, 0, 74, 24)
       .setOrigin(0.5, 0.5)
       .setInteractive({ useHandCursor: true });
     this.nextPageZone.on(
@@ -265,9 +310,11 @@ export class AltarModal {
 
     this.pageInfoText = scene.add
       .text(0, 0, '1/1', {
-        fontFamily: 'monospace',
+        fontFamily: DF_FONTS.BODY,
         fontSize: '11px',
-        color: '#cbd5e1',
+        color: DF_PALETTE.textMuted,
+        fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
 
@@ -276,6 +323,7 @@ export class AltarModal {
       this.backdropZone,
       this.panelGraphic,
       this.soulsBgGraphic,
+      this.soulsFallbackGraphic,
       this.titleText,
       this.soulsText,
       this.introText,
@@ -285,54 +333,63 @@ export class AltarModal {
       this.nextPageContainer,
       this.pageInfoText,
     ];
+    if (this.soulsIcon) {
+      rootChildren.splice(5, 0, this.soulsIcon);
+    }
 
-    for (let i = 0; i < MAX_ROWS_PER_PAGE; i++) {
+    for (let i = 0; i < MAX_ROWS_PER_PAGE; i += 1) {
       const bg = scene.add.graphics();
       const nameText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
-        fontSize: '12px',
-        color: '#f8fafc',
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '13px',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
+        resolution: 2,
       });
       const levelText = scene.add
         .text(0, 0, '', {
-          fontFamily: 'monospace',
+          fontFamily: DF_FONTS.BODY,
           fontSize: '11px',
-          color: '#ffd166',
+          color: DF_PALETTE.textGold,
           fontStyle: 'bold',
+          resolution: 2,
         })
         .setOrigin(1, 0);
       const bonusText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        color: '#80ed99',
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '11px',
+        color: DF_PALETTE.textSuccess,
         fontStyle: 'bold',
+        resolution: 2,
       });
       const descText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
+        fontFamily: DF_FONTS.BODY,
         fontSize: '10px',
-        color: '#94a3b8',
+        color: DF_PALETTE.textMuted,
+        resolution: 2,
       });
       const costText = scene.add
         .text(0, 0, '', {
-          fontFamily: 'monospace',
-          fontSize: '10px',
-          color: '#90e0ef',
+          fontFamily: DF_FONTS.BODY,
+          fontSize: '11px',
+          color: DF_PALETTE.textBlue,
           fontStyle: 'bold',
+          resolution: 2,
         })
         .setOrigin(1, 0);
 
       const btnBg = scene.add.graphics();
       const btnText = scene.add
         .text(0, 0, 'Aprimorar', {
-          fontFamily: 'monospace',
+          fontFamily: DF_FONTS.TITLE,
           fontSize: '11px',
-          color: '#ffffff',
+          color: DF_PALETTE.textParchment,
           fontStyle: 'bold',
+          resolution: 2,
         })
         .setOrigin(0.5, 0.5);
       const btnZone = scene.add
-        .zone(0, 0, 100, 28)
+        .zone(0, 0, 114, 32)
         .setOrigin(0.5, 0.5)
         .setInteractive({ useHandCursor: true });
 
@@ -431,84 +488,133 @@ export class AltarModal {
     this.viewport = viewport;
     const w = viewport.width;
     const h = viewport.height;
-    const isMobile = viewport.mode === 'mobile_portrait';
 
     this.rootContainer.setPosition(w / 2, h / 2);
 
     this.backdropGraphic.clear();
-    this.backdropGraphic.fillStyle(0x04060a, 0.82);
+    this.backdropGraphic.fillStyle(0x04060a, 0.84);
     this.backdropGraphic.fillRect(-w / 2, -h / 2, w, h);
     this.backdropZone.setSize(w, h);
 
-    const boxW = isMobile ? w - 20 : 680;
-    const boxH = isMobile ? h - 44 : 520;
+    // Painel Paisagem Amplo 780x460 centralizado em 960x540
+    const boxW = Math.min(780, w - 24);
+    const boxH = Math.min(460, h - 24);
+    const headerH = 42;
 
-    this.panelGraphic.clear();
-    this.panelGraphic.fillStyle(0x0f1420, 0.97);
-    this.panelGraphic.fillRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 8);
-    this.panelGraphic.lineStyle(2, 0x3b4252, 1);
-    this.panelGraphic.strokeRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 8);
+    drawOrnatePanel(this.panelGraphic, {
+      x: -boxW / 2,
+      y: -boxH / 2,
+      width: boxW,
+      height: boxH,
+      bevel: 12,
+      fillColor: DF_PALETTE.obsidianBg,
+      fillAlpha: 0.98,
+      innerFillColor: DF_PALETTE.innerSurface,
+      outerBorderColor: DF_PALETTE.bronzeBorder,
+      innerBorderColor: DF_PALETTE.metalBorder,
+      accentColor: DF_PALETTE.agedGold,
+      headerHeight: headerH,
+      headerColor: DF_PALETTE.headerBg,
+      headerGlowColor: DF_PALETTE.buttonBlueBorder,
+      headerGlowAlpha: 0.16,
+      shadow: true,
+      cornerOrnaments: true,
+      clear: true,
+    });
 
-    const leftEdge = -boxW / 2 + 16;
-    const rightEdge = boxW / 2 - 16;
-    const topEdge = -boxH / 2 + 14;
-    const innerW = boxW - 32;
+    // Crânio ornamental discreto coroando o topo central do Altar
+    drawSkullCrest(this.panelGraphic, 0, -boxH / 2 + 1, 0.85);
 
-    this.titleText.setFontSize(isMobile ? 14 : 16);
-    this.titleText.setPosition(leftEdge, topEdge + 2);
+    const leftEdge = -boxW / 2 + 18;
+    const rightEdge = boxW / 2 - 18;
+    const topEdge = -boxH / 2;
+    const innerW = boxW - 36;
 
-    const closeW = isMobile ? 72 : 84;
-    const closeH = isMobile ? 26 : 28;
-    this.closeBtnContainer.setPosition(rightEdge - closeW / 2, topEdge + 12);
+    this.titleText.setPosition(leftEdge, topEdge + headerH / 2 + 4);
+
+    const closeW = 88;
+    const closeH = 28;
+    this.closeBtnContainer.setPosition(
+      rightEdge - closeW / 2,
+      topEdge + headerH / 2 + 4
+    );
     this.closeBtnZone.setSize(closeW, closeH);
-    this.closeBtnBg.clear();
-    this.closeBtnBg.fillStyle(0x7f1d1d, 0.92);
-    this.closeBtnBg.fillRoundedRect(-closeW / 2, -closeH / 2, closeW, closeH, 5);
-    this.closeBtnBg.lineStyle(1.5, 0xfca5a5, 0.85);
-    this.closeBtnBg.strokeRoundedRect(-closeW / 2, -closeH / 2, closeW, closeH, 5);
+    this.drawCloseButton(false);
 
-    const soulsBarY = topEdge + (isMobile ? 32 : 34);
-    const soulsBarH = isMobile ? 24 : 26;
-    this.soulsBgGraphic.clear();
-    this.soulsBgGraphic.fillStyle(0x161d2e, 0.92);
-    this.soulsBgGraphic.fillRoundedRect(leftEdge, soulsBarY, innerW, soulsBarH, 5);
-    this.soulsBgGraphic.lineStyle(1, 0x2b3448, 0.9);
-    this.soulsBgGraphic.strokeRoundedRect(leftEdge, soulsBarY, innerW, soulsBarH, 5);
+    // Barra de saldo de Almas
+    const soulsBarY = topEdge + headerH + 10;
+    const soulsBarH = 28;
+    drawOrnatePanel(this.soulsBgGraphic, {
+      x: leftEdge,
+      y: soulsBarY,
+      width: innerW,
+      height: soulsBarH,
+      bevel: 5,
+      fillColor: DF_PALETTE.deepRecess,
+      fillAlpha: 0.95,
+      innerFillColor: DF_PALETTE.obsidianBg,
+      outerBorderColor: DF_PALETTE.metalBorder,
+      innerBorderColor: DF_PALETTE.metalDark,
+      shadow: false,
+      cornerOrnaments: false,
+      clear: true,
+    });
 
-    this.soulsText.setFontSize(isMobile ? 11 : 12);
-    this.soulsText.setPosition(leftEdge + 10, soulsBarY + (isMobile ? 5 : 6));
+    const iconSize = 16;
+    const iconCenterX = leftEdge + 16;
+    const iconCenterY = soulsBarY + soulsBarH / 2;
+    this.soulsIcon
+      ?.setPosition(iconCenterX, iconCenterY)
+      .setDisplaySize(iconSize, iconSize);
+    this.soulsFallbackGraphic.setPosition(iconCenterX, iconCenterY);
 
-    const introY = soulsBarY + soulsBarH + 7;
-    this.introText.setFontSize(isMobile ? 9 : 10);
+    this.soulsText.setPosition(leftEdge + 29, iconCenterY);
+
+    const introY = soulsBarY + soulsBarH + 6;
     this.introText.setWordWrapWidth(innerW);
     this.introText.setPosition(leftEdge, introY);
 
-    const listTop = introY + (isMobile ? 28 : 22);
-    const rowH = isMobile ? 86 : 74;
-    const gap = isMobile ? 6 : 8;
+    const dividerY = introY + 20;
+    drawOrnamentalDivider(this.panelGraphic, leftEdge, dividerY, innerW);
+
+    const listTop = dividerY + 8;
+    const rowH = 60;
+    const gap = 6;
 
     this.rows.forEach((row, idx) => {
       const cy = listTop + idx * (rowH + gap) + rowH / 2;
-      this.layoutRow(row, 0, cy, innerW, rowH, isMobile);
+      this.layoutRow(row, 0, cy, innerW, rowH);
     });
 
-    this.emptyText.setPosition(0, listTop + 140);
+    this.emptyText.setPosition(0, listTop + 130);
 
     const pageY = boxH / 2 - 18;
-    this.prevPageContainer.setPosition(-76, pageY);
+    this.prevPageContainer.setPosition(-80, pageY);
     this.pageInfoText.setPosition(0, pageY);
-    this.nextPageContainer.setPosition(76, pageY);
+    this.nextPageContainer.setPosition(80, pageY);
 
     this.renderSnapshot();
   }
 
   public destroy(): void {
     this.scene.input.keyboard?.off('keydown', this.keydownHandler);
-    this.rootContainer.destroy();
+    this.rootContainer.destroy(true);
   }
 
   private getTotalPages(): number {
-    return Math.max(1, Math.ceil(this.lastSnapshot.upgrades.length / MAX_ROWS_PER_PAGE));
+    return Math.max(
+      1,
+      Math.ceil(this.lastSnapshot.upgrades.length / MAX_ROWS_PER_PAGE)
+    );
+  }
+
+  private drawCloseButton(hovered: boolean): void {
+    drawOrnateButton(this.closeBtnBg, -44, -14, 88, 28, {
+      variant: 'crimson',
+      bevel: 5,
+      hovered,
+      clear: true,
+    });
   }
 
   private layoutRow(
@@ -516,53 +622,57 @@ export class AltarModal {
     cx: number,
     cy: number,
     w: number,
-    h: number,
-    isMobile: boolean
+    h: number
   ): void {
     row.container.setPosition(cx, cy);
     row.container.setData('rowW', w);
     row.container.setData('rowH', h);
 
-    const left = -w / 2 + 10;
-    const right = w / 2 - 10;
-    const top = -h / 2 + 8;
+    const left = -w / 2 + 14;
+    const right = w / 2 - 14;
+    const top = -h / 2 + 7;
 
-    const btnW = isMobile ? 92 : 112;
-    const btnH = isMobile ? 28 : 30;
+    const btnW = 114;
+    const btnH = 32;
     row.container.setData('btnW', btnW);
     row.container.setData('btnH', btnH);
 
-    row.nameText.setFontSize(isMobile ? 11 : 12);
-    row.nameText.setWordWrapWidth(w - (isMobile ? 96 : 160));
+    const infoRightX = right - btnW - 16;
+    const textMaxW = Math.max(220, infoRightX - left - 120);
+
+    row.nameText.setWordWrapWidth(textMaxW);
     row.nameText.setPosition(left, top);
 
-    row.levelText.setFontSize(isMobile ? 10 : 11);
-    row.levelText.setPosition(right, top);
+    row.bonusText.setWordWrapWidth(textMaxW + 40);
+    row.bonusText.setPosition(left, top + 18);
 
-    row.bonusText.setFontSize(isMobile ? 10 : 11);
-    row.bonusText.setWordWrapWidth(w - btnW - 28);
-    row.bonusText.setPosition(left, top + (isMobile ? 18 : 20));
+    row.descText.setWordWrapWidth(infoRightX - left - 16);
+    row.descText.setPosition(left, top + 34);
 
-    row.descText.setFontSize(isMobile ? 9 : 10);
-    row.descText.setWordWrapWidth(w - btnW - 28);
-    row.descText.setPosition(left, top + (isMobile ? 36 : 39));
+    row.levelText.setPosition(infoRightX, top + 2);
+    row.costText.setPosition(infoRightX, top + 22);
 
-    row.costText.setFontSize(isMobile ? 9 : 10);
-    row.costText.setPosition(right, top + (isMobile ? 20 : 19));
-
-    row.btnContainer.setPosition(right - btnW / 2, h / 2 - btnH / 2 - 8);
+    row.btnContainer.setPosition(right - btnW / 2, 0);
     row.btnZone.setSize(btnW, btnH);
   }
 
   private renderSnapshot(): void {
     const snap = this.lastSnapshot;
-    const isMobile = this.viewport.mode === 'mobile_portrait';
 
-    this.soulsText.setText(`Almas disponíveis: ${snap.souls}`);
+    const hasSoulsIcon =
+      this.soulsIcon !== null &&
+      hasUiTextureFrame(this.scene, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.souls);
+    this.soulsIcon?.setVisible(hasSoulsIcon);
+    if (hasSoulsIcon && this.soulsIcon) {
+      this.soulsIcon.setFrame(DF_UI_ICON_FRAMES.souls);
+    }
+    this.soulsFallbackGraphic.setVisible(!hasSoulsIcon);
+
+    this.soulsText.setText(`Almas disponíveis: ${formatStatNumber(snap.souls)}`);
     this.setTextClamped(
       this.introText,
       dialoguesData.entries.altar_intro.shortText,
-      isMobile ? 2 : 1
+      1
     );
 
     const upgrades = snap.upgrades;
@@ -572,7 +682,7 @@ export class AltarModal {
     const startIdx = this.page * MAX_ROWS_PER_PAGE;
     const pageUpgrades = upgrades.slice(startIdx, startIdx + MAX_ROWS_PER_PAGE);
 
-    for (let i = 0; i < this.rows.length; i++) {
+    for (let i = 0; i < this.rows.length; i += 1) {
       const row = this.rows[i];
       const def = pageUpgrades[i];
       if (!def) {
@@ -591,56 +701,77 @@ export class AltarModal {
       const canAfford = !isMax && snap.souls >= cost;
       row.canPurchase = canAfford;
 
-      const rowW = (row.container.getData('rowW') as number) || 308;
-      const rowH = (row.container.getData('rowH') as number) || 86;
-      const btnW = (row.container.getData('btnW') as number) || 92;
-      const btnH = (row.container.getData('btnH') as number) || 28;
+      const rowW = (row.container.getData('rowW') as number) || 744;
+      const rowH = (row.container.getData('rowH') as number) || 60;
+      const btnW = (row.container.getData('btnW') as number) || 114;
+      const btnH = (row.container.getData('btnH') as number) || 32;
 
-      row.bg.clear();
-      row.bg.fillStyle(0x141b2d, 0.94);
-      row.bg.fillRoundedRect(-rowW / 2, -rowH / 2, rowW, rowH, 6);
-      row.bg.lineStyle(
-        1.5,
-        isMax ? 0xffd166 : canAfford ? 0x48cae4 : 0x334155,
-        0.92
-      );
-      row.bg.strokeRoundedRect(-rowW / 2, -rowH / 2, rowW, rowH, 6);
+      const outerBorder = isMax
+        ? DF_PALETTE.bronzeBorder
+        : canAfford
+          ? DF_PALETTE.buttonBlueBorder
+          : DF_PALETTE.metalBorder;
+
+      drawOrnatePanel(row.bg, {
+        x: -rowW / 2,
+        y: -rowH / 2,
+        width: rowW,
+        height: rowH,
+        bevel: 6,
+        fillColor: DF_PALETTE.deepRecess,
+        fillAlpha: 0.95,
+        innerFillColor: DF_PALETTE.innerSurface,
+        outerBorderColor: outerBorder,
+        innerBorderColor: isMax ? DF_PALETTE.bronzeDark : DF_PALETTE.metalDark,
+        shadow: false,
+        cornerOrnaments: false,
+        clear: true,
+      });
 
       this.setTextClamped(row.nameText, def.name, 1);
       row.levelText.setText(`Nv. ${level}/${def.maxLevel}`);
-      row.levelText.setColor(isMax ? '#ffd166' : '#cbd5e1');
+      row.levelText.setColor(
+        isMax ? DF_PALETTE.textGold : DF_PALETTE.textLight
+      );
 
       const bonusStr = this.formatBonusSummary(def.bonusPerLevel, level);
       this.setTextClamped(row.bonusText, bonusStr, 1);
-      this.setTextClamped(row.descText, def.description, isMobile ? 2 : 1);
+      this.setTextClamped(row.descText, def.description, 1);
 
       if (isMax) {
         row.costText.setText('Nível Máximo');
-        row.costText.setColor('#ffd166');
+        row.costText.setColor(DF_PALETTE.textGold);
       } else {
-        row.costText.setText(`Custo: ${cost} Almas`);
-        row.costText.setColor(canAfford ? '#90e0ef' : '#f87171');
+        row.costText.setText(`Custo: ${formatStatNumber(cost)} Almas`);
+        row.costText.setColor(
+          canAfford ? DF_PALETTE.textBlue : DF_PALETTE.textDanger
+        );
       }
 
-      row.btnBg.clear();
       if (isMax) {
-        row.btnBg.fillStyle(0x1e293b, 0.92);
-        row.btnBg.lineStyle(1, 0x64748b, 0.8);
-        row.btnText.setText('Máximo');
-        row.btnText.setColor('#ffd166');
+        drawOrnateButton(row.btnBg, -btnW / 2, -btnH / 2, btnW, btnH, {
+          variant: 'gold',
+          bevel: 5,
+          disabled: true,
+          clear: true,
+        });
+        row.btnText.setText('Máximo').setColor(DF_PALETTE.textGold);
       } else if (canAfford) {
-        row.btnBg.fillStyle(0x155e75, 0.96);
-        row.btnBg.lineStyle(1.5, 0x48cae4, 1);
-        row.btnText.setText('Aprimorar');
-        row.btnText.setColor('#ffffff');
+        drawOrnateButton(row.btnBg, -btnW / 2, -btnH / 2, btnW, btnH, {
+          variant: 'blue',
+          bevel: 5,
+          clear: true,
+        });
+        row.btnText.setText('Aprimorar').setColor(DF_PALETTE.textParchment);
       } else {
-        row.btnBg.fillStyle(0x1e293b, 0.78);
-        row.btnBg.lineStyle(1, 0x475569, 0.75);
-        row.btnText.setText('Aprimorar');
-        row.btnText.setColor('#64748b');
+        drawOrnateButton(row.btnBg, -btnW / 2, -btnH / 2, btnW, btnH, {
+          variant: 'iron',
+          bevel: 5,
+          disabled: true,
+          clear: true,
+        });
+        row.btnText.setText('Aprimorar').setColor(DF_PALETTE.textMuted);
       }
-      row.btnBg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 5);
-      row.btnBg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 5);
     }
 
     const showPagination = upgrades.length > MAX_ROWS_PER_PAGE;
@@ -664,12 +795,27 @@ export class AltarModal {
     label: Phaser.GameObjects.Text,
     enabled: boolean
   ): void {
-    bg.clear();
-    bg.fillStyle(enabled ? 0x1e293b : 0x0f172a, 0.95);
-    bg.fillRoundedRect(-34, -12, 68, 24, 4);
-    bg.lineStyle(1, enabled ? 0x64748b : 0x334155, 0.9);
-    bg.strokeRoundedRect(-34, -12, 68, 24, 4);
-    label.setColor(enabled ? '#f8fafc' : '#475569');
+    drawOrnateButton(bg, -37, -12, 74, 24, {
+      variant: 'iron',
+      bevel: 4,
+      disabled: !enabled,
+      clear: true,
+    });
+    label.setColor(enabled ? DF_PALETTE.textParchment : DF_PALETTE.textMuted);
+  }
+
+  private drawSoulsFallbackDiamond(): void {
+    this.soulsFallbackGraphic.clear();
+    this.soulsFallbackGraphic.fillStyle(DF_PALETTE.buttonBlueHighlight, 0.95);
+    this.soulsFallbackGraphic.fillPoints(
+      [
+        { x: 0, y: -5 },
+        { x: 5, y: 0 },
+        { x: 0, y: 5 },
+        { x: -5, y: 0 },
+      ],
+      true
+    );
   }
 
   private formatBonusSummary(bonusPerLevel: StatBonus, level: number): string {
@@ -692,10 +838,10 @@ export class AltarModal {
 
       const perText = isPercent
         ? `${Math.round(val * 100)}%`
-        : `${Math.round(val)}`;
+        : formatStatNumber(val);
       const totalText = isPercent
         ? `${Math.round(total * 100)}%`
-        : `${Math.round(total)}`;
+        : formatStatNumber(total);
 
       const label = this.getStatLabel(key);
       if (level > 0) {

@@ -6,6 +6,14 @@ import {
   type ViewportConfig,
 } from '../../core/index';
 import { soundManager } from '../audio/SoundManager';
+import {
+  DF_FONTS,
+  DF_PALETTE,
+  drawOrnamentalDivider,
+  drawOrnateButton,
+  drawOrnatePanel,
+  hasUiTextureFrame,
+} from './DarkFantasyUiBuilder';
 
 const PORTRAIT_FRAME_MAP: Record<PortraitId, number> = {
   hero_living: 0,
@@ -32,6 +40,12 @@ const PORTRAIT_THEME: Record<
   system: { color: 0xfacc15, hex: '#fde047', badge: 'SY' },
 };
 
+const DIALOGUE_BOX_MAX_W = 820;
+const DIALOGUE_BOX_H = 148;
+const PORTRAIT_SIZE = 128;
+const ACTION_BTN_W = 126;
+const ACTION_BTN_H = 38;
+
 export class DialogueBox {
   private readonly scene: Phaser.Scene;
   private viewport: ViewportConfig;
@@ -39,6 +53,7 @@ export class DialogueBox {
   private lines: DialogueLine[] = [];
   private currentIndex = 0;
   private opened = false;
+  private actionBtnHovered = false;
   private onComplete?: () => void;
 
   private readonly rootContainer: Phaser.GameObjects.Container;
@@ -67,8 +82,8 @@ export class DialogueBox {
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     this.viewport = resolveViewportConfig(
-      scene.scale.width || 800,
-      scene.scale.height || 600
+      scene.scale.width || 960,
+      scene.scale.height || 540
     );
 
     this.backdropGraphic = scene.add.graphics();
@@ -93,10 +108,11 @@ export class DialogueBox {
     this.portraitFallbackGraphic = scene.add.graphics();
     this.portraitFallbackText = scene.add
       .text(0, 0, 'SY', {
-        fontFamily: 'monospace',
-        fontSize: '18px',
-        color: '#f8fafc',
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '24px',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5);
 
@@ -105,53 +121,71 @@ export class DialogueBox {
       : null;
 
     this.speakerText = scene.add.text(0, 0, '', {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: '#90e0ef',
+      fontFamily: DF_FONTS.TITLE,
+      fontSize: '12px',
+      color: DF_PALETTE.textBlue,
       fontStyle: 'bold',
+      resolution: 2,
     });
 
     this.titleText = scene.add.text(0, 0, '', {
-      fontFamily: 'monospace',
+      fontFamily: DF_FONTS.TITLE,
       fontSize: '14px',
-      color: '#ffd166',
+      color: DF_PALETTE.textGold,
       fontStyle: 'bold',
+      resolution: 2,
     });
 
     this.bodyText = scene.add.text(0, 0, '', {
-      fontFamily: 'monospace',
+      fontFamily: DF_FONTS.BODY,
       fontSize: '12px',
-      color: '#e2e8f0',
-      lineSpacing: 5,
+      color: DF_PALETTE.textLight,
+      lineSpacing: 4,
+      resolution: 2,
     });
 
-    this.pageText = scene.add.text(0, 0, '1/1', {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: '#94a3b8',
-      fontStyle: 'bold',
-    });
+    this.pageText = scene.add
+      .text(0, 0, '1/1', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '11px',
+        color: DF_PALETTE.textMuted,
+        fontStyle: 'bold',
+        resolution: 2,
+      })
+      .setOrigin(1, 0);
 
-    this.shortcutText = scene.add.text(0, 0, '[Enter/Espaço]', {
-      fontFamily: 'monospace',
-      fontSize: '10px',
-      color: '#64748b',
-    });
+    this.shortcutText = scene.add
+      .text(0, 0, '[Enter / Espaço]', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '10px',
+        color: DF_PALETTE.textMuted,
+        resolution: 2,
+      })
+      .setOrigin(0.5, 0);
 
     this.actionBtnBg = scene.add.graphics();
     this.actionBtnText = scene.add
       .text(0, 0, 'Continuar', {
-        fontFamily: 'monospace',
+        fontFamily: DF_FONTS.TITLE,
         fontSize: '12px',
-        color: '#ffffff',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5);
     this.actionBtnZone = scene.add
-      .zone(0, 0, 120, 32)
+      .zone(0, 0, ACTION_BTN_W, ACTION_BTN_H)
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
 
+    this.actionBtnZone.on('pointerover', () => {
+      this.actionBtnHovered = true;
+      this.redrawCurrentActionButton();
+    });
+    this.actionBtnZone.on('pointerout', () => {
+      this.actionBtnHovered = false;
+      this.redrawCurrentActionButton();
+    });
     this.actionBtnZone.on(
       'pointerdown',
       (
@@ -228,6 +262,7 @@ export class DialogueBox {
     this.currentIndex = 0;
     this.onComplete = onComplete;
     this.opened = true;
+    this.actionBtnHovered = false;
 
     this.layout();
     this.renderCurrentLine();
@@ -256,6 +291,7 @@ export class DialogueBox {
     }
 
     this.opened = false;
+    this.actionBtnHovered = false;
     this.rootContainer.setVisible(false);
     soundManager.play('ui_click');
 
@@ -272,8 +308,8 @@ export class DialogueBox {
 
   public handleResize(): void {
     this.viewport = resolveViewportConfig(
-      this.scene.scale.width || 800,
-      this.scene.scale.height || 600
+      this.scene.scale.width || 960,
+      this.scene.scale.height || 540
     );
     this.layout();
     if (this.opened) {
@@ -283,7 +319,7 @@ export class DialogueBox {
 
   public destroy(): void {
     this.scene.input.keyboard?.off('keydown', this.keydownHandler);
-    this.rootContainer.destroy();
+    this.rootContainer.destroy(true);
   }
 
   private renderCurrentLine(): void {
@@ -305,45 +341,59 @@ export class DialogueBox {
     this.drawPanelAndButton(theme.color, isLast);
   }
 
+  private redrawCurrentActionButton(): void {
+    const isLast = this.currentIndex >= Math.max(0, this.lines.length - 1);
+    drawOrnateButton(
+      this.actionBtnBg,
+      -ACTION_BTN_W / 2,
+      -ACTION_BTN_H / 2,
+      ACTION_BTN_W,
+      ACTION_BTN_H,
+      {
+        variant: isLast ? 'crimson' : 'blue',
+        bevel: 6,
+        hovered: this.actionBtnHovered,
+        clear: true,
+      }
+    );
+  }
+
   private drawPortrait(
     portraitId: PortraitId,
     theme: { color: number; hex: string; badge: string }
   ): void {
-    const isMobile = this.viewport.mode === 'mobile_portrait';
     const metrics = this.getBoxMetrics();
-    const portraitSize = isMobile ? 68 : 84;
-    const portraitCenterX = -metrics.boxW / 2 + metrics.padX + portraitSize / 2;
-    const portraitCenterY = -metrics.boxH / 2 + metrics.padY + portraitSize / 2 + 4;
+    const portraitCenterX = -metrics.boxW / 2 + metrics.padX + PORTRAIT_SIZE / 2;
+    const portraitCenterY = 0;
 
-    this.portraitFrameGraphic.clear();
-    this.portraitFrameGraphic.fillStyle(0x070b13, 1);
-    this.portraitFrameGraphic.fillRoundedRect(
-      portraitCenterX - portraitSize / 2,
-      portraitCenterY - portraitSize / 2,
-      portraitSize,
-      portraitSize,
-      6
-    );
-    this.portraitFrameGraphic.lineStyle(2, theme.color, 0.92);
-    this.portraitFrameGraphic.strokeRoundedRect(
-      portraitCenterX - portraitSize / 2,
-      portraitCenterY - portraitSize / 2,
-      portraitSize,
-      portraitSize,
-      6
-    );
+    drawOrnatePanel(this.portraitFrameGraphic, {
+      x: portraitCenterX - PORTRAIT_SIZE / 2,
+      y: portraitCenterY - PORTRAIT_SIZE / 2,
+      width: PORTRAIT_SIZE,
+      height: PORTRAIT_SIZE,
+      bevel: 8,
+      fillColor: DF_PALETTE.obsidianBg,
+      fillAlpha: 1,
+      innerFillColor: DF_PALETTE.innerSurface,
+      outerBorderColor: DF_PALETTE.bronzeBorder,
+      innerBorderColor: theme.color,
+      accentColor: theme.color,
+      shadow: false,
+      cornerOrnaments: true,
+      clear: true,
+    });
 
-    const frameIndex = PORTRAIT_FRAME_MAP[portraitId] ?? PORTRAIT_FRAME_MAP.system;
+    const frameIndex =
+      PORTRAIT_FRAME_MAP[portraitId] ?? PORTRAIT_FRAME_MAP.system;
     const hasPortraitFrame =
       this.portraitSprite !== null &&
-      this.scene.textures.exists('portraits') &&
-      this.scene.textures.get('portraits').has(String(frameIndex));
+      hasUiTextureFrame(this.scene, 'portraits', frameIndex);
 
     if (hasPortraitFrame && this.portraitSprite) {
       this.portraitSprite
         .setPosition(portraitCenterX, portraitCenterY)
         .setFrame(frameIndex)
-        .setScale(isMobile ? 0.94 : 1.18)
+        .setDisplaySize(PORTRAIT_SIZE - 14, PORTRAIT_SIZE - 14)
         .setVisible(true);
       this.portraitFallbackGraphic.clear();
       this.portraitFallbackText.setVisible(false);
@@ -356,48 +406,68 @@ export class DialogueBox {
       this.portraitFallbackGraphic.fillCircle(
         portraitCenterX,
         portraitCenterY,
-        portraitSize * 0.34
+        PORTRAIT_SIZE * 0.34
       );
-      this.portraitFallbackGraphic.lineStyle(1.5, theme.color, 0.8);
+      this.portraitFallbackGraphic.lineStyle(1.5, theme.color, 0.85);
       this.portraitFallbackGraphic.strokeCircle(
         portraitCenterX,
         portraitCenterY,
-        portraitSize * 0.34
+        PORTRAIT_SIZE * 0.34
       );
       this.portraitFallbackText
         .setPosition(portraitCenterX, portraitCenterY)
         .setColor(theme.hex)
-        .setFontSize(isMobile ? 16 : 20)
         .setText(theme.badge)
         .setVisible(true);
     }
   }
 
   private drawPanelAndButton(accentColor: number, isLast: boolean): void {
-    const { boxW, boxH } = this.getBoxMetrics();
+    const { boxW, boxH, padX } = this.getBoxMetrics();
+    const textLeft = -boxW / 2 + padX + PORTRAIT_SIZE + 16;
+    const textRight = boxW / 2 - padX;
 
-    this.panelGraphic.clear();
-    this.panelGraphic.fillStyle(0x0b1120, 0.97);
-    this.panelGraphic.fillRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 9);
-    this.panelGraphic.lineStyle(2, accentColor, 0.9);
-    this.panelGraphic.strokeRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 9);
-    this.panelGraphic.lineStyle(1, 0x334155, 0.75);
-    this.panelGraphic.strokeRoundedRect(
-      -boxW / 2 + 4,
-      -boxH / 2 + 4,
-      boxW - 8,
-      boxH - 8,
-      6
+    drawOrnatePanel(this.panelGraphic, {
+      x: -boxW / 2,
+      y: -boxH / 2,
+      width: boxW,
+      height: boxH,
+      bevel: 10,
+      fillColor: DF_PALETTE.obsidianBg,
+      fillAlpha: 0.97,
+      innerFillColor: DF_PALETTE.innerSurface,
+      outerBorderColor: DF_PALETTE.bronzeBorder,
+      innerBorderColor: DF_PALETTE.metalBorder,
+      accentColor,
+      shadow: true,
+      cornerOrnaments: true,
+      clear: true,
+    });
+
+    // Divisor ornamental sutil entre nome/título e a fala
+    const headerDivY = -boxH / 2 + 49;
+    drawOrnamentalDivider(
+      this.panelGraphic,
+      textLeft,
+      headerDivY,
+      textRight - textLeft,
+      DF_PALETTE.bronzeBorder
     );
 
-    const btnW = this.viewport.mode === 'mobile_portrait' ? 112 : 120;
-    const btnH = 32;
-    this.actionBtnZone.setSize(btnW, btnH);
-    this.actionBtnBg.clear();
-    this.actionBtnBg.fillStyle(isLast ? 0x1e3a5f : 0x155e75, 0.96);
-    this.actionBtnBg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 6);
-    this.actionBtnBg.lineStyle(1.6, accentColor, 0.98);
-    this.actionBtnBg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 6);
+    this.actionBtnZone.setSize(ACTION_BTN_W, ACTION_BTN_H);
+    drawOrnateButton(
+      this.actionBtnBg,
+      -ACTION_BTN_W / 2,
+      -ACTION_BTN_H / 2,
+      ACTION_BTN_W,
+      ACTION_BTN_H,
+      {
+        variant: isLast ? 'crimson' : 'blue',
+        bevel: 6,
+        hovered: this.actionBtnHovered,
+        clear: true,
+      }
+    );
   }
 
   private getBoxMetrics(): {
@@ -407,31 +477,18 @@ export class DialogueBox {
     padY: number;
     centerYOffset: number;
   } {
-    const isMobile = this.viewport.mode === 'mobile_portrait';
     const w = this.viewport.width;
     const h = this.viewport.height;
 
-    if (isMobile) {
-      const boxW = Math.min(w - 20, 344);
-      const boxH = 236;
-      const targetCenterY = Math.round(h / 2 + 12);
-      return {
-        boxW,
-        boxH,
-        padX: 14,
-        padY: 14,
-        centerYOffset: targetCenterY,
-      };
-    }
+    const boxW = Math.min(DIALOGUE_BOX_MAX_W, w - 32);
+    const boxH = DIALOGUE_BOX_H;
+    const targetCenterY = h - boxH / 2 - 16;
 
-    const boxW = Math.min(w - 40, 648);
-    const boxH = 196;
-    const targetCenterY = h - 128;
     return {
       boxW,
       boxH,
-      padX: 18,
-      padY: 16,
+      padX: 14,
+      padY: 12,
       centerYOffset: targetCenterY,
     };
   }
@@ -439,47 +496,41 @@ export class DialogueBox {
   private layout(): void {
     const w = this.viewport.width;
     const h = this.viewport.height;
-    const isMobile = this.viewport.mode === 'mobile_portrait';
     const { boxW, boxH, padX, padY, centerYOffset } = this.getBoxMetrics();
 
     this.rootContainer.setPosition(w / 2, centerYOffset);
 
-    // Backdrop covers the whole screen regardless of rootContainer Y offset
+    // Backdrop cobrindo toda a tela independente do deslocamento vertical da caixa
     this.backdropGraphic.clear();
-    this.backdropGraphic.fillStyle(0x04060a, 0.72);
+    this.backdropGraphic.fillStyle(0x04060a, 0.68);
     this.backdropGraphic.fillRect(-w / 2, -centerYOffset, w, h);
     this.backdropZone
       .setPosition(0, h / 2 - centerYOffset)
       .setSize(w, h);
 
-    const portraitSize = isMobile ? 68 : 84;
-    const textLeft = -boxW / 2 + padX + portraitSize + (isMobile ? 12 : 16);
-    const textRight = boxW / 2 - padX;
-    const textWidth = Math.max(120, textRight - textLeft);
+    const textLeft = -boxW / 2 + padX + PORTRAIT_SIZE + 16;
+    const rightEdge = boxW / 2 - padX;
+    const bodyRight = rightEdge - ACTION_BTN_W - 18;
+    const headerWidth = Math.max(160, rightEdge - textLeft - 46);
+    const bodyWidth = Math.max(160, bodyRight - textLeft);
     const top = -boxH / 2 + padY;
 
-    this.speakerText.setFontSize(isMobile ? 10 : 11).setPosition(textLeft, top);
-    this.titleText
-      .setFontSize(isMobile ? 12 : 14)
-      .setWordWrapWidth(textWidth)
-      .setPosition(textLeft, top + 16);
-    this.bodyText
-      .setFontSize(isMobile ? 11 : 12)
-      .setWordWrapWidth(textWidth)
-      .setPosition(textLeft, top + (isMobile ? 42 : 44));
+    this.speakerText.setPosition(textLeft, top);
+    this.titleText.setWordWrapWidth(headerWidth).setPosition(textLeft, top + 16);
+    this.bodyText.setWordWrapWidth(bodyWidth).setPosition(textLeft, top + 45);
 
-    const footerY = boxH / 2 - 24;
-    this.pageText.setPosition(-boxW / 2 + padX, footerY - 7);
+    this.pageText.setPosition(rightEdge, top + 2);
+
+    const btnCenterX = rightEdge - ACTION_BTN_W / 2;
+    const btnCenterY = 18;
+    this.actionBtnContainer.setPosition(btnCenterX, btnCenterY);
     this.shortcutText
-      .setVisible(!isMobile)
-      .setPosition(-boxW / 2 + padX + 46, footerY - 6);
-
-    const btnW = isMobile ? 112 : 120;
-    this.actionBtnContainer.setPosition(textRight - btnW / 2, footerY);
+      .setVisible(true)
+      .setPosition(btnCenterX, btnCenterY + ACTION_BTN_H / 2 + 6);
 
     const currentLine = this.lines[this.currentIndex];
     const theme = currentLine
-      ? PORTRAIT_THEME[currentLine.portraitId] ?? PORTRAIT_THEME.system
+      ? (PORTRAIT_THEME[currentLine.portraitId] ?? PORTRAIT_THEME.system)
       : PORTRAIT_THEME.system;
     this.drawPanelAndButton(
       theme.color,

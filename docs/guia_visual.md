@@ -35,7 +35,7 @@ Para contrastar emocionalmente com a queda e a condenação no Submundo, a Vila 
 2. **Paredes Delimitadas:** `wall_abyssal` e `refuge_wall` possuem sombreamento de 4 tons, topo iluminado (`#52525b` / `#64748b`) e juntas escuras (`#09090b`) para leitura imediata de bloqueio físico.
 3. **Sombreamento 4 Tons & Rim Lighting:** Personagens e monstros possuem contorno `#09090b`, sombreamento volumétrico de 4 tons, silhuetas orgânicas (capuz pontiagudo, chifres curvos, asas recortadas) e *rim lighting* direcional (`#38bdf8` no Espectro/Hub, `#f97316` no Inferno).
 4. **Telegrafia Visual:** Os frames de ação (`attack`, `slam`, `dash`) expandem a silhueta com arcos de energia de alto brilho (`#e0f2fe` ou `#f97316`).
-5. **Retratos 2D Estilizados (`portraits.png`):** Renderizados com supersampling 3x (anti-aliasing suave), iluminação volumétrica com *rim light*, gradientes suaves e bordas nítidas em frames `64x64`.
+5. **Retratos 2D Estilizados (`portraits.png`) e Ícones de UI (`ui_icons.png`):** Arte 2D estilizada com recorte por alpha suave, preservação de *glows*/auras, descontaminação de cor e downscale por integração de área em *premultiplied alpha* (`portraits.png` em frames `128x128` e `ui_icons.png` em frames `64x64`).
 
 ---
 
@@ -58,7 +58,8 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 | `loot_drops` | `loot_drops.png` | `64x16` px | `16x16` px | 4 | `0: common (#e4e4e7)`, `1: magic (#38bdf8)`, `2: rare (#facc15)`, `3: legendary (#f97316)` |
 | `hub_tiles` | `hub_tiles.png` | `64x16` px | `16x16` px | 4 | `0: refuge_floor`, `1: refuge_runes`, `2: refuge_wall`, `3: refuge_brazier` |
 | `hub_npcs` | `hub_npcs.png` | `128x32` px | `32x32` px | 4 | `0: emissary`, `1: blacksmith`, `2: soul_altar`, `3: rift_portal` |
-| `portraits` | `portraits.png` | `512x64` px | `64x64` px | 8 | `0: hero_living`, `1: hero_wraith`, `2: weapon_master`, `3: village_blacksmith`, `4: emissary`, `5: spectral_blacksmith`, `6: infernal_warden`, `7: system` |
+| `portraits` | `portraits.png` | `1024x128` px | `128x128` px | 8 | `0: hero_living`, `1: hero_wraith`, `2: weapon_master`, `3: village_blacksmith`, `4: emissary`, `5: spectral_blacksmith`, `6: infernal_warden`, `7: system` |
+| `ui_icons` | `ui_icons.png` | `1024x64` px | `64x64` px | 16 | `0: attack`, `1: dash`, `2: skill_inferno`, `3: skill_empireo`, `4: skill_submundo`, `5: potion`, `6: bag`, `7: settings`, `8: audio_on`, `9: audio_off`, `10: souls`, `11: essence`, `12: slot_weapon`, `13: slot_armor`, `14: slot_amulet`, `15: slot_ring` |
 | `village_tiles` | `village_tiles.png` | `64x16` px | `16x16` px | 4 | `0: grass_path`, `1: cobble_square`, `2: wood_wall`, `3: village_lantern` |
 | `village_npcs` | `village_npcs.png` | `128x32` px | `32x32` px | 4 | `0: weapon_master`, `1: village_blacksmith`, `2: potion_stall`, `3: village_gate` |
 | `slime` | `slime.png` | `1600x80` px | `80x80` px | 20 | `0..3: idle0..3`, `4..9: walk0..5`, `10..15: attack0..5`, `16..19: death0..3` |
@@ -97,6 +98,7 @@ Todos os arquivos são gerados via código por `scripts/art/generateSprites.mjs`
 - Para regenerar os spritesheets procedurais base: `node scripts/art/generateSprites.mjs`.
 - Para regenerar `hero_living.png` (`1920x80`, 24f), `hero_wraith.png` (`1920x80`, 24f), as prévias em `assets/mockups/preview_hero_*.png` e atualizar `manifest.json` a partir dos sprites base em `assets/sprites_src/` (sem dependências externas): `python scripts/art/buildHeroAndWeapons.py`.
 - Para regenerar os spritesheets animados 20f de monstros/bosses (`slime.png` 50%, `cave_bat.png` 50%, `wolf_alpha.png` `1600x80`, `karnak.png` `1920x96`, `skeleton_chief.png` `1600x80`), as prévias `assets/mockups/preview_bosses_20f.png` e `assets/mockups/preview_skeleton_chief_20f.png`, e atualizar `manifest.json` (sem dependências externas): `python scripts/art/buildMonstersSheets.py`.
+- Para regenerar e publicar `ui_icons.png` (`1024x64`, 16f `64x64`) e `portraits.png` (`1024x128`, 8f `128x128`) em `public/assets/sprites/`, atualizar `manifest.json` e gerar a prancha `assets/mockups/preview_m7_ui_assets.png` a partir de `assets/sprites_src/ui/`: `python scripts/art/buildUiAssets.py` (ou `--publish-only` para republicar apenas os PNGs já aprovados).
 - Qualquer arquivo `.png` em `public/assets/sprites/` pode ser editado ou substituído no LibreSprite/Pixelorama mantendo a mesma chave, dimensão de frame e ordem de índices em `manifest.json`.
 
 ---

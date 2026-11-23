@@ -35,7 +35,14 @@ import {
 export const DEFAULT_PROFILE_VERSION = 1;
 export const DEFAULT_MAX_STASH_SIZE = 30;
 
-const EQUIP_SLOTS: readonly EquipSlot[] = ['weapon', 'armor', 'amulet', 'ring'];
+const EQUIP_SLOTS: readonly EquipSlot[] = [
+  'weapon',
+  'armor',
+  'helm',
+  'boots',
+  'amulet',
+  'ring',
+];
 const ALTAR_IDS: readonly AltarUpgradeId[] = [
   'vitality',
   'might',
@@ -170,6 +177,8 @@ export function createDefaultProfile(): SaveProfile {
     equipped: {
       weapon: null,
       armor: null,
+      helm: null,
+      boots: null,
       amulet: null,
       ring: null,
     },

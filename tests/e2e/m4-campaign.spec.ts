@@ -1,15 +1,29 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { getAvailableStages } from '../../src/core/progression/CampaignManager';
 import { MUTE_STORAGE_KEY } from '../../src/view/audio/SoundManager';
 import affixesJson from '../../src/data/affixes.json';
 import { GAME_VERSION } from '../../src/version';
+import {
+  DESKTOP_VIEWPORT,
+  MOBILE_LANDSCAPE_VIEWPORT,
+  assertLandscapeCanvas,
+  clickLogicalCanvas,
+  ensureHubScene,
+  openMobileLandscapePage,
+} from './helpers/landscape';
 
-test.describe('SUBMUNDO M4 — Campaign (Prologue -> Village Fall -> Act 1), 2D Portraits, T-051, 36 Affixes & Web Audio SFX E2E', () => {
-  test('validates Prologue clean boot with 2D portrait DialogueBox, SoundManager mute toggle, 36 affixes, T-051 Blacksmith fixes, and PC/Mobile screenshots', async ({
+const SCREENSHOT_DIR = resolve(process.cwd(), 'docs/qa/screenshots');
+
+test.describe('SUBMUNDO M4 — Campaign (Prologue -> Village Fall -> Act 1), 2D Portraits, T-051, 36 Affixes & Web Audio SFX E2E (PC 960x540 & Mobile Landscape 844x390)', () => {
+  test('validates Prologue clean boot with 2D portrait DialogueBox, SoundManager mute toggle, 36 affixes, T-051 Blacksmith fixes, and PC/Mobile Landscape screenshots', async ({
     page,
+    browser,
+    baseURL,
   }) => {
+    mkdirSync(SCREENSHOT_DIR, { recursive: true });
+
     const consoleErrors: string[] = [];
     const pageErrors: string[] = [];
 
@@ -26,9 +40,11 @@ test.describe('SUBMUNDO M4 — Campaign (Prologue -> Village Fall -> Act 1), 2D 
     // Verify 36 affixes in src/data/affixes.json
     expect(affixesJson.affixes.length).toBe(36);
 
-    // 1. Clean boot on Desktop Landscape (800x600) in Prologue — Vila Natal Viva
-    await page.setViewportSize({ width: 800, height: 600 });
+    // 1. Clean boot on Desktop Landscape (960x540) in Prologue — Vila Natal Viva
+    await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto('/');
+    await ensureHubScene(page, { clearStorage: true });
+    await assertLandscapeCanvas(page, DESKTOP_VIEWPORT);
 
     await page.waitForFunction(
       () =>
@@ -44,7 +60,7 @@ test.describe('SUBMUNDO M4 — Campaign (Prologue -> Village Fall -> Act 1), 2D 
       const profile = hub.getProfile();
       const box = hub.getDialogueBox() as unknown as {
         isOpen: () => boolean;
-        portraitSprite: { visible: boolean; frame: { name: string } } | null;
+        portraitSprite: { visible: boolean; frame: { name: string | number } } | null;
         speakerText: { text: string };
         titleText: { text: string };
       };
@@ -61,14 +77,16 @@ test.describe('SUBMUNDO M4 — Campaign (Prologue -> Village Fall -> Act 1), 2D 
         hasVillageTiles,
         hasVillageNpcs,
         portraitVisible: box.portraitSprite?.visible ?? false,
-        portraitFrame: box.portraitSprite?.frame?.name ?? null,
+        portraitFrame:
+          box.portraitSprite?.frame?.name !== undefined
+            ? Number(box.portraitSprite.frame.name)
+            : null,
         speaker: box.speakerText.text,
         dialogueTitle: box.titleText.text,
       };
     });
 
-    expect(GAME_VERSION).toBe('0.5.0');
-    expect(prologueBootCheck.title).toBe('SUBMUNDO v0.5.0');
+    expect(prologueBootCheck.title).toBe(`SUBMUNDO v${GAME_VERSION}`);
     expect(prologueBootCheck.phase).toBe('prologue');
     expect(prologueBootCheck.currentStageId).toBe('prologue_grotto');
     expect(prologueBootCheck.dialogueOpen).toBe(true);
@@ -79,12 +97,9 @@ test.describe('SUBMUNDO M4 — Campaign (Prologue -> Village Fall -> Act 1), 2D 
     expect(prologueBootCheck.portraitFrame).toBe(2); // weapon_master
     expect(prologueBootCheck.speaker).toContain('MESTRE DE ARMAS');
 
-    // Capture Desktop PC 800x600 screenshot: Vila Natal + DialogueBox + 2D portrait
+    // Capture Desktop PC 960x540 screenshot: Vila Natal + DialogueBox + 2D portrait
     await page.waitForTimeout(150);
-    const pcScreenshotPath = resolve(
-      process.cwd(),
-      'docs/qa/screenshots/m4-pc-800x600.png'
-    );
+    const pcScreenshotPath = resolve(SCREENSHOT_DIR, 'm4-pc-960x540.png');
     await page.screenshot({ path: pcScreenshotPath });
     expect(existsSync(pcScreenshotPath)).toBe(true);
     expect(statSync(pcScreenshotPath).size).toBeGreaterThan(5000);
@@ -100,32 +115,31 @@ test.describe('SUBMUNDO M4 — Campaign (Prologue -> Village Fall -> Act 1), 2D 
     );
 
     // 2. Test SoundManager mute toggle & LocalStorage persistence in headless browser
-    const muteBtnPos = await page.evaluate(() => {
-      const rect = document.querySelector('canvas')?.getBoundingClientRect();
+    const muteBtnLogical = await page.evaluate(() => {
       const scene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
         hud: {
           muteBtn: { container: { x: number; y: number } };
         };
       };
       return {
-        x: (rect?.left ?? 0) + scene.hud.muteBtn.container.x,
-        y: (rect?.top ?? 0) + scene.hud.muteBtn.container.y,
+        x: scene.hud.muteBtn.container.x,
+        y: scene.hud.muteBtn.container.y,
       };
     });
 
-    await page.mouse.click(muteBtnPos.x, muteBtnPos.y);
+    await clickLogicalCanvas(page, muteBtnLogical.x, muteBtnLogical.y);
     const mutedState = await page.evaluate((key: string) => {
       return window.localStorage.getItem(key);
     }, MUTE_STORAGE_KEY);
     expect(mutedState).toBe('true');
 
-    await page.mouse.click(muteBtnPos.x, muteBtnPos.y);
+    await clickLogicalCanvas(page, muteBtnLogical.x, muteBtnLogical.y);
     const unmutedState = await page.evaluate((key: string) => {
       return window.localStorage.getItem(key);
     }, MUTE_STORAGE_KEY);
     expect(unmutedState).toBe('false');
 
-    // 3. Verify T-051 fixes in BlacksmithModal (no duplicate +N suffix & costText spacing on 800x600)
+    // 3. Verify T-051 fixes in BlacksmithModal (no duplicate +N suffix & costText spacing on 960x540)
     await page.evaluate(() => {
       const hub = window.__SUBMUNDO_HUB_DEBUG__!;
       hub.grantTestResources(500, 3);
@@ -144,7 +158,6 @@ test.describe('SUBMUNDO M4 — Campaign (Prologue -> Village Fall -> Act 1), 2D 
     );
 
     const blacksmithTargets = await page.evaluate(() => {
-      const rect = document.querySelector('canvas')?.getBoundingClientRect();
       const scene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
         blacksmithModal: {
           rootContainer: { x: number; y: number };
@@ -165,9 +178,9 @@ test.describe('SUBMUNDO M4 — Campaign (Prologue -> Village Fall -> Act 1), 2D 
         costText: legCard.costText.text,
         costRight,
         btnLeft,
-        legBtnClick: {
-          x: (rect?.left ?? 0) + modal.rootContainer.x + legCard.container.x + legCard.btnContainer.x,
-          y: (rect?.top ?? 0) + modal.rootContainer.y + legCard.container.y + legCard.btnContainer.y,
+        legBtnLogical: {
+          x: modal.rootContainer.x + legCard.container.x + legCard.btnContainer.x,
+          y: modal.rootContainer.y + legCard.container.y + legCard.btnContainer.y,
         },
       };
     });
@@ -177,13 +190,13 @@ test.describe('SUBMUNDO M4 — Campaign (Prologue -> Village Fall -> Act 1), 2D 
     expect(blacksmithTargets.costRight).toBeLessThan(blacksmithTargets.btnLeft);
 
     // Forge legendary item and upgrade it to +1, then check row.nameText for no duplicate (+1) +1
-    await page.mouse.click(
-      blacksmithTargets.legBtnClick.x,
-      blacksmithTargets.legBtnClick.y
+    await clickLogicalCanvas(
+      page,
+      blacksmithTargets.legBtnLogical.x,
+      blacksmithTargets.legBtnLogical.y
     );
 
-    const upgradeBtnPos = await page.evaluate(() => {
-      const rect = document.querySelector('canvas')?.getBoundingClientRect();
+    const upgradeBtnLogical = await page.evaluate(() => {
       const scene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
         blacksmithModal: {
           rootContainer: { x: number; y: number };
@@ -197,12 +210,12 @@ test.describe('SUBMUNDO M4 — Campaign (Prologue -> Village Fall -> Act 1), 2D 
       const modal = scene.blacksmithModal;
       const firstRow = modal.itemRows[0];
       return {
-        x: (rect?.left ?? 0) + modal.rootContainer.x + firstRow.container.x + firstRow.btnContainer.x,
-        y: (rect?.top ?? 0) + modal.rootContainer.y + firstRow.container.y + firstRow.btnContainer.y,
+        x: modal.rootContainer.x + firstRow.container.x + firstRow.btnContainer.x,
+        y: modal.rootContainer.y + firstRow.container.y + firstRow.btnContainer.y,
       };
     });
 
-    await page.mouse.click(upgradeBtnPos.x, upgradeBtnPos.y);
+    await clickLogicalCanvas(page, upgradeBtnLogical.x, upgradeBtnLogical.y);
 
     const upgradedCheck = await page.evaluate(() => {
       const hub = window.__SUBMUNDO_HUB_DEBUG__!;
@@ -235,35 +248,47 @@ test.describe('SUBMUNDO M4 — Campaign (Prologue -> Village Fall -> Act 1), 2D 
     expect(/\(\+\d+\)\s*\+\d+/.test(upgradedCheck.rowText)).toBe(false);
     expect(/\+1\s*\+1/.test(upgradedCheck.rowText)).toBe(false);
 
-    // 4. Mobile Portrait (360x640) screenshot of Vila Natal Viva (9:16)
-    await page.setViewportSize({ width: 360, height: 640 });
-    await page.waitForTimeout(200);
+    // 4. Mobile Landscape (844x390, hasTouch: true) screenshot of Vila Natal Viva
+    const { context: mobileContext, page: mobilePage } =
+      await openMobileLandscapePage(browser, {
+        baseURL,
+        consoleErrors,
+        pageErrors,
+      });
 
-    const mobileCheck = await page.evaluate(() => {
-      const canvas = document.querySelector('canvas');
-      const hud = (
-        window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
-          hud: { locationText: { text: string } };
-        }
-      ).hud;
-      return {
-        canvasWidth: canvas?.width ?? 0,
-        canvasHeight: canvas?.height ?? 0,
-        locationTitle: hud.locationText.text,
-      };
-    });
+    try {
+      await mobilePage.goto('/');
+      await ensureHubScene(mobilePage, { clearStorage: true });
+      await mobilePage.waitForTimeout(200);
 
-    expect(mobileCheck.canvasWidth).toBe(360);
-    expect(mobileCheck.canvasHeight).toBe(640);
-    expect(mobileCheck.locationTitle).toContain('Vila Natal');
+      await assertLandscapeCanvas(mobilePage, MOBILE_LANDSCAPE_VIEWPORT);
 
-    const mobileScreenshotPath = resolve(
-      process.cwd(),
-      'docs/qa/screenshots/m4-mobile-360x640.png'
-    );
-    await page.screenshot({ path: mobileScreenshotPath });
-    expect(existsSync(mobileScreenshotPath)).toBe(true);
-    expect(statSync(mobileScreenshotPath).size).toBeGreaterThan(4000);
+      const mobileCheck = await mobilePage.evaluate(() => {
+        const hub = window.__SUBMUNDO_HUB_DEBUG__!;
+        hub.getDialogueBox().close();
+        const hud = (
+          hub.scene as unknown as {
+            hud: { locationText: { text: string } };
+          }
+        ).hud;
+        return {
+          locationTitle: hud.locationText.text,
+        };
+      });
+
+      expect(mobileCheck.locationTitle).toContain('Vila Natal');
+
+      await mobilePage.waitForTimeout(120);
+      const mobileScreenshotPath = resolve(
+        SCREENSHOT_DIR,
+        'm4-mobile-844x390.png'
+      );
+      await mobilePage.screenshot({ path: mobileScreenshotPath });
+      expect(existsSync(mobileScreenshotPath)).toBe(true);
+      expect(statSync(mobileScreenshotPath).size).toBeGreaterThan(4000);
+    } finally {
+      await mobileContext.close();
+    }
 
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);
@@ -272,14 +297,23 @@ test.describe('SUBMUNDO M4 — Campaign (Prologue -> Village Fall -> Act 1), 2D 
   test('validates Campaign progression (prologue_grotto -> prologue_mine -> prologue_seal -> Village Fall -> act1_submundo) with Emissary portrait', async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 800, height: 600 });
-    await page.goto('/');
+    const consoleErrors: string[] = [];
+    const pageErrors: string[] = [];
 
-    await page.waitForFunction(
-      () => typeof window.__SUBMUNDO_HUB_DEBUG__ !== 'undefined',
-      undefined,
-      { timeout: 10000 }
-    );
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') {
+        consoleErrors.push(msg.text());
+      }
+    });
+
+    page.on('pageerror', (err) => {
+      pageErrors.push(err.message);
+    });
+
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await page.goto('/');
+    await ensureHubScene(page, { clearStorage: true });
+    await assertLandscapeCanvas(page, DESKTOP_VIEWPORT);
 
     await page.evaluate(() => {
       const hub = window.__SUBMUNDO_HUB_DEBUG__!;
@@ -376,7 +410,7 @@ test.describe('SUBMUNDO M4 — Campaign (Prologue -> Village Fall -> Act 1), 2D 
       const profile = hub.getProfile();
       const box = hub.getDialogueBox() as unknown as {
         isOpen: () => boolean;
-        portraitSprite: { visible: boolean; frame: { name: string } } | null;
+        portraitSprite: { visible: boolean; frame: { name: string | number } } | null;
         speakerText: { text: string };
         titleText: { text: string };
       };
@@ -406,12 +440,15 @@ test.describe('SUBMUNDO M4 — Campaign (Prologue -> Village Fall -> Act 1), 2D 
 
     const pactPortraitCheck = await page.evaluate(() => {
       const box = window.__SUBMUNDO_HUB_DEBUG__!.getDialogueBox() as unknown as {
-        portraitSprite: { visible: boolean; frame: { name: string } } | null;
+        portraitSprite: { visible: boolean; frame: { name: string | number } } | null;
         speakerText: { text: string };
       };
       return {
         portraitVisible: box.portraitSprite?.visible ?? false,
-        portraitFrame: box.portraitSprite?.frame?.name ?? null,
+        portraitFrame:
+          box.portraitSprite?.frame?.name !== undefined
+            ? Number(box.portraitSprite.frame.name)
+            : null,
         speaker: box.speakerText.text,
       };
     });
@@ -428,5 +465,8 @@ test.describe('SUBMUNDO M4 — Campaign (Prologue -> Village Fall -> Act 1), 2D 
       undefined,
       { timeout: 3000 }
     );
+
+    expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
   });
 });

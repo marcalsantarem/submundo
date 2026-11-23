@@ -1,10 +1,18 @@
 import { existsSync, mkdirSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { SAVE_STORAGE_KEY } from '../../src/core/progression/StorageAdapter';
 import { GAME_VERSION } from '../../src/version';
+import {
+  DESKTOP_VIEWPORT,
+  MOBILE_LANDSCAPE_VIEWPORT,
+  assertLandscapeCanvas,
+  ensureHubScene,
+  openMobileLandscapePage,
+} from './helpers/landscape';
 
-const SCREENSHOT_DIR = '/tmp/qa-m5';
+const SCREENSHOT_DIR = join(tmpdir(), 'qa-m5');
 
 interface DebugSpriteSnapshot {
   texture: {
@@ -21,9 +29,54 @@ interface DebugSpriteSnapshot {
   };
 }
 
-test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations (Living vs Wraith) E2E', () => {
-  test('validates v0.5.0 boot, hero_living/hero_wraith 1920x80 (24f), weapons 192x48, 10 animation frame counts, anti-sliding legs check, walk progression, HeroWeaponRig, Prologue/Act 1, and 4 PC/Mobile screenshots', async ({
+const ACT1_PROFILE_FIXTURE = {
+  version: 1,
+  souls: 150,
+  generalEssences: 1,
+  altarLevels: {
+    vitality: 1,
+    might: 1,
+    bastion: 0,
+    swiftness: 0,
+    fortune: 0,
+  },
+  equipped: {
+    weapon: null,
+    armor: null,
+    helm: null,
+    boots: null,
+    amulet: null,
+    ring: null,
+  },
+  stash: [],
+  maxStashSize: 30,
+  itemUpgradeLevels: {},
+  stats: {
+    runsCompleted: 3,
+    runsFailed: 0,
+    totalSoulsEarned: 320,
+    bossesDefeated: 1,
+  },
+  campaign: {
+    phase: 'act1',
+    currentStageId: 'act1_submundo',
+    completedStages: ['prologue_grotto', 'prologue_mine', 'prologue_seal'],
+    villageFallTriggered: true,
+    seenDialogues: [
+      'prologue_welcome',
+      'stage_grotto_intro',
+      'village_fall_boss',
+      'village_fall_pact',
+      'act1_briefing',
+    ],
+  },
+};
+
+test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations (Living vs Wraith) E2E (PC 960x540 & Mobile Landscape 844x390)', () => {
+  test('validates hero_living/hero_wraith 1920x80 (24f), weapons 192x48, 10 animation frame counts, anti-sliding legs check, walk progression, HeroWeaponRig, Prologue/Act 1, and 4 PC/Mobile Landscape screenshots', async ({
     page,
+    browser,
+    baseURL,
   }) => {
     mkdirSync(SCREENSHOT_DIR, { recursive: true });
 
@@ -47,17 +100,11 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
       }
     });
 
-    // 1. Clean boot on Desktop Landscape (800x600) in Prologue — Vila Natal Viva
-    await page.setViewportSize({ width: 800, height: 600 });
+    // 1. Clean boot on Desktop Landscape (960x540) in Prologue — Vila Natal Viva
+    await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto('/');
-
-    await page.waitForFunction(
-      () =>
-        typeof window.__SUBMUNDO_HUB_DEBUG__ !== 'undefined' &&
-        Boolean(window.__SUBMUNDO_HUB_DEBUG__.getProfile()),
-      undefined,
-      { timeout: 10000 }
-    );
+    await ensureHubScene(page, { clearStorage: true });
+    await assertLandscapeCanvas(page, DESKTOP_VIEWPORT);
 
     // Close opening dialogue if open so the living hero in Vila Natal is clearly visible & controllable
     const dialogueInitiallyOpen = await page.evaluate(() =>
@@ -74,7 +121,7 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
       );
     }
 
-    // 2. Validate v0.5.0, BootScene textures (hero_living & hero_wraith 1920x80 24f, weapons 192x48), weaponRig, 10 animations & anti-sliding pixel diff
+    // 2. Validate textures (hero_living & hero_wraith 1920x80 24f, weapons 192x48), weaponRig, 10 animations & anti-sliding pixel diff
     const assetsAndAnimsCheck = await page.evaluate(() => {
       const hub = window.__SUBMUNDO_HUB_DEBUG__!;
       const scene = hub.scene as unknown as {
@@ -244,8 +291,7 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
       };
     });
 
-    expect(GAME_VERSION).toBe('0.5.0');
-    expect(assetsAndAnimsCheck.title).toBe('SUBMUNDO v0.5.0');
+    expect(assetsAndAnimsCheck.title).toBe(`SUBMUNDO v${GAME_VERSION}`);
     expect(assetsAndAnimsCheck.phase).toBe('prologue');
     expect(assetsAndAnimsCheck.heroLiving).toEqual({
       width: 1920,
@@ -481,7 +527,7 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
     expect(prologueDashCheck.dashTriggered).toBe(true);
     expect(prologueDashCheck.dashAnim).toBe('hero_living_dash');
 
-    // Capture combat screenshot in Gruta da Cachoeira (800x600)
+    // Capture combat screenshot in Gruta da Cachoeira (960x540)
     await page.evaluate(() => {
       window.__SUBMUNDO_DEBUG__!.triggerSkill('crimson_cleave');
     });
@@ -495,53 +541,15 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
     expect(statSync(pcPrologueDungeonPath).size).toBeGreaterThan(5000);
 
     // 5. Act 1 via localStorage (campaign.phase = 'act1') -> Refúgio no Submundo & Masmorra
-    await page.evaluate((storageKey: string) => {
-      const profile = {
-        version: 1,
-        souls: 150,
-        generalEssences: 1,
-        altarLevels: {
-          vitality: 1,
-          ferocity: 1,
-          greed: 0,
-          haste: 0,
-        },
-        equipped: {
-          weapon: null,
-          armor: null,
-          amulet: null,
-          ring: null,
-        },
-        stash: [],
-        maxStashSize: 24,
-        itemUpgradeLevels: {},
-        stats: {
-          totalRuns: 3,
-          victories: 3,
-          totalKills: 45,
-          bossesDefeated: 1,
-        },
-        campaign: {
-          phase: 'act1',
-          currentStageId: 'act1_submundo',
-          completedStages: [
-            'prologue_grotto',
-            'prologue_mine',
-            'prologue_seal',
-          ],
-          villageFallTriggered: true,
-          seenDialogues: [
-            'prologue_welcome',
-            'stage_grotto_intro',
-            'village_fall_pact',
-            'act1_refuge_arrival',
-          ],
-        },
-      };
-      window.localStorage.setItem(storageKey, JSON.stringify(profile));
-    }, SAVE_STORAGE_KEY);
+    await page.evaluate(
+      ({ storageKey, profile }) => {
+        window.localStorage.setItem(storageKey, JSON.stringify(profile));
+      },
+      { storageKey: SAVE_STORAGE_KEY, profile: ACT1_PROFILE_FIXTURE }
+    );
 
     await page.goto('/');
+    await ensureHubScene(page);
     await page.waitForFunction(
       () =>
         typeof window.__SUBMUNDO_HUB_DEBUG__ !== 'undefined' &&
@@ -609,99 +617,111 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
     expect(existsSync(pcAct1RefugePath)).toBe(true);
     expect(statSync(pcAct1RefugePath).size).toBeGreaterThan(5000);
 
-    // 6. Mobile Portrait (360x640) in Act 1 Dungeon (hero_wraith combat)
-    await page.setViewportSize({ width: 360, height: 640 });
-    await page.goto('/');
-    await page.waitForFunction(
-      () =>
-        typeof window.__SUBMUNDO_HUB_DEBUG__ !== 'undefined' &&
-        window.__SUBMUNDO_HUB_DEBUG__.getProfile()?.campaign?.phase === 'act1',
-      undefined,
-      { timeout: 10000 }
-    );
+    // 6. Mobile Landscape (844x390, hasTouch: true) in Act 1 Dungeon (hero_wraith combat)
+    const { context: mobileContext, page: mobilePage } =
+      await openMobileLandscapePage(browser, {
+        baseURL,
+        consoleErrors,
+        pageErrors,
+        notFoundUrls,
+        initialStorage: {
+          [SAVE_STORAGE_KEY]: JSON.stringify(ACT1_PROFILE_FIXTURE),
+        },
+      });
 
-    await page.evaluate(() => {
-      window.__SUBMUNDO_HUB_DEBUG__!.enterDungeon('act1_submundo');
-    });
+    try {
+      await mobilePage.goto('/');
+      await ensureHubScene(mobilePage);
+      await mobilePage.waitForFunction(
+        () =>
+          typeof window.__SUBMUNDO_HUB_DEBUG__ !== 'undefined' &&
+          window.__SUBMUNDO_HUB_DEBUG__.getProfile()?.campaign?.phase === 'act1',
+        undefined,
+        { timeout: 10000 }
+      );
 
-    await page.waitForFunction(
-      () =>
-        typeof window.__SUBMUNDO_DEBUG__ !== 'undefined' &&
-        window.__SUBMUNDO_DEBUG__.getHero()?.isAlive === true &&
-        window.__SUBMUNDO_DEBUG__.getRunState()?.totalRooms === 5,
-      undefined,
-      { timeout: 10000 }
-    );
+      await mobilePage.evaluate(() => {
+        window.__SUBMUNDO_HUB_DEBUG__!.enterDungeon('act1_submundo');
+      });
 
-    const act1DungeonCheck = await page.evaluate(() => {
-      const dbg = window.__SUBMUNDO_DEBUG__!;
-      const scene = dbg.scene as unknown as {
-        heroSprite: DebugSpriteSnapshot;
-        weaponRig?: {
-          weaponSprite?: {
-            visible: boolean;
-            texture: { key: string };
-            frame: { name: string | number };
+      await mobilePage.waitForFunction(
+        () =>
+          typeof window.__SUBMUNDO_DEBUG__ !== 'undefined' &&
+          window.__SUBMUNDO_DEBUG__.getHero()?.isAlive === true &&
+          window.__SUBMUNDO_DEBUG__.getRunState()?.totalRooms === 5,
+        undefined,
+        { timeout: 10000 }
+      );
+
+      await assertLandscapeCanvas(mobilePage, MOBILE_LANDSCAPE_VIEWPORT);
+
+      const act1DungeonCheck = await mobilePage.evaluate(() => {
+        const dbg = window.__SUBMUNDO_DEBUG__!;
+        const scene = dbg.scene as unknown as {
+          heroSprite: DebugSpriteSnapshot;
+          weaponRig?: {
+            weaponSprite?: {
+              visible: boolean;
+              texture: { key: string };
+              frame: { name: string | number };
+            };
           };
         };
-      };
-      const canvas = document.querySelector('canvas');
-      const hero = dbg.getHero();
-      const monsters = dbg.getMonsters();
-      if (monsters.length > 0) {
-        hero.position.x = monsters[0].position.x - 24;
-        hero.position.y = monsters[0].position.y;
-      }
+        const hero = dbg.getHero();
+        const monsters = dbg.getMonsters();
+        if (monsters.length > 0) {
+          hero.position.x = monsters[0].position.x - 24;
+          hero.position.y = monsters[0].position.y;
+        }
 
-      const weaponSprite = scene.weaponRig?.weaponSprite;
-      return {
-        canvasWidth: canvas?.width ?? 0,
-        canvasHeight: canvas?.height ?? 0,
-        initialTexture: scene.heroSprite.texture.key,
-        initialAnim: scene.heroSprite.anims.currentAnim?.key ?? null,
-        weaponRig: weaponSprite
-          ? {
-              visible: weaponSprite.visible,
-              textureKey: weaponSprite.texture.key,
-              frame: Number(weaponSprite.frame.name),
-            }
-          : null,
-      };
-    });
-
-    expect(act1DungeonCheck.canvasWidth).toBe(360);
-    expect(act1DungeonCheck.canvasHeight).toBe(640);
-    expect(act1DungeonCheck.initialTexture).toBe('hero_wraith');
-    expect(['hero_wraith_idle', 'hero_wraith_walk']).toContain(
-      act1DungeonCheck.initialAnim
-    );
-    expect(act1DungeonCheck.weaponRig).toEqual({
-      visible: true,
-      textureKey: 'weapons',
-      frame: 1,
-    });
-
-    await page.waitForFunction(
-      () => {
-        const scene = window.__SUBMUNDO_DEBUG__!.scene as unknown as {
-          heroSprite: DebugSpriteSnapshot;
+        const weaponSprite = scene.weaponRig?.weaponSprite;
+        return {
+          initialTexture: scene.heroSprite.texture.key,
+          initialAnim: scene.heroSprite.anims.currentAnim?.key ?? null,
+          weaponRig: weaponSprite
+            ? {
+                visible: weaponSprite.visible,
+                textureKey: weaponSprite.texture.key,
+                frame: Number(weaponSprite.frame.name),
+              }
+            : null,
         };
-        return (
-          scene.heroSprite.anims.currentAnim?.key === 'hero_wraith_attack'
-        );
-      },
-      undefined,
-      { timeout: 3000 }
-    );
+      });
 
-    await page.waitForTimeout(120);
-    const mobileAct1DungeonPath = join(
-      SCREENSHOT_DIR,
-      'm5_mobile_act1_dungeon.png'
-    );
-    await page.screenshot({ path: mobileAct1DungeonPath });
-    expect(existsSync(mobileAct1DungeonPath)).toBe(true);
-    expect(statSync(mobileAct1DungeonPath).size).toBeGreaterThan(5000);
+      expect(act1DungeonCheck.initialTexture).toBe('hero_wraith');
+      expect(['hero_wraith_idle', 'hero_wraith_walk']).toContain(
+        act1DungeonCheck.initialAnim
+      );
+      expect(act1DungeonCheck.weaponRig).toEqual({
+        visible: true,
+        textureKey: 'weapons',
+        frame: 1,
+      });
+
+      await mobilePage.waitForFunction(
+        () => {
+          const scene = window.__SUBMUNDO_DEBUG__!.scene as unknown as {
+            heroSprite: DebugSpriteSnapshot;
+          };
+          return (
+            scene.heroSprite.anims.currentAnim?.key === 'hero_wraith_attack'
+          );
+        },
+        undefined,
+        { timeout: 3000 }
+      );
+
+      await mobilePage.waitForTimeout(120);
+      const mobileAct1DungeonPath = join(
+        SCREENSHOT_DIR,
+        'm5_mobile_act1_dungeon.png'
+      );
+      await mobilePage.screenshot({ path: mobileAct1DungeonPath });
+      expect(existsSync(mobileAct1DungeonPath)).toBe(true);
+      expect(statSync(mobileAct1DungeonPath).size).toBeGreaterThan(5000);
+    } finally {
+      await mobileContext.close();
+    }
 
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);

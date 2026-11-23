@@ -17,47 +17,64 @@ import {
 import { GAME_VERSION } from '../../src/version';
 
 describe('Architecture & Viewport Contracts (T-001)', () => {
-  it('exports GAME_VERSION as 0.6.0', () => {
-    expect(GAME_VERSION).toBe('0.6.0');
+  it('exports GAME_VERSION as 0.7.0', () => {
+    expect(GAME_VERSION).toBe('0.7.0');
   });
 
-  it('resolves desktop landscape viewport (800x600, 4:3) when windowWidth >= windowHeight', () => {
+  it('always resolves exclusive landscape viewport (960x540, 16:9) for landscape windows with isPortraitWindow false', () => {
     expect(resolveViewportConfig(1920, 1080)).toEqual({
-      mode: 'desktop_landscape',
-      width: 800,
-      height: 600,
-      aspectRatio: '4:3',
+      mode: 'landscape',
+      width: 960,
+      height: 540,
+      aspectRatio: '16:9',
+      isPortraitWindow: false,
     });
 
-    expect(resolveViewportConfig(800, 600)).toEqual({
-      mode: 'desktop_landscape',
-      width: 800,
-      height: 600,
-      aspectRatio: '4:3',
+    expect(resolveViewportConfig(960, 540)).toEqual({
+      mode: 'landscape',
+      width: 960,
+      height: 540,
+      aspectRatio: '16:9',
+      isPortraitWindow: false,
     });
 
-    expect(resolveViewportConfig(600, 600)).toEqual({
-      mode: 'desktop_landscape',
-      width: 800,
-      height: 600,
-      aspectRatio: '4:3',
+    expect(resolveViewportConfig(844, 390)).toEqual({
+      mode: 'landscape',
+      width: 960,
+      height: 540,
+      aspectRatio: '16:9',
+      isPortraitWindow: false,
     });
   });
 
-  it('resolves mobile portrait viewport (360x640, 9:16) when windowWidth < windowHeight', () => {
+  it('always resolves exclusive landscape viewport (960x540, 16:9) for portrait windows with isPortraitWindow true', () => {
     expect(resolveViewportConfig(360, 640)).toEqual({
-      mode: 'mobile_portrait',
-      width: 360,
-      height: 640,
-      aspectRatio: '9:16',
+      mode: 'landscape',
+      width: 960,
+      height: 540,
+      aspectRatio: '16:9',
+      isPortraitWindow: true,
     });
 
     expect(resolveViewportConfig(390, 844)).toEqual({
-      mode: 'mobile_portrait',
-      width: 360,
-      height: 640,
-      aspectRatio: '9:16',
+      mode: 'landscape',
+      width: 960,
+      height: 540,
+      aspectRatio: '16:9',
+      isPortraitWindow: true,
     });
+  });
+
+  it('includes #rotate-overlay in index.html and landscape orientation in public/manifest.webmanifest', () => {
+    const htmlPath = resolve(process.cwd(), 'index.html');
+    const html = readFileSync(htmlPath, 'utf-8');
+    expect(html).toContain('id="rotate-overlay"');
+    expect(html).toContain('id="rotate-dismiss-btn"');
+    expect(html).toContain('@media (orientation: portrait) and (pointer: coarse)');
+
+    const manifestPath = resolve(process.cwd(), 'public/manifest.webmanifest');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as { orientation?: string };
+    expect(manifest.orientation).toBe('landscape');
   });
 
   it('guarantees src/core/index.ts is 100% pure TypeScript and does not import phaser', () => {
@@ -82,7 +99,14 @@ describe('Architecture & Viewport Contracts (T-001)', () => {
   });
 
   it('provides pure M2 equipment and synergy type contracts in src/core/index.ts (T-013)', () => {
-    const slots: EquipSlot[] = ['weapon', 'armor', 'amulet', 'ring'];
+    const slots: EquipSlot[] = [
+      'weapon',
+      'armor',
+      'helm',
+      'boots',
+      'amulet',
+      'ring',
+    ];
     const rarities: Rarity[] = ['common', 'magic', 'rare', 'legendary'];
     const statuses: StatusEffectType[] = ['ember', 'bleed', 'judgment'];
     const powerIds: LegendaryPowerId[] = [
@@ -139,11 +163,13 @@ describe('Architecture & Viewport Contracts (T-001)', () => {
     const gear: EquippedGear = {
       weapon: instance,
       armor: null,
+      helm: null,
+      boots: null,
       amulet: null,
       ring: null,
     };
 
-    expect(slots).toHaveLength(4);
+    expect(slots).toHaveLength(6);
     expect(rarities).toHaveLength(4);
     expect(statuses).toHaveLength(3);
     expect(powerIds).toHaveLength(6);

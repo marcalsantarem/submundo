@@ -2,14 +2,29 @@ import Phaser from 'phaser';
 import {
   EquipSlot,
   EquippedGear,
-  ForceType,
   HeroStats,
   ItemInstance,
-  Rarity,
-  StatBonus,
   ViewportConfig,
   resolveViewportConfig,
 } from '../../core/index';
+import {
+  DF_EQUIP_SLOT_ORDER,
+  DF_FONTS,
+  DF_FORCE_THEME,
+  DF_PALETTE,
+  DF_RARITY_THEME,
+  DF_SLOT_META,
+  DF_UI_ICONS_KEY,
+  DF_UI_ICON_FRAMES,
+  drawOrnamentalDivider,
+  drawOrnateButton,
+  drawOrnatePanel,
+  drawRaritySlotFrame,
+  drawSkullCrest,
+  formatStatNumber,
+  hasUiTextureFrame,
+} from './DarkFantasyUiBuilder';
+import { ItemTooltipCard, calculateItemPower } from './ItemTooltipCard';
 
 export interface InventoryHudSnapshot {
   equipped: EquippedGear;
@@ -24,64 +39,37 @@ export interface InventoryHudSnapshot {
 interface EquipSlotCardView {
   slot: EquipSlot;
   container: Phaser.GameObjects.Container;
-  bg: Phaser.GameObjects.Graphics;
-  headerText: Phaser.GameObjects.Text;
-  powerText: Phaser.GameObjects.Text;
-  nameText: Phaser.GameObjects.Text;
-  detailText: Phaser.GameObjects.Text;
+  boxBg: Phaser.GameObjects.Graphics;
+  iconImage: Phaser.GameObjects.Image | null;
+  fallbackIconText: Phaser.GameObjects.Text;
+  slotLabelText: Phaser.GameObjects.Text;
+  itemNameText: Phaser.GameObjects.Text;
   hitZone: Phaser.GameObjects.Zone;
+  hovered: boolean;
 }
 
-interface BagRowView {
+interface BagCellView {
   container: Phaser.GameObjects.Container;
   bg: Phaser.GameObjects.Graphics;
-  nameText: Phaser.GameObjects.Text;
+  iconImage: Phaser.GameObjects.Image | null;
+  fallbackIconText: Phaser.GameObjects.Text;
+  powerText: Phaser.GameObjects.Text;
   compareText: Phaser.GameObjects.Text;
-  statsText: Phaser.GameObjects.Text;
-  metaText: Phaser.GameObjects.Text;
-  actionText: Phaser.GameObjects.Text;
+  nameText: Phaser.GameObjects.Text;
   hitZone: Phaser.GameObjects.Zone;
-  boundInstanceId: string | null;
+  boundItem: ItemInstance | null;
+  hovered: boolean;
 }
 
-const EQUIP_SLOT_ORDER: EquipSlot[] = ['weapon', 'armor', 'amulet', 'ring'];
+// Grade 2 colunas x 3 linhas:
+// Linha 1: ELMO | ARMA
+// Linha 2: ARMADURA | AMULETO
+// Linha 3: BOTA | ANEL
+export const EQUIP_SLOT_ORDER: EquipSlot[] = [...DF_EQUIP_SLOT_ORDER];
 
-const SLOT_LABELS: Record<EquipSlot, string> = {
-  weapon: 'Arma',
-  armor: 'Armadura',
-  amulet: 'Amuleto',
-  ring: 'Anel',
-};
-
-const RARITY_HEX: Record<Rarity, string> = {
-  common: '#e4e4e7',
-  magic: '#38bdf8',
-  rare: '#facc15',
-  legendary: '#f97316',
-};
-
-const RARITY_NUM: Record<Rarity, number> = {
-  common: 0xe4e4e7,
-  magic: 0x38bdf8,
-  rare: 0xfacc15,
-  legendary: 0xf97316,
-};
-
-const FORCE_LABELS: Record<ForceType, string> = {
-  inferno: 'Inferno',
-  submundo: 'Submundo',
-  empireo: 'Empíreo',
-  none: 'Neutro',
-};
-
-const FORCE_HEX: Record<ForceType, string> = {
-  inferno: '#f48c06',
-  submundo: '#ff4d6d',
-  empireo: '#ffd166',
-  none: '#94a3b8',
-};
-
-const MAX_BAG_ROWS = 4;
+const BAG_GRID_COLS = 4;
+const BAG_GRID_ROWS = 4;
+const BAG_PAGE_SIZE = BAG_GRID_COLS * BAG_GRID_ROWS; // 16 slots
 
 export class InventoryModal {
   private readonly scene: Phaser.Scene;
@@ -96,6 +84,7 @@ export class InventoryModal {
   private bagPage = 0;
   private lastSnapshot: InventoryHudSnapshot;
 
+  private readonly tooltipCard: ItemTooltipCard;
   private readonly rootContainer: Phaser.GameObjects.Container;
   private readonly backdropGraphic: Phaser.GameObjects.Graphics;
   private readonly backdropZone: Phaser.GameObjects.Zone;
@@ -103,18 +92,23 @@ export class InventoryModal {
   private readonly statsBgGraphic: Phaser.GameObjects.Graphics;
 
   private readonly titleText: Phaser.GameObjects.Text;
-  private readonly infernoForceText: Phaser.GameObjects.Text;
-  private readonly submundoForceText: Phaser.GameObjects.Text;
-  private readonly empireoForceText: Phaser.GameObjects.Text;
-  private readonly statsText: Phaser.GameObjects.Text;
-  private readonly equippedHeaderText: Phaser.GameObjects.Text;
-  private readonly bagHeaderText: Phaser.GameObjects.Text;
-  private readonly emptyBagText: Phaser.GameObjects.Text;
-
+  private readonly closeBtnContainer: Phaser.GameObjects.Container;
   private readonly closeBtnBg: Phaser.GameObjects.Graphics;
   private readonly closeBtnText: Phaser.GameObjects.Text;
   private readonly closeBtnZone: Phaser.GameObjects.Zone;
-  private readonly closeBtnContainer: Phaser.GameObjects.Container;
+
+  private readonly equipmentSection: Phaser.GameObjects.Container;
+  private readonly equipHeaderText: Phaser.GameObjects.Text;
+  private readonly slotCards: EquipSlotCardView[] = [];
+  private readonly statsPrimaryText: Phaser.GameObjects.Text;
+  private readonly statsSecondaryText: Phaser.GameObjects.Text;
+
+  private readonly bagSection: Phaser.GameObjects.Container;
+  private readonly bagHeaderIcon: Phaser.GameObjects.Image | null;
+  private readonly bagHeaderText: Phaser.GameObjects.Text;
+  private readonly forcesLegendText: Phaser.GameObjects.Text;
+  private readonly emptyBagText: Phaser.GameObjects.Text;
+  private readonly bagCells: BagCellView[] = [];
 
   private readonly prevPageContainer: Phaser.GameObjects.Container;
   private readonly prevPageBg: Phaser.GameObjects.Graphics;
@@ -127,10 +121,13 @@ export class InventoryModal {
   private readonly nextPageZone: Phaser.GameObjects.Zone;
 
   private readonly pageInfoText: Phaser.GameObjects.Text;
-
-  private readonly slotCards: EquipSlotCardView[] = [];
-  private readonly bagRows: BagRowView[] = [];
   private readonly keydownHandler: (event: KeyboardEvent) => void;
+
+  private equipBoxSize = 70;
+  private statsBoxWidth = 332;
+  private statsBoxHeight = 82;
+  private bagCellWidth = 108;
+  private bagCellHeight = 80;
 
   constructor(
     scene: Phaser.Scene,
@@ -143,12 +140,20 @@ export class InventoryModal {
     this.scene = scene;
     this.callbacks = callbacks;
     this.viewport = resolveViewportConfig(
-      scene.scale.width || 800,
-      scene.scale.height || 600
+      scene.scale.width || 960,
+      scene.scale.height || 540
     );
+    this.tooltipCard = new ItemTooltipCard(scene);
 
     this.lastSnapshot = {
-      equipped: { weapon: null, armor: null, amulet: null, ring: null },
+      equipped: {
+        weapon: null,
+        armor: null,
+        helm: null,
+        boots: null,
+        amulet: null,
+        ring: null,
+      },
       bag: [],
       heroStats: {
         maxHp: 120,
@@ -172,7 +177,6 @@ export class InventoryModal {
       .zone(0, 0, this.viewport.width, this.viewport.height)
       .setOrigin(0.5, 0.5)
       .setInteractive();
-
     this.backdropZone.on(
       'pointerdown',
       (
@@ -186,78 +190,34 @@ export class InventoryModal {
     );
 
     this.panelGraphic = scene.add.graphics();
-    this.statsBgGraphic = scene.add.graphics();
-
-    this.titleText = scene.add.text(0, 0, 'INVENTÁRIO E EQUIPAMENTOS', {
-      fontFamily: 'monospace',
-      fontSize: '15px',
-      color: '#ffd166',
-      fontStyle: 'bold',
-    });
-
-    this.infernoForceText = scene.add.text(0, 0, 'Inferno: 0', {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: FORCE_HEX.inferno,
-      fontStyle: 'bold',
-    });
-    this.submundoForceText = scene.add.text(0, 0, 'Submundo: 0', {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: FORCE_HEX.submundo,
-      fontStyle: 'bold',
-    });
-    this.empireoForceText = scene.add.text(0, 0, 'Empíreo: 0', {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: FORCE_HEX.empireo,
-      fontStyle: 'bold',
-    });
-
-    this.statsText = scene.add.text(0, 0, '', {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: '#e2e8f0',
-    });
-
-    this.equippedHeaderText = scene.add.text(0, 0, 'EQUIPADOS (toque p/ remover)', {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: '#94a3b8',
-      fontStyle: 'bold',
-    });
-
-    this.bagHeaderText = scene.add.text(0, 0, 'MOCHILA (0 — toque p/ equipar)', {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: '#94a3b8',
-      fontStyle: 'bold',
-    });
-
-    this.emptyBagText = scene.add
-      .text(0, 0, 'Mochila vazia.\nDerrote inimigos para obter itens.', {
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        color: '#64748b',
-        align: 'center',
+    this.titleText = scene.add
+      .text(0, 0, 'INVENTÁRIO & EQUIPAMENTO', {
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '18px',
+        color: DF_PALETTE.textGold,
+        fontStyle: 'bold',
+        letterSpacing: 2,
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
 
-    // Close Button
+    // Botão X carmesim no canto superior direito
     this.closeBtnBg = scene.add.graphics();
     this.closeBtnText = scene.add
-      .text(0, 0, 'Fechar', {
-        fontFamily: 'monospace',
-        fontSize: '12px',
-        color: '#f8fafc',
+      .text(0, 0, 'X', {
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '14px',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
     this.closeBtnZone = scene.add
-      .zone(0, 0, 84, 28)
+      .zone(0, 0, 32, 32)
       .setOrigin(0.5, 0.5)
       .setInteractive({ useHandCursor: true });
-
+    this.closeBtnZone.on('pointerover', () => this.drawCloseButton(true));
+    this.closeBtnZone.on('pointerout', () => this.drawCloseButton(false));
     this.closeBtnZone.on(
       'pointerdown',
       (
@@ -274,26 +234,378 @@ export class InventoryModal {
         this.callbacks.onClose();
       }
     );
-
     this.closeBtnContainer = scene.add.container(0, 0, [
       this.closeBtnBg,
       this.closeBtnText,
       this.closeBtnZone,
     ]);
 
-    // Pagination Controls
-    this.prevPageBg = scene.add.graphics();
-    this.prevPageText = scene.add
-      .text(0, 0, '< Ant', {
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        color: '#f8fafc',
+    // Coluna Esquerda: Equipamento (6 slots 2x3 + Placa Ornamental de Atributos)
+    this.equipmentSection = scene.add.container(0, 0);
+    this.equipHeaderText = scene.add
+      .text(0, 0, 'EQUIPAMENTO', {
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '13px',
+        color: DF_PALETTE.textGold,
         fontStyle: 'bold',
+        resolution: 2,
       })
       .setOrigin(0.5, 0.5);
+    this.equipmentSection.add(this.equipHeaderText);
+
+    for (const slot of DF_EQUIP_SLOT_ORDER) {
+      const slotMeta = DF_SLOT_META[slot];
+      const boxBg = scene.add.graphics();
+      const iconImage = hasUiTextureFrame(
+        scene,
+        DF_UI_ICONS_KEY,
+        slotMeta.iconFrame
+      )
+        ? scene.add
+            .image(0, 0, DF_UI_ICONS_KEY, slotMeta.iconFrame)
+            .setOrigin(0.5)
+        : null;
+      const fallbackIconText = scene.add
+        .text(0, 0, slotMeta.labelUpper[0] ?? '?', {
+          fontFamily: DF_FONTS.TITLE,
+          fontSize: '20px',
+          color: DF_PALETTE.textMuted,
+          fontStyle: 'bold',
+          resolution: 2,
+        })
+        .setOrigin(0.5);
+
+      const slotLabelText = scene.add
+        .text(0, 0, slotMeta.labelUpper, {
+          fontFamily: DF_FONTS.BODY,
+          fontSize: '11px',
+          color: DF_PALETTE.textMuted,
+          fontStyle: 'bold',
+          resolution: 2,
+        })
+        .setOrigin(0.5);
+
+      const itemNameText = scene.add
+        .text(0, 0, slotMeta.labelTitle, {
+          fontFamily: DF_FONTS.BODY,
+          fontSize: '10px',
+          color: DF_PALETTE.textMuted,
+          resolution: 2,
+        })
+        .setOrigin(0.5);
+
+      const hitZone = scene.add
+        .zone(0, 0, 82, 98)
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true });
+
+      const children: Phaser.GameObjects.GameObject[] = [boxBg];
+      if (iconImage) {
+        children.push(iconImage);
+      }
+      children.push(fallbackIconText, slotLabelText, itemNameText, hitZone);
+
+      const cardContainer = scene.add.container(0, 0, children);
+      const cardView: EquipSlotCardView = {
+        slot,
+        container: cardContainer,
+        boxBg,
+        iconImage,
+        fallbackIconText,
+        slotLabelText,
+        itemNameText,
+        hitZone,
+        hovered: false,
+      };
+
+      hitZone.on('pointerover', () => {
+        if (!this.opened) {
+          return;
+        }
+        cardView.hovered = true;
+        this.renderSingleEquippedSlot(cardView);
+        if (this.tooltipCard.isPinned()) {
+          return;
+        }
+        const equippedItem = this.lastSnapshot.equipped[slot];
+        if (!equippedItem) {
+          return;
+        }
+        this.tooltipCard.open(equippedItem, {
+          isEquipped: true,
+          equippedInSlot: equippedItem,
+          pinned: false,
+          hoverSide: 'right',
+          onUnequip: (targetSlot) => {
+            this.callbacks.onUnequipSlot(targetSlot);
+          },
+        });
+      });
+
+      hitZone.on('pointerout', () => {
+        cardView.hovered = false;
+        this.renderSingleEquippedSlot(cardView);
+        if (this.tooltipCard.isOpen() && !this.tooltipCard.isPinned()) {
+          this.tooltipCard.close();
+        }
+      });
+
+      hitZone.on(
+        'pointerdown',
+        (
+          _pointer: Phaser.Input.Pointer,
+          _lx: number,
+          _ly: number,
+          event?: Phaser.Types.Input.EventData
+        ) => {
+          event?.stopPropagation?.();
+          if (!this.opened) {
+            return;
+          }
+          const equippedItem = this.lastSnapshot.equipped[slot];
+          if (!equippedItem) {
+            return;
+          }
+          this.tooltipCard.open(equippedItem, {
+            isEquipped: true,
+            equippedInSlot: equippedItem,
+            pinned: true,
+            onUnequip: (targetSlot) => {
+              this.callbacks.onUnequipSlot(targetSlot);
+            },
+          });
+        }
+      );
+
+      this.slotCards.push(cardView);
+      this.equipmentSection.add(cardContainer);
+    }
+
+    this.statsBgGraphic = scene.add.graphics();
+    this.statsPrimaryText = scene.add
+      .text(0, 0, '', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '12px',
+        color: DF_PALETTE.textParchment,
+        fontStyle: 'bold',
+        align: 'center',
+        lineSpacing: 3,
+        resolution: 2,
+      })
+      .setOrigin(0.5, 0.5);
+    this.statsSecondaryText = scene.add
+      .text(0, 0, '', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '10px',
+        color: DF_PALETTE.textMuted,
+        align: 'center',
+        resolution: 2,
+      })
+      .setOrigin(0.5, 0.5);
+
+    this.equipmentSection.add([
+      this.statsBgGraphic,
+      this.statsPrimaryText,
+      this.statsSecondaryText,
+    ]);
+
+    // Coluna Direita: Mochila (Grade 4x4 = 16 slots + paginação + legenda das 3 Forças)
+    this.bagSection = scene.add.container(0, 0);
+    this.bagHeaderIcon = hasUiTextureFrame(
+      scene,
+      DF_UI_ICONS_KEY,
+      DF_UI_ICON_FRAMES.bag
+    )
+      ? scene.add
+          .image(0, 0, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.bag)
+          .setOrigin(0.5)
+      : null;
+    this.bagHeaderText = scene.add
+      .text(0, 0, 'MOCHILA (0)', {
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '13px',
+        color: DF_PALETTE.textGold,
+        fontStyle: 'bold',
+        resolution: 2,
+      })
+      .setOrigin(0, 0.5);
+    this.forcesLegendText = scene.add
+      .text(0, 0, '', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '10px',
+        color: DF_PALETTE.textLight,
+        fontStyle: 'bold',
+        resolution: 2,
+      })
+      .setOrigin(1, 0.5);
+    this.emptyBagText = scene.add
+      .text(0, 0, 'Mochila vazia.\nDerrote monstros para obter itens.', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '12px',
+        color: DF_PALETTE.textMuted,
+        align: 'center',
+        resolution: 2,
+      })
+      .setOrigin(0.5);
+
+    if (this.bagHeaderIcon) {
+      this.bagSection.add(this.bagHeaderIcon);
+    }
+    this.bagSection.add([
+      this.bagHeaderText,
+      this.forcesLegendText,
+      this.emptyBagText,
+    ]);
+
+    for (let i = 0; i < BAG_PAGE_SIZE; i += 1) {
+      const bg = scene.add.graphics();
+      const iconImage = hasUiTextureFrame(
+        scene,
+        DF_UI_ICONS_KEY,
+        DF_SLOT_META.weapon.iconFrame
+      )
+        ? scene.add
+            .image(0, 0, DF_UI_ICONS_KEY, DF_SLOT_META.weapon.iconFrame)
+            .setOrigin(0.5)
+        : null;
+      const fallbackIconText = scene.add
+        .text(0, 0, '?', {
+          fontFamily: DF_FONTS.TITLE,
+          fontSize: '18px',
+          color: DF_PALETTE.textLight,
+          fontStyle: 'bold',
+          resolution: 2,
+        })
+        .setOrigin(0.5);
+      const powerText = scene.add
+        .text(0, 0, '', {
+          fontFamily: DF_FONTS.TITLE,
+          fontSize: '10px',
+          color: DF_PALETTE.textParchment,
+          fontStyle: 'bold',
+          resolution: 2,
+        })
+        .setOrigin(0, 0.5);
+      const compareText = scene.add
+        .text(0, 0, '', {
+          fontFamily: DF_FONTS.BODY,
+          fontSize: '11px',
+          color: DF_PALETTE.textSuccess,
+          fontStyle: 'bold',
+          resolution: 2,
+        })
+        .setOrigin(1, 0.5);
+      const nameText = scene.add
+        .text(0, 0, '', {
+          fontFamily: DF_FONTS.BODY,
+          fontSize: '10px',
+          color: DF_PALETTE.textLight,
+          align: 'center',
+          resolution: 2,
+        })
+        .setOrigin(0.5, 0.5);
+      const hitZone = scene.add
+        .zone(0, 0, 108, 80)
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true });
+
+      const cellChildren: Phaser.GameObjects.GameObject[] = [bg];
+      if (iconImage) {
+        cellChildren.push(iconImage);
+      }
+      cellChildren.push(
+        fallbackIconText,
+        powerText,
+        compareText,
+        nameText,
+        hitZone
+      );
+      const cellContainer = scene.add.container(0, 0, cellChildren);
+
+      const cellView: BagCellView = {
+        container: cellContainer,
+        bg,
+        iconImage,
+        fallbackIconText,
+        powerText,
+        compareText,
+        nameText,
+        hitZone,
+        boundItem: null,
+        hovered: false,
+      };
+
+      hitZone.on('pointerover', () => {
+        if (!this.opened || !cellView.boundItem) {
+          return;
+        }
+        cellView.hovered = true;
+        this.renderSingleBagCell(cellView);
+        if (this.tooltipCard.isPinned()) {
+          return;
+        }
+        const item = cellView.boundItem;
+        this.tooltipCard.open(item, {
+          isEquipped: false,
+          equippedInSlot: this.lastSnapshot.equipped[item.slot],
+          pinned: false,
+          hoverSide: 'left',
+          onEquip: (instanceId) => {
+            this.callbacks.onEquipItem(instanceId);
+          },
+        });
+      });
+
+      hitZone.on('pointerout', () => {
+        cellView.hovered = false;
+        this.renderSingleBagCell(cellView);
+        if (this.tooltipCard.isOpen() && !this.tooltipCard.isPinned()) {
+          this.tooltipCard.close();
+        }
+      });
+
+      hitZone.on(
+        'pointerdown',
+        (
+          _pointer: Phaser.Input.Pointer,
+          _lx: number,
+          _ly: number,
+          event?: Phaser.Types.Input.EventData
+        ) => {
+          event?.stopPropagation?.();
+          if (!this.opened || !cellView.boundItem) {
+            return;
+          }
+          const item = cellView.boundItem;
+          this.tooltipCard.open(item, {
+            isEquipped: false,
+            equippedInSlot: this.lastSnapshot.equipped[item.slot],
+            pinned: true,
+            onEquip: (instanceId) => {
+              this.callbacks.onEquipItem(instanceId);
+            },
+          });
+        }
+      );
+
+      this.bagCells.push(cellView);
+      this.bagSection.add(cellContainer);
+    }
+
+    // Paginação da Mochila
+    this.prevPageBg = scene.add.graphics();
+    this.prevPageText = scene.add
+      .text(0, 0, '◄ Anterior', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '11px',
+        color: DF_PALETTE.textParchment,
+        fontStyle: 'bold',
+        resolution: 2,
+      })
+      .setOrigin(0.5);
     this.prevPageZone = scene.add
-      .zone(0, 0, 68, 26)
-      .setOrigin(0.5, 0.5)
+      .zone(0, 0, 96, 28)
+      .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
     this.prevPageZone.on(
       'pointerdown',
@@ -319,16 +631,17 @@ export class InventoryModal {
 
     this.nextPageBg = scene.add.graphics();
     this.nextPageText = scene.add
-      .text(0, 0, 'Próx >', {
-        fontFamily: 'monospace',
+      .text(0, 0, 'Próxima ►', {
+        fontFamily: DF_FONTS.BODY,
         fontSize: '11px',
-        color: '#f8fafc',
+        color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
+        resolution: 2,
       })
-      .setOrigin(0.5, 0.5);
+      .setOrigin(0.5);
     this.nextPageZone = scene.add
-      .zone(0, 0, 68, 26)
-      .setOrigin(0.5, 0.5)
+      .zone(0, 0, 96, 28)
+      .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
     this.nextPageZone.on(
       'pointerdown',
@@ -339,14 +652,12 @@ export class InventoryModal {
         event?: Phaser.Types.Input.EventData
       ) => {
         event?.stopPropagation?.();
-        if (!this.opened) {
+        const totalPages = this.getTotalPages();
+        if (!this.opened || this.bagPage >= totalPages - 1) {
           return;
         }
-        const totalPages = this.getTotalPages();
-        if (this.bagPage < totalPages - 1) {
-          this.bagPage += 1;
-          this.renderSnapshot();
-        }
+        this.bagPage += 1;
+        this.renderSnapshot();
       }
     );
     this.nextPageContainer = scene.add.container(0, 0, [
@@ -357,187 +668,30 @@ export class InventoryModal {
 
     this.pageInfoText = scene.add
       .text(0, 0, '1/1', {
-        fontFamily: 'monospace',
+        fontFamily: DF_FONTS.BODY,
         fontSize: '11px',
-        color: '#cbd5e1',
+        color: DF_PALETTE.textMuted,
+        fontStyle: 'bold',
+        resolution: 2,
       })
-      .setOrigin(0.5, 0.5);
+      .setOrigin(0.5);
 
-    const rootChildren: Phaser.GameObjects.GameObject[] = [
-      this.backdropGraphic,
-      this.backdropZone,
-      this.panelGraphic,
-      this.statsBgGraphic,
-      this.titleText,
-      this.infernoForceText,
-      this.submundoForceText,
-      this.empireoForceText,
-      this.statsText,
-      this.equippedHeaderText,
-      this.bagHeaderText,
-      this.emptyBagText,
-      this.closeBtnContainer,
+    this.bagSection.add([
       this.prevPageContainer,
       this.nextPageContainer,
       this.pageInfoText,
-    ];
-
-    // Build 4 Equipped Slot Cards
-    for (const slot of EQUIP_SLOT_ORDER) {
-      const bg = scene.add.graphics();
-      const headerText = scene.add.text(0, 0, SLOT_LABELS[slot], {
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        color: '#94a3b8',
-        fontStyle: 'bold',
-      });
-      const powerText = scene.add
-        .text(0, 0, '', {
-          fontFamily: 'monospace',
-          fontSize: '10px',
-          color: '#ffd166',
-          fontStyle: 'bold',
-        })
-        .setOrigin(1, 0);
-      const nameText = scene.add.text(0, 0, 'Vazio', {
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        color: '#64748b',
-        fontStyle: 'bold',
-      });
-      const detailText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        color: '#cbd5e1',
-      });
-      const hitZone = scene.add
-        .zone(0, 0, 100, 60)
-        .setOrigin(0.5, 0.5)
-        .setInteractive({ useHandCursor: true });
-
-      hitZone.on(
-        'pointerdown',
-        (
-          _pointer: Phaser.Input.Pointer,
-          _lx: number,
-          _ly: number,
-          event?: Phaser.Types.Input.EventData
-        ) => {
-          event?.stopPropagation?.();
-          if (!this.opened) {
-            return;
-          }
-          if (this.lastSnapshot.equipped[slot]) {
-            this.callbacks.onUnequipSlot(slot);
-          }
-        }
-      );
-
-      const container = scene.add.container(0, 0, [
-        bg,
-        headerText,
-        powerText,
-        nameText,
-        detailText,
-        hitZone,
-      ]);
-
-      this.slotCards.push({
-        slot,
-        container,
-        bg,
-        headerText,
-        powerText,
-        nameText,
-        detailText,
-        hitZone,
-      });
-      rootChildren.push(container);
-    }
-
-    // Build Pooled Bag Rows
-    for (let i = 0; i < MAX_BAG_ROWS; i++) {
-      const bg = scene.add.graphics();
-      const nameText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        color: '#f8fafc',
-        fontStyle: 'bold',
-      });
-      const compareText = scene.add
-        .text(0, 0, '', {
-          fontFamily: 'monospace',
-          fontSize: '11px',
-          color: '#80ed99',
-          fontStyle: 'bold',
-        })
-        .setOrigin(1, 0);
-      const statsText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        color: '#cbd5e1',
-      });
-      const metaText = scene.add.text(0, 0, '', {
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        color: '#94a3b8',
-      });
-      const actionText = scene.add
-        .text(0, 0, '[Equipar]', {
-          fontFamily: 'monospace',
-          fontSize: '10px',
-          color: '#80ed99',
-          fontStyle: 'bold',
-        })
-        .setOrigin(1, 1);
-
-      const hitZone = scene.add
-        .zone(0, 0, 100, 60)
-        .setOrigin(0.5, 0.5)
-        .setInteractive({ useHandCursor: true });
-
-      const rowView: BagRowView = {
-        container: scene.add.container(0, 0, [
-          bg,
-          nameText,
-          compareText,
-          statsText,
-          metaText,
-          actionText,
-          hitZone,
-        ]),
-        bg,
-        nameText,
-        compareText,
-        statsText,
-        metaText,
-        actionText,
-        hitZone,
-        boundInstanceId: null,
-      };
-
-      hitZone.on(
-        'pointerdown',
-        (
-          _pointer: Phaser.Input.Pointer,
-          _lx: number,
-          _ly: number,
-          event?: Phaser.Types.Input.EventData
-        ) => {
-          event?.stopPropagation?.();
-          if (!this.opened || !rowView.boundInstanceId) {
-            return;
-          }
-          this.callbacks.onEquipItem(rowView.boundInstanceId);
-        }
-      );
-
-      this.bagRows.push(rowView);
-      rootChildren.push(rowView.container);
-    }
+    ]);
 
     this.rootContainer = scene.add
-      .container(this.viewport.width / 2, this.viewport.height / 2, rootChildren)
+      .container(this.viewport.width / 2, this.viewport.height / 2, [
+        this.backdropGraphic,
+        this.backdropZone,
+        this.panelGraphic,
+        this.titleText,
+        this.closeBtnContainer,
+        this.equipmentSection,
+        this.bagSection,
+      ])
       .setScrollFactor(0)
       .setDepth(1080)
       .setVisible(false);
@@ -547,6 +701,10 @@ export class InventoryModal {
         return;
       }
       if (event.code === 'Escape') {
+        if (this.tooltipCard.isOpen()) {
+          this.tooltipCard.close();
+          return;
+        }
         this.close();
         this.callbacks.onClose();
       }
@@ -565,6 +723,7 @@ export class InventoryModal {
 
   public close(): void {
     this.opened = false;
+    this.tooltipCard.close();
     this.rootContainer.setVisible(false);
   }
 
@@ -583,401 +742,322 @@ export class InventoryModal {
 
   public resize(viewport: ViewportConfig): void {
     this.viewport = viewport;
+    this.tooltipCard.resize(viewport);
+
     const w = viewport.width;
     const h = viewport.height;
-    const isMobile = viewport.mode === 'mobile_portrait';
 
     this.rootContainer.setPosition(w / 2, h / 2);
 
     this.backdropGraphic.clear();
-    this.backdropGraphic.fillStyle(0x04060a, 0.82);
+    this.backdropGraphic.fillStyle(0x04060a, 0.84);
     this.backdropGraphic.fillRect(-w / 2, -h / 2, w, h);
     this.backdropZone.setSize(w, h);
 
-    const boxW = isMobile ? w - 20 : 720;
-    const boxH = isMobile ? h - 52 : 510;
+    // Painel Paisagem Amplo 880x486 centralizado em 960x540
+    const panelW = Math.min(880, w - 24);
+    const panelH = Math.min(486, h - 24);
+    const headerH = 42;
 
-    this.panelGraphic.clear();
-    this.panelGraphic.fillStyle(0x0f1420, 0.97);
-    this.panelGraphic.fillRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 8);
-    this.panelGraphic.lineStyle(2, 0x3b4252, 1);
-    this.panelGraphic.strokeRoundedRect(-boxW / 2, -boxH / 2, boxW, boxH, 8);
+    const innerPadX = 18;
+    const leftColW = Math.min(360, Math.round((panelW - innerPadX * 2) * 0.42));
+    const dividerX = -panelW / 2 + innerPadX + leftColW + 10;
+    const leftCenterX = -panelW / 2 + innerPadX + leftColW / 2;
+    const rightColLeft = dividerX + 14;
+    const rightColW = panelW / 2 - innerPadX - rightColLeft;
+    const rightCenterX = rightColLeft + rightColW / 2;
 
-    // Header + Close
-    const leftEdge = -boxW / 2 + 16;
-    const rightEdge = boxW / 2 - 16;
-    const topEdge = -boxH / 2 + 14;
+    this.drawPanelFrame(panelW, panelH, headerH, dividerX);
 
-    this.titleText.setText(isMobile ? 'INVENTÁRIO' : 'INVENTÁRIO E EQUIPAMENTOS');
-    this.titleText.setFontSize(isMobile ? 14 : 15);
-    this.titleText.setPosition(leftEdge, topEdge);
+    this.titleText.setPosition(0, -panelH / 2 + headerH / 2 + 4);
 
-    const closeW = isMobile ? 72 : 84;
-    const closeH = 28;
-    this.closeBtnContainer.setPosition(rightEdge - closeW / 2, topEdge + 12);
-    this.closeBtnZone.setSize(closeW, closeH);
-    this.closeBtnBg.clear();
-    this.closeBtnBg.fillStyle(0x7f1d1d, 0.92);
-    this.closeBtnBg.fillRoundedRect(-closeW / 2, -closeH / 2, closeW, closeH, 5);
-    this.closeBtnBg.lineStyle(1.5, 0xfca5a5, 0.85);
-    this.closeBtnBg.strokeRoundedRect(-closeW / 2, -closeH / 2, closeW, closeH, 5);
+    this.closeBtnContainer.setPosition(
+      panelW / 2 - 26,
+      -panelH / 2 + headerH / 2 + 4
+    );
+    this.drawCloseButton(false);
 
-    // Active Forces
-    const forcesY = topEdge + 22;
-    this.infernoForceText.setPosition(leftEdge, forcesY);
-    this.submundoForceText.setPosition(leftEdge + (isMobile ? 78 : 104), forcesY);
-    this.empireoForceText.setPosition(leftEdge + (isMobile ? 158 : 216), forcesY);
+    // Coluna Esquerda: EQUIPAMENTO (2x3 slots 70x70 + Placa de Atributos com crânio)
+    this.equipmentSection.setPosition(leftCenterX, 0);
+    const contentTopY = -panelH / 2 + headerH + 18;
+    this.equipHeaderText.setPosition(0, contentTopY);
 
-    // Stats strip
-    const statsY = forcesY + 18;
-    const statsH = isMobile ? 34 : 26;
-    const innerW = boxW - 32;
-    this.statsBgGraphic.clear();
-    this.statsBgGraphic.fillStyle(0x161d2e, 0.92);
-    this.statsBgGraphic.fillRoundedRect(leftEdge, statsY, innerW, statsH, 5);
-    this.statsBgGraphic.lineStyle(1, 0x2b3448, 0.9);
-    this.statsBgGraphic.strokeRoundedRect(leftEdge, statsY, innerW, statsH, 5);
-    this.statsText.setFontSize(isMobile ? 10 : 11);
-    this.statsText.setPosition(leftEdge + 8, statsY + (isMobile ? 5 : 6));
+    this.equipBoxSize = 70;
+    const colOffset = Math.min(82, Math.floor(leftColW * 0.24));
+    const row1Y = contentTopY + 58;
+    const row2Y = row1Y + 104;
+    const row3Y = row2Y + 104;
 
-    // Equipped & Bag Sections
-    if (isMobile) {
-      const equipHeaderY = statsY + statsH + 10;
-      this.equippedHeaderText.setFontSize(10);
-      this.equippedHeaderText.setPosition(leftEdge, equipHeaderY);
+    const coords: Array<{ x: number; y: number }> = [
+      { x: -colOffset, y: row1Y },
+      { x: colOffset, y: row1Y },
+      { x: -colOffset, y: row2Y },
+      { x: colOffset, y: row2Y },
+      { x: -colOffset, y: row3Y },
+      { x: colOffset, y: row3Y },
+    ];
+    this.positionEquipCards(coords);
 
-      const gridTop = equipHeaderY + 16;
-      const cardW = (innerW - 8) / 2;
-      const cardH = 66;
-      this.slotCards.forEach((card, idx) => {
-        const col = idx % 2;
-        const row = Math.floor(idx / 2);
-        const cx = leftEdge + col * (cardW + 8) + cardW / 2;
-        const cy = gridTop + row * (cardH + 6) + cardH / 2;
-        this.layoutSlotCard(card, cx, cy, cardW, cardH, true);
-      });
+    this.statsBoxWidth = Math.min(336, leftColW - 14);
+    this.statsBoxHeight = 82;
+    const statsY = panelH / 2 - this.statsBoxHeight / 2 - 14;
+    this.positionStatsPanel(0, statsY);
 
-      const bagHeaderY = gridTop + cardH * 2 + 16;
-      this.bagHeaderText.setFontSize(10);
-      this.bagHeaderText.setPosition(leftEdge, bagHeaderY);
-
-      const bagTop = bagHeaderY + 16;
-      const rowW = innerW;
-      const rowH = 78;
-      this.bagRows.forEach((row, idx) => {
-        const cy = bagTop + idx * (rowH + 6) + rowH / 2;
-        this.layoutBagRow(row, 0, cy, rowW, rowH, true);
-      });
-
-      this.emptyBagText.setPosition(0, bagTop + 115);
-
-      const pageY = boxH / 2 - 22;
-      this.prevPageContainer.setPosition(-78, pageY);
-      this.pageInfoText.setPosition(0, pageY);
-      this.nextPageContainer.setPosition(78, pageY);
+    // Coluna Direita: MOCHILA (4x4 = 16 slots + legenda das 3 Forças + paginação)
+    this.bagSection.setPosition(rightCenterX, 0);
+    const bagTopY = contentTopY;
+    if (this.bagHeaderIcon) {
+      this.bagHeaderIcon
+        .setPosition(-rightColW / 2 + 10, bagTopY)
+        .setDisplaySize(18, 18);
+      this.bagHeaderText.setPosition(-rightColW / 2 + 26, bagTopY);
     } else {
-      const bodyHeaderY = statsY + statsH + 12;
-      const leftColW = 284;
-      const rightColLeft = leftEdge + leftColW + 16;
-      const rightColW = rightEdge - rightColLeft;
-
-      this.equippedHeaderText.setFontSize(11);
-      this.equippedHeaderText.setPosition(leftEdge, bodyHeaderY);
-      this.bagHeaderText.setFontSize(11);
-      this.bagHeaderText.setPosition(rightColLeft, bodyHeaderY);
-
-      const listTop = bodyHeaderY + 18;
-      const slotH = 84;
-      this.slotCards.forEach((card, idx) => {
-        const cx = leftEdge + leftColW / 2;
-        const cy = listTop + idx * (slotH + 8) + slotH / 2;
-        this.layoutSlotCard(card, cx, cy, leftColW, slotH, false);
-      });
-
-      const rowH = 80;
-      const rowCenterX = rightColLeft + rightColW / 2;
-      this.bagRows.forEach((row, idx) => {
-        const cy = listTop + idx * (rowH + 8) + rowH / 2;
-        this.layoutBagRow(row, rowCenterX, cy, rightColW, rowH, false);
-      });
-
-      this.emptyBagText.setPosition(rowCenterX, listTop + 140);
-
-      const pageY = boxH / 2 - 22;
-      this.prevPageContainer.setPosition(rowCenterX - 80, pageY);
-      this.pageInfoText.setPosition(rowCenterX, pageY);
-      this.nextPageContainer.setPosition(rowCenterX + 80, pageY);
+      this.bagHeaderText.setPosition(-rightColW / 2 + 2, bagTopY);
     }
+    this.forcesLegendText.setPosition(rightColW / 2 - 2, bagTopY);
+
+    const gap = 8;
+    const pagY = panelH / 2 - 26;
+    const gridTopEdge = bagTopY + 18;
+    const gridBottomEdge = pagY - 22;
+    const availableGridH = Math.max(240, gridBottomEdge - gridTopEdge);
+
+    this.bagCellWidth = Math.floor(
+      (rightColW - gap * (BAG_GRID_COLS - 1)) / BAG_GRID_COLS
+    );
+    this.bagCellHeight = Math.floor(
+      (availableGridH - gap * (BAG_GRID_ROWS - 1)) / BAG_GRID_ROWS
+    );
+    const gridFirstRowCenterY = gridTopEdge + this.bagCellHeight / 2;
+    this.positionBagGrid(0, gridFirstRowCenterY, gap);
+
+    this.positionPagination(0, pagY, rightColW);
+    this.emptyBagText.setPosition(
+      0,
+      gridTopEdge + availableGridH / 2
+    );
 
     this.renderSnapshot();
   }
 
   public destroy(): void {
     this.scene.input.keyboard?.off('keydown', this.keydownHandler);
-    this.rootContainer.destroy();
+    this.tooltipCard.destroy();
+    this.rootContainer.destroy(true);
   }
 
-  private getPageSize(): number {
-    return this.viewport.mode === 'mobile_portrait' ? 3 : 4;
+  private positionEquipCards(coords: Array<{ x: number; y: number }>): void {
+    const half = this.equipBoxSize / 2;
+    this.slotCards.forEach((card, idx) => {
+      const pos = coords[idx] ?? { x: 0, y: 0 };
+      card.container.setPosition(pos.x, pos.y);
+      card.slotLabelText.setPosition(0, -half - 11);
+      card.itemNameText.setPosition(0, half + 11);
+      if (card.iconImage) {
+        card.iconImage
+          .setPosition(0, 0)
+          .setDisplaySize(this.equipBoxSize - 16, this.equipBoxSize - 16);
+      }
+      card.fallbackIconText.setPosition(0, 0);
+      card.hitZone
+        .setPosition(0, 0)
+        .setSize(this.equipBoxSize + 14, this.equipBoxSize + 28);
+    });
   }
 
-  private getTotalPages(): number {
-    const pageSize = this.getPageSize();
-    return Math.max(1, Math.ceil(this.lastSnapshot.bag.length / pageSize));
+  private positionStatsPanel(x: number, y: number): void {
+    this.drawStatsFrame(x, y, this.statsBoxWidth, this.statsBoxHeight);
+    this.statsPrimaryText.setPosition(x, y - 4);
+    this.statsSecondaryText.setPosition(x, y + this.statsBoxHeight / 2 - 12);
   }
 
-  private layoutSlotCard(
-    card: EquipSlotCardView,
-    cx: number,
-    cy: number,
-    w: number,
-    h: number,
-    isMobile: boolean
+  private positionBagGrid(
+    centerX: number,
+    firstRowY: number,
+    gap: number
   ): void {
-    card.container.setPosition(cx, cy);
-    card.container.setData('cardW', w);
-    card.container.setData('cardH', h);
-    card.hitZone.setSize(w, h);
+    const stepX = this.bagCellWidth + gap;
+    const stepY = this.bagCellHeight + gap;
+    const iconSize = Math.min(40, this.bagCellHeight - 34, this.bagCellWidth - 28);
 
-    const left = -w / 2 + 8;
-    const right = w / 2 - 8;
-    const top = -h / 2 + 6;
+    for (let i = 0; i < this.bagCells.length; i += 1) {
+      const col = i % BAG_GRID_COLS;
+      const row = Math.floor(i / BAG_GRID_COLS);
+      const cx = centerX + (col - (BAG_GRID_COLS - 1) / 2) * stepX;
+      const cy = firstRowY + row * stepY;
 
-    card.headerText.setFontSize(isMobile ? 9 : 10);
-    card.headerText.setPosition(left, top);
-
-    card.powerText.setFontSize(isMobile ? 9 : 10);
-    card.powerText.setPosition(right, top);
-
-    card.nameText.setFontSize(isMobile ? 10 : 11);
-    card.nameText.setWordWrapWidth(w - 16);
-    card.nameText.setPosition(left, top + (isMobile ? 13 : 16));
-
-    card.detailText.setFontSize(isMobile ? 9 : 10);
-    card.detailText.setWordWrapWidth(w - 16);
-    card.detailText.setPosition(left, top + (isMobile ? 31 : 36));
+      const cell = this.bagCells[i];
+      cell.container.setPosition(cx, cy);
+      if (cell.iconImage) {
+        cell.iconImage.setPosition(0, -2).setDisplaySize(iconSize, iconSize);
+      }
+      cell.fallbackIconText.setPosition(0, -2);
+      cell.powerText.setPosition(
+        -this.bagCellWidth / 2 + 7,
+        -this.bagCellHeight / 2 + 11
+      );
+      cell.compareText.setPosition(
+        this.bagCellWidth / 2 - 7,
+        -this.bagCellHeight / 2 + 11
+      );
+      cell.nameText.setPosition(0, this.bagCellHeight / 2 - 11);
+      cell.hitZone.setSize(this.bagCellWidth, this.bagCellHeight);
+    }
   }
 
-  private layoutBagRow(
-    row: BagRowView,
-    cx: number,
-    cy: number,
-    w: number,
-    h: number,
-    isMobile: boolean
-  ): void {
-    row.container.setPosition(cx, cy);
-    row.container.setData('rowW', w);
-    row.container.setData('rowH', h);
-    row.hitZone.setSize(w, h);
+  private positionPagination(centerX: number, y: number, width: number): void {
+    const btnW = 96;
+    const btnH = 28;
+    const edgeOffset = Math.max(btnW / 2 + 32, width / 2 - btnW / 2);
 
-    const left = -w / 2 + 10;
-    const right = w / 2 - 10;
-    const top = -h / 2 + 7;
-    const bottom = h / 2 - 7;
-
-    row.nameText.setFontSize(isMobile ? 10 : 11);
-    row.nameText.setWordWrapWidth(w - 105);
-    row.nameText.setPosition(left, top);
-
-    row.compareText.setFontSize(isMobile ? 10 : 11);
-    row.compareText.setPosition(right, top);
-
-    row.statsText.setFontSize(10);
-    row.statsText.setWordWrapWidth(w - 20);
-    row.statsText.setPosition(left, top + 18);
-
-    row.metaText.setFontSize(isMobile ? 9 : 10);
-    row.metaText.setWordWrapWidth(w - 86);
-    row.metaText.setPosition(left, bottom - 13);
-
-    row.actionText.setFontSize(10);
-    row.actionText.setPosition(right, bottom);
+    this.prevPageContainer.setPosition(centerX - edgeOffset, y);
+    this.prevPageZone.setSize(btnW, btnH);
+    this.nextPageContainer.setPosition(centerX + edgeOffset, y);
+    this.nextPageZone.setSize(btnW, btnH);
+    this.pageInfoText.setPosition(centerX, y);
   }
 
   private renderSnapshot(): void {
-    const snap = this.lastSnapshot;
-    const isMobile = this.viewport.mode === 'mobile_portrait';
+    this.renderEquippedSlots();
+    this.renderStatsPanel();
+    this.renderBagGrid();
+  }
 
-    // Forces
-    if (isMobile) {
-      this.infernoForceText.setText(`Inf:${snap.activeForces.inferno}`);
-      this.submundoForceText.setText(`Sub:${snap.activeForces.submundo}`);
-      this.empireoForceText.setText(`Emp:${snap.activeForces.empireo}`);
-    } else {
-      this.infernoForceText.setText(`Inferno: ${snap.activeForces.inferno}`);
-      this.submundoForceText.setText(`Submundo: ${snap.activeForces.submundo}`);
-      this.empireoForceText.setText(`Empíreo: ${snap.activeForces.empireo}`);
-    }
-
-    // Hero Stats
-    const s = snap.heroStats;
-    const critPct = this.formatPercent(s.critChance);
-    const stealPct = this.formatPercent(snap.lifeSteal);
-    const cdrPct = this.formatPercent(snap.cooldownReduction);
-    const luckPct = this.formatPercent(snap.luck);
-
-    if (isMobile) {
-      this.statsText.setText(
-        `HP ${Math.ceil(s.hp)}/${s.maxHp} | ATQ ${s.attack} | DEF ${s.defense} | VEL ${s.moveSpeed}\n` +
-          `CRIT ${critPct} | Roubo ${stealPct} | Rec ${cdrPct} | Sorte ${luckPct}`
-      );
-    } else {
-      this.statsText.setText(
-        `HP ${Math.ceil(s.hp)}/${s.maxHp} | ATQ ${s.attack} | DEF ${s.defense} | VEL ${s.moveSpeed} | CRIT ${critPct} | Roubo ${stealPct} | Rec ${cdrPct} | Sorte ${luckPct}`
-      );
-    }
-
-    // Equipped Cards
+  private renderEquippedSlots(): void {
     for (const card of this.slotCards) {
-      const item = snap.equipped[card.slot];
-      const cardW = (card.container.getData('cardW') as number) || 150;
-      const cardH = (card.container.getData('cardH') as number) || 66;
-      const cardTop = -cardH / 2 + 6;
-      const cardBottom = cardH / 2 - 5;
-
-      card.bg.clear();
-      if (item) {
-        const borderNum = RARITY_NUM[item.rarity];
-        const borderHex = RARITY_HEX[item.rarity];
-        card.bg.fillStyle(0x161f33, 0.95);
-        card.bg.fillRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 6);
-        card.bg.lineStyle(2, borderNum, 0.95);
-        card.bg.strokeRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 6);
-
-        card.headerText.setText(
-          `${SLOT_LABELS[card.slot]} · ${FORCE_LABELS[item.force]}`
-        );
-        card.headerText.setColor(FORCE_HEX[item.force]);
-        card.powerText.setText(`P:${item.powerScore}`);
-
-        this.setTextClamped(card.nameText, item.name, 2);
-        card.nameText.setColor(borderHex);
-
-        const minDetailY = cardTop + (isMobile ? 30 : 35);
-        const detailY = Math.max(
-          minDetailY,
-          card.nameText.y + card.nameText.height + (isMobile ? 3 : 4)
-        );
-        card.detailText.setY(detailY);
-
-        const bonusLine = this.formatItemBonuses(item, isMobile ? 2 : 3);
-        const tail = isMobile
-          ? bonusLine || 'Toque p/ remover'
-          : `${bonusLine}${item.legendaryPower ? ` | ${item.legendaryPower.name}` : ''}`;
-        const detailLineH = isMobile ? 11 : 13;
-        const maxDetailLines = cardBottom - detailY >= detailLineH * 2 ? 2 : 1;
-        this.setTextClamped(
-          card.detailText,
-          tail || 'Equipado (toque p/ remover)',
-          maxDetailLines
-        );
-        card.detailText.setColor('#cbd5e1');
-      } else {
-        card.bg.fillStyle(0x111622, 0.78);
-        card.bg.fillRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 6);
-        card.bg.lineStyle(1, 0x334155, 0.85);
-        card.bg.strokeRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 6);
-
-        card.headerText.setText(SLOT_LABELS[card.slot]);
-        card.headerText.setColor('#64748b');
-        card.powerText.setText('');
-        card.nameText.setText('— Vazio —');
-        card.nameText.setColor('#64748b');
-        card.detailText.setY(cardTop + (isMobile ? 31 : 36));
-        card.detailText.setText('Nenhum item equipado');
-        card.detailText.setColor('#475569');
-      }
+      this.renderSingleEquippedSlot(card);
     }
+  }
 
-    // Bag List (Paginated)
-    this.bagHeaderText.setText(
-      `MOCHILA (${snap.bag.length} — toque p/ equipar)`
+  private renderSingleEquippedSlot(card: EquipSlotCardView): void {
+    const item = this.lastSnapshot.equipped[card.slot];
+    const slotMeta = DF_SLOT_META[card.slot];
+    const boxSize = this.equipBoxSize;
+    const half = boxSize / 2;
+
+    if (item) {
+      const rarityTheme = DF_RARITY_THEME[item.rarity];
+      const gemColor =
+        item.force !== 'none'
+          ? DF_FORCE_THEME[item.force].color
+          : rarityTheme.gemColor;
+
+      drawRaritySlotFrame(card.boxBg, {
+        x: -half,
+        y: -half,
+        width: boxSize,
+        height: boxSize,
+        rarity: item.rarity,
+        bevel: 6,
+        hovered: card.hovered,
+        gemColor,
+        showTopGem: true,
+        showCornerGem: true,
+        clear: true,
+      });
+
+      if (card.iconImage) {
+        card.iconImage.setVisible(true).setAlpha(1).clearTint();
+        card.fallbackIconText.setVisible(false);
+      } else {
+        card.fallbackIconText.setVisible(true).setColor(rarityTheme.hex);
+      }
+
+      card.slotLabelText
+        .setText(slotMeta.labelUpper)
+        .setColor(rarityTheme.hex);
+      card.itemNameText
+        .setText(this.truncateName(item.name, 14))
+        .setColor(rarityTheme.accentHex);
+    } else {
+      drawRaritySlotFrame(card.boxBg, {
+        x: -half,
+        y: -half,
+        width: boxSize,
+        height: boxSize,
+        rarity: null,
+        empty: true,
+        bevel: 6,
+        hovered: card.hovered,
+        showTopGem: true,
+        showCornerGem: true,
+        clear: true,
+      });
+
+      if (card.iconImage) {
+        card.iconImage.setVisible(true).setAlpha(0.24).setTint(0x64748b);
+        card.fallbackIconText.setVisible(false);
+      } else {
+        card.fallbackIconText.setVisible(true).setColor(DF_PALETTE.textMuted);
+      }
+
+      card.slotLabelText
+        .setText(slotMeta.labelUpper)
+        .setColor(DF_PALETTE.textMuted);
+      card.itemNameText
+        .setText(slotMeta.labelTitle)
+        .setColor(DF_PALETTE.textMuted);
+    }
+  }
+
+  private renderStatsPanel(): void {
+    const s = this.lastSnapshot.heroStats;
+    const f = this.lastSnapshot.activeForces;
+    const critPct = Math.round(s.critChance * 100);
+    const lsPct = Math.round(this.lastSnapshot.lifeSteal * 100);
+    const cdrPct = Math.round(this.lastSnapshot.cooldownReduction * 100);
+
+    this.statsPrimaryText.setText(
+      `Poder de Ataque: ${formatStatNumber(s.attack)}\n` +
+        `Armadura: ${formatStatNumber(s.defense)}   ·   Vida: ${formatStatNumber(s.maxHp)}`
     );
 
-    const pageSize = this.getPageSize();
+    const extraParts = [`Crítico: ${critPct}%`];
+    if (lsPct > 0) {
+      extraParts.push(`Roubo: ${lsPct}%`);
+    }
+    if (cdrPct > 0) {
+      extraParts.push(`Recarga: -${cdrPct}%`);
+    }
+    this.statsSecondaryText.setText(extraParts.join('  ·  '));
+
+    this.forcesLegendText.setText(
+      `${DF_FORCE_THEME.inferno.label} ${f.inferno}  ·  ${DF_FORCE_THEME.submundo.label} ${f.submundo}  ·  ${DF_FORCE_THEME.empireo.label} ${f.empireo}`
+    );
+  }
+
+  private renderBagGrid(): void {
+    const totalItems = this.lastSnapshot.bag.length;
+    this.bagHeaderText.setText(`MOCHILA (${totalItems})`);
+
     const totalPages = this.getTotalPages();
-    const startIdx = this.bagPage * pageSize;
-    const pageItems = snap.bag.slice(startIdx, startIdx + pageSize);
+    const startIdx = this.bagPage * BAG_PAGE_SIZE;
+    const pageItems = this.lastSnapshot.bag.slice(
+      startIdx,
+      startIdx + BAG_PAGE_SIZE
+    );
 
-    this.emptyBagText.setVisible(snap.bag.length === 0);
+    this.emptyBagText.setVisible(totalItems === 0);
 
-    for (let i = 0; i < this.bagRows.length; i++) {
-      const row = this.bagRows[i];
-      const item = pageItems[i];
-      if (!item || i >= pageSize) {
-        row.boundInstanceId = null;
-        row.container.setVisible(false);
-        continue;
-      }
-
-      row.boundInstanceId = item.instanceId;
-      row.container.setVisible(true);
-
-      const rowW = (row.container.getData('rowW') as number) || 316;
-      const rowH = (row.container.getData('rowH') as number) || 78;
-      const rowTop = -rowH / 2 + 7;
-      const borderNum = RARITY_NUM[item.rarity];
-      const borderHex = RARITY_HEX[item.rarity];
-
-      row.bg.clear();
-      row.bg.fillStyle(0x141b2d, 0.94);
-      row.bg.fillRoundedRect(-rowW / 2, -rowH / 2, rowW, rowH, 6);
-      row.bg.lineStyle(1.5, borderNum, 0.9);
-      row.bg.strokeRoundedRect(-rowW / 2, -rowH / 2, rowW, rowH, 6);
-
-      const equippedInSlot = snap.equipped[item.slot];
-      const currentScore = equippedInSlot ? equippedInSlot.powerScore : 0;
-      const delta = item.powerScore - currentScore;
-      const deltaStr = delta > 0 ? `+${delta}` : `${delta}`;
-      const deltaColor =
-        delta > 0 ? '#80ed99' : delta < 0 ? '#ff4d6d' : '#adb5bd';
-      row.compareText.setText(`P:${item.powerScore} (${deltaStr})`);
-      row.compareText.setColor(deltaColor);
-
-      const availableNameW = Math.max(
-        120,
-        rowW - 20 - Math.ceil(row.compareText.width) - 10
-      );
-      row.nameText.setWordWrapWidth(availableNameW);
-      this.setTextClamped(
-        row.nameText,
-        `[${SLOT_LABELS[item.slot]}] ${item.name}`,
-        2
-      );
-      row.nameText.setColor(borderHex);
-
-      const statsY = Math.max(
-        rowTop + 18,
-        row.nameText.y + row.nameText.height + 4
-      );
-      row.statsText.setY(statsY);
-      const bonusStr = this.formatItemBonuses(item, isMobile ? 3 : 4);
-      const maxStatsLines = statsY + 26 <= row.metaText.y - 3 ? 2 : 1;
-      this.setTextClamped(
-        row.statsText,
-        bonusStr || 'Sem bônus adicionais',
-        maxStatsLines
-      );
-
-      const forceLabel = FORCE_LABELS[item.force];
-      const meta = item.legendaryPower
-        ? `${forceLabel} · ${item.legendaryPower.name}`
-        : `${forceLabel} · ${item.affixes.length} afixo(s)`;
-      this.setTextClamped(row.metaText, meta, 1);
-      row.metaText.setColor(FORCE_HEX[item.force]);
+    for (let i = 0; i < this.bagCells.length; i += 1) {
+      const cell = this.bagCells[i];
+      cell.boundItem = pageItems[i] ?? null;
+      this.renderSingleBagCell(cell);
     }
 
-    // Pagination buttons state
-    const showPagination = snap.bag.length > pageSize;
+    const showPagination = totalPages > 1;
     this.prevPageContainer.setVisible(showPagination);
     this.nextPageContainer.setVisible(showPagination);
     this.pageInfoText.setVisible(showPagination);
 
     if (showPagination) {
       this.pageInfoText.setText(`${this.bagPage + 1}/${totalPages}`);
-      this.drawPageButton(this.prevPageBg, this.prevPageText, this.bagPage > 0);
-      this.drawPageButton(
+      this.drawPaginationButton(
+        this.prevPageBg,
+        this.prevPageText,
+        this.bagPage > 0
+      );
+      this.drawPaginationButton(
         this.nextPageBg,
         this.nextPageText,
         this.bagPage < totalPages - 1
@@ -985,85 +1065,211 @@ export class InventoryModal {
     }
   }
 
-  private drawPageButton(
-    bg: Phaser.GameObjects.Graphics,
-    label: Phaser.GameObjects.Text,
+  private renderSingleBagCell(cell: BagCellView): void {
+    const item = cell.boundItem;
+    const totalItems = this.lastSnapshot.bag.length;
+    const halfW = this.bagCellWidth / 2;
+    const halfH = this.bagCellHeight / 2;
+
+    if (!item) {
+      cell.container.setVisible(totalItems > 0);
+      drawRaritySlotFrame(cell.bg, {
+        x: -halfW,
+        y: -halfH,
+        width: this.bagCellWidth,
+        height: this.bagCellHeight,
+        rarity: null,
+        empty: true,
+        bevel: 5,
+        fillColor: DF_PALETTE.deepRecess,
+        showTopGem: false,
+        showCornerGem: false,
+        clear: true,
+      });
+      cell.iconImage?.setVisible(false);
+      cell.fallbackIconText.setVisible(false);
+      cell.powerText.setVisible(false);
+      cell.compareText.setVisible(false);
+      cell.nameText.setVisible(false);
+      return;
+    }
+
+    cell.container.setVisible(true);
+    const rarityTheme = DF_RARITY_THEME[item.rarity];
+    const slotMeta = DF_SLOT_META[item.slot];
+    const gemColor =
+      item.force !== 'none'
+        ? DF_FORCE_THEME[item.force].color
+        : rarityTheme.gemColor;
+
+    drawRaritySlotFrame(cell.bg, {
+      x: -halfW,
+      y: -halfH,
+      width: this.bagCellWidth,
+      height: this.bagCellHeight,
+      rarity: item.rarity,
+      bevel: 5,
+      hovered: cell.hovered,
+      gemColor,
+      showTopGem: false,
+      showCornerGem: true,
+      clear: true,
+    });
+
+    if (
+      cell.iconImage &&
+      hasUiTextureFrame(this.scene, DF_UI_ICONS_KEY, slotMeta.iconFrame)
+    ) {
+      cell.iconImage.setFrame(slotMeta.iconFrame).setVisible(true);
+      cell.fallbackIconText.setVisible(false);
+    } else {
+      cell.iconImage?.setVisible(false);
+      cell.fallbackIconText
+        .setText(slotMeta.labelUpper[0] ?? '?')
+        .setColor(rarityTheme.hex)
+        .setVisible(true);
+    }
+
+    const itemPower = calculateItemPower(item);
+    cell.powerText
+      .setText(formatStatNumber(itemPower))
+      .setColor(DF_PALETTE.textParchment)
+      .setVisible(true);
+
+    const equipped = this.lastSnapshot.equipped[item.slot];
+    const eqPower = equipped ? calculateItemPower(equipped) : 0;
+    const delta = itemPower - eqPower;
+    if (!equipped || delta > 0) {
+      cell.compareText
+        .setText('▲')
+        .setColor(DF_PALETTE.textSuccess)
+        .setVisible(true);
+    } else if (delta < 0) {
+      cell.compareText
+        .setText('▼')
+        .setColor(DF_PALETTE.textDanger)
+        .setVisible(true);
+    } else {
+      cell.compareText
+        .setText('=')
+        .setColor(DF_PALETTE.textMuted)
+        .setVisible(true);
+    }
+
+    cell.nameText
+      .setText(this.truncateName(item.name, 13))
+      .setColor(rarityTheme.hex)
+      .setVisible(true);
+  }
+
+  private drawPanelFrame(
+    panelW: number,
+    panelH: number,
+    headerH: number,
+    dividerX: number
+  ): void {
+    const left = -panelW / 2;
+    const top = -panelH / 2;
+
+    drawOrnatePanel(this.panelGraphic, {
+      x: left,
+      y: top,
+      width: panelW,
+      height: panelH,
+      bevel: 12,
+      fillColor: DF_PALETTE.obsidianBg,
+      fillAlpha: 0.98,
+      innerFillColor: DF_PALETTE.innerSurface,
+      outerBorderColor: DF_PALETTE.bronzeBorder,
+      innerBorderColor: DF_PALETTE.metalBorder,
+      accentColor: DF_PALETTE.agedGold,
+      headerHeight: headerH,
+      headerColor: DF_PALETTE.headerBg,
+      headerGlowColor: DF_PALETTE.agedGold,
+      headerGlowAlpha: 0.14,
+      shadow: true,
+      cornerOrnaments: true,
+      clear: true,
+    });
+
+    // Divisória vertical ornamental separando Equipamento (esquerda) e Mochila (direita)
+    const divTop = top + headerH + 14;
+    const divBottom = top + panelH - 16;
+    this.panelGraphic.lineStyle(1.4, DF_PALETTE.bronzeDark, 0.9);
+    this.panelGraphic.lineBetween(dividerX, divTop, dividerX, divBottom);
+    this.panelGraphic.lineStyle(0.8, DF_PALETTE.agedGold, 0.35);
+    this.panelGraphic.lineBetween(
+      dividerX + 1.5,
+      divTop + 12,
+      dividerX + 1.5,
+      divBottom - 12
+    );
+
+    // Divisória horizontal sutil sob o cabeçalho da coluna direita
+    drawOrnamentalDivider(
+      this.panelGraphic,
+      dividerX + 14,
+      top + headerH + 31,
+      panelW / 2 - 18 - (dividerX + 14)
+    );
+  }
+
+  private drawStatsFrame(x: number, y: number, w: number, h: number): void {
+    const left = x - w / 2;
+    const top = y - h / 2;
+
+    drawOrnatePanel(this.statsBgGraphic, {
+      x: left,
+      y: top,
+      width: w,
+      height: h,
+      bevel: 8,
+      fillColor: DF_PALETTE.deepRecess,
+      fillAlpha: 0.96,
+      innerFillColor: DF_PALETTE.obsidianBg,
+      outerBorderColor: DF_PALETTE.bronzeBorder,
+      innerBorderColor: DF_PALETTE.bronzeDark,
+      accentColor: DF_PALETTE.agedGold,
+      shadow: false,
+      cornerOrnaments: false,
+      clear: true,
+    });
+
+    // Crânio ornamental coroando o topo central da placa de atributos
+    drawSkullCrest(this.statsBgGraphic, x, top + 1, 0.9);
+  }
+
+  private drawCloseButton(hovered: boolean): void {
+    drawOrnateButton(this.closeBtnBg, -16, -16, 32, 32, {
+      variant: 'crimson',
+      bevel: 5,
+      hovered,
+      clear: true,
+    });
+  }
+
+  private drawPaginationButton(
+    gfx: Phaser.GameObjects.Graphics,
+    text: Phaser.GameObjects.Text,
     enabled: boolean
   ): void {
-    bg.clear();
-    bg.fillStyle(enabled ? 0x1e293b : 0x0f172a, 0.95);
-    bg.fillRoundedRect(-34, -13, 68, 26, 4);
-    bg.lineStyle(1, enabled ? 0x64748b : 0x334155, 0.9);
-    bg.strokeRoundedRect(-34, -13, 68, 26, 4);
-    label.setColor(enabled ? '#f8fafc' : '#475569');
+    drawOrnateButton(gfx, -48, -14, 96, 28, {
+      variant: 'iron',
+      bevel: 5,
+      disabled: !enabled,
+      clear: true,
+    });
+    text.setColor(enabled ? DF_PALETTE.textParchment : DF_PALETTE.textMuted);
   }
 
-  private setTextClamped(
-    textObj: Phaser.GameObjects.Text,
-    fullText: string,
-    maxLines: number
-  ): void {
-    const cleanText = fullText.trim();
-    if (!cleanText || maxLines <= 0) {
-      textObj.setText('');
-      return;
-    }
-
-    const wrapped = textObj.getWrappedText(cleanText);
-    if (wrapped.length <= maxLines) {
-      textObj.setText(cleanText);
-      return;
-    }
-
-    let low = 1;
-    let high = cleanText.length - 1;
-    let best = '...';
-
-    while (low <= high) {
-      const mid = Math.floor((low + high) / 2);
-      const candidate = `${cleanText.slice(0, mid).trimEnd()}...`;
-      if (textObj.getWrappedText(candidate).length <= maxLines) {
-        best = candidate;
-        low = mid + 1;
-      } else {
-        high = mid - 1;
-      }
-    }
-
-    textObj.setText(best);
+  private getTotalPages(): number {
+    return Math.max(1, Math.ceil(this.lastSnapshot.bag.length / BAG_PAGE_SIZE));
   }
 
-  private formatItemBonuses(item: ItemInstance, maxEntries: number): string {
-    const totals: StatBonus = { ...item.baseBonuses };
-    for (const affix of item.affixes) {
-      for (const [k, v] of Object.entries(affix.bonuses) as Array<
-        [keyof StatBonus, number | undefined]
-      >) {
-        if (typeof v === 'number') {
-          totals[k] = (totals[k] ?? 0) + v;
-        }
-      }
+  private truncateName(name: string, maxLen: number): string {
+    if (name.length <= maxLen) {
+      return name;
     }
-
-    const parts: string[] = [];
-    if (totals.attack) parts.push(`ATQ +${Math.round(totals.attack)}`);
-    if (totals.maxHp) parts.push(`HP +${Math.round(totals.maxHp)}`);
-    if (totals.defense) parts.push(`DEF +${Math.round(totals.defense)}`);
-    if (totals.moveSpeed) parts.push(`VEL +${Math.round(totals.moveSpeed)}`);
-    if (totals.critChance) parts.push(`CRIT +${this.formatPercent(totals.critChance)}`);
-    if (totals.critMultiplier)
-      parts.push(`DMG CRIT +${this.formatPercent(totals.critMultiplier)}`);
-    if (totals.lifeSteal) parts.push(`Roubo +${this.formatPercent(totals.lifeSteal)}`);
-    if (totals.cooldownReduction)
-      parts.push(`Rec +${this.formatPercent(totals.cooldownReduction)}`);
-    if (totals.luck) parts.push(`Sorte +${this.formatPercent(totals.luck)}`);
-    if (totals.attackRange) parts.push(`Alc +${Math.round(totals.attackRange)}`);
-
-    return parts.slice(0, maxEntries).join(', ');
-  }
-
-  private formatPercent(value: number): string {
-    const pct = Math.abs(value) <= 1 ? value * 100 : value;
-    return `${Math.round(pct)}%`;
+    return `${name.slice(0, Math.max(1, maxLen - 1))}…`;
   }
 }
