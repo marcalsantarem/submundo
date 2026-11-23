@@ -193,6 +193,78 @@
       "title": "Ato 1 — A Caçada Começa",
       "text": "Este é o Refúgio no Submundo, espelho em ruínas do lar que você perdeu. Atravesse a Fenda, abata os Generais do Inferno — começando pelo Carcereiro Infernal — e prove o valor do seu Selo.",
       "shortText": "Ato 1 iniciado: cace o Carcereiro Infernal através do Portal da Fenda."
+    },
+    "village_master_mission_grotto": {
+      "id": "village_master_mission_grotto",
+      "speaker": "Mestre de Armas",
+      "portraitId": "weapon_master",
+      "title": "Missão — A Gruta da Cachoeira",
+      "text": "Limos e morcegos tomaram a nascente da Gruta da Cachoeira. Pegue sua lâmina e saia pelo portão; quero notícias antes do anoitecer.",
+      "shortText": "Missão: limpe a Gruta da Cachoeira. Saia pelo portão."
+    },
+    "village_master_mission_mine": {
+      "id": "village_master_mission_mine",
+      "speaker": "Mestre de Armas",
+      "portraitId": "weapon_master",
+      "title": "Missão — A Mina Abandonada",
+      "text": "Ossos andam pela Mina Abandonada desde o anoitecer. Saia pelo portão e desça antes que alcancem a estrada da vila.",
+      "shortText": "Missão: limpe a Mina Abandonada. Saia pelo portão."
+    },
+    "village_master_mission_seal": {
+      "id": "village_master_mission_seal",
+      "speaker": "Mestre de Armas",
+      "portraitId": "weapon_master",
+      "title": "Missão — O Selo Antigo",
+      "text": "Algo força a porta ancestral no fundo da mina. O Selo Antigo não pode cair: saia pelo portão e não hesite.",
+      "shortText": "Missão: defenda o Selo Antigo. Saia pelo portão."
+    },
+    "village_master_idle": {
+      "id": "village_master_idle",
+      "speaker": "Mestre de Armas",
+      "portraitId": "weapon_master",
+      "title": "Mestre de Armas",
+      "text": "Já disse o que precisava, garoto. O portão está aberto; o resto é com a sua lâmina.",
+      "shortText": "O portão está aberto. Vá."
+    },
+    "village_lyra_idle": {
+      "id": "village_lyra_idle",
+      "speaker": "Lyra",
+      "portraitId": "village_healer",
+      "title": "Lyra — Curandeira",
+      "text": "Ervas frescas da beira do rio. Se voltar ferido, minha porta fica aberta.",
+      "shortText": "Lyra: volte inteiro, guerreiro."
+    },
+    "village_lyra_idle_2": {
+      "id": "village_lyra_idle_2",
+      "speaker": "Lyra",
+      "portraitId": "village_healer",
+      "title": "Lyra — Curandeira",
+      "text": "Meus frascos não curam teimosia. Lute com a cabeça, não só com o braço.",
+      "shortText": "Lyra: lute com a cabeça."
+    },
+    "village_gorran_idle": {
+      "id": "village_gorran_idle",
+      "speaker": "Gorran",
+      "portraitId": "village_blacksmith",
+      "title": "Gorran — Ferreiro",
+      "text": "Ferro bom não precisa de lenda. Precisa de fogo, martelo e paciência.",
+      "shortText": "Gorran: ferro bom é fogo e paciência."
+    },
+    "village_gorran_idle_2": {
+      "id": "village_gorran_idle_2",
+      "speaker": "Gorran",
+      "portraitId": "village_blacksmith",
+      "title": "Gorran — Ferreiro",
+      "text": "A bigorna está ocupada hoje. Volte com o gume cego e a gente conversa.",
+      "shortText": "Gorran: a bigorna está ocupada hoje."
+    },
+    "village_gate_locked": {
+      "id": "village_gate_locked",
+      "speaker": "Portão da Vila",
+      "portraitId": "system",
+      "title": "Portão da Vila",
+      "text": "O portão está trancado. Fale com o Mestre de Armas antes de sair da Vila Natal.",
+      "shortText": "Fale com o Mestre antes de sair."
     }
   },
   "dungeon_enter": "As correntes do Submundo rangem, Guerreiro Espectral. Expurgue as quatro câmaras e reivindique a cabeça do Carcereiro Infernal.",
@@ -218,5 +290,14 @@
   "stage_seal_intro": "O Selo Antigo foi rompido no fundo da mina. Prepare-se para o pior!",
   "village_fall_boss": "Arauto do Abismo: 'Sua Vila Natal já arde em cinzas, mortal!'",
   "village_fall_pact": "Você tombou na vila, mas o Emissário Celestial cravou o Selo em sua alma.",
-  "act1_briefing": "Ato 1 iniciado: cace o Carcereiro Infernal através do Portal da Fenda."
+  "act1_briefing": "Ato 1 iniciado: cace o Carcereiro Infernal através do Portal da Fenda.",
+  "village_master_mission_grotto": "Missão: limpe a Gruta da Cachoeira. Saia pelo portão.",
+  "village_master_mission_mine": "Missão: limpe a Mina Abandonada. Saia pelo portão.",
+  "village_master_mission_seal": "Missão: defenda o Selo Antigo. Saia pelo portão.",
+  "village_master_idle": "O portão está aberto. Vá.",
+  "village_lyra_idle": "Lyra: volte inteiro, guerreiro.",
+  "village_lyra_idle_2": "Lyra: lute com a cabeça.",
+  "village_gorran_idle": "Gorran: ferro bom é fogo e paciência.",
+  "village_gorran_idle_2": "Gorran: a bigorna está ocupada hoje.",
+  "village_gate_locked": "Fale com o Mestre antes de sair."
 }

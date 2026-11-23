@@ -280,6 +280,8 @@ export interface CampaignProgress {
   completedStages: CampaignStageId[];
   seenDialogues: string[];
   villageFallTriggered: boolean;
+  /** Missão sobre a qual o Mestre de Armas já falou (libera o portão da vila). Opcional para saves antigos. */
+  masterBriefedStageId?: CampaignStageId;
 }
 
-
+export * from './progression/VillageHub';

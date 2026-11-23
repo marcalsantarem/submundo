@@ -1,0 +1,135 @@
+{
+  "sprites": {
+    "village_npc_master": {
+      "key": "village_npc_master",
+      "file": "village_npc_master.png",
+      "width": 480,
+      "height": 80,
+      "frameWidth": 80,
+      "frameHeight": 80,
+      "frames": [
+        "idle0",
+        "idle1",
+        "idle2",
+        "idle3",
+        "idle4",
+        "idle5"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.95
+      },
+      "animations": {
+        "idle": {
+          "frames": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "frameRate": 5,
+          "repeat": -1
+        }
+      }
+    },
+    "village_npc_lyra": {
+      "key": "village_npc_lyra",
+      "file": "village_npc_lyra.png",
+      "width": 480,
+      "height": 80,
+      "frameWidth": 80,
+      "frameHeight": 80,
+      "frames": [
+        "idle0",
+        "idle1",
+        "idle2",
+        "idle3",
+        "idle4",
+        "idle5"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.95
+      },
+      "animations": {
+        "idle": {
+          "frames": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "frameRate": 5,
+          "repeat": -1
+        }
+      }
+    },
+    "village_npc_gorran": {
+      "key": "village_npc_gorran",
+      "file": "village_npc_gorran.png",
+      "width": 1120,
+      "height": 80,
+      "frameWidth": 80,
+      "frameHeight": 80,
+      "frames": [
+        "idle0",
+        "idle1",
+        "idle2",
+        "idle3",
+        "idle4",
+        "idle5",
+        "hammer0",
+        "hammer1",
+        "hammer2",
+        "hammer3",
+        "hammer4",
+        "hammer5",
+        "hammer6",
+        "hammer7"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.95
+      },
+      "animations": {
+        "idle": {
+          "frames": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "frameRate": 5,
+          "repeat": -1
+        },
+        "hammer": {
+          "frames": [
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13
+          ],
+          "frameRate": 10,
+          "repeat": -1,
+          "repeatDelay": 400
+        }
+      },
+      "hammerImpact": {
+        "frame": 11,
+        "frameName": "hammer5",
+        "dx": -28.7,
+        "dy": -17.3
+      }
+    }
+  }
+}
