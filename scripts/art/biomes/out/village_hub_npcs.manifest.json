@@ -3,10 +3,10 @@
     "npc_weapon_master": {
       "key": "npc_weapon_master",
       "file": "npc_weapon_master.png",
-      "width": 192,
-      "height": 48,
-      "frameWidth": 48,
-      "frameHeight": 48,
+      "width": 320,
+      "height": 80,
+      "frameWidth": 80,
+      "frameHeight": 80,
       "frames": [
         "idle0",
         "idle1",
@@ -17,10 +17,10 @@
     "npc_lyra": {
       "key": "npc_lyra",
       "file": "npc_lyra.png",
-      "width": 192,
-      "height": 48,
-      "frameWidth": 48,
-      "frameHeight": 48,
+      "width": 320,
+      "height": 80,
+      "frameWidth": 80,
+      "frameHeight": 80,
       "frames": [
         "idle0",
         "idle1",
@@ -31,10 +31,10 @@
     "npc_gorran": {
       "key": "npc_gorran",
       "file": "npc_gorran.png",
-      "width": 384,
-      "height": 48,
-      "frameWidth": 48,
-      "frameHeight": 48,
+      "width": 640,
+      "height": 80,
+      "frameWidth": 80,
+      "frameHeight": 80,
       "frames": [
         "idle0",
         "idle1",

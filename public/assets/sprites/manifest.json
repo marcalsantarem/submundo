@@ -2117,40 +2117,40 @@
     "village_hub_house": {
       "key": "village_hub_house",
       "file": "village_hub_house.png",
-      "width": 192,
-      "height": 160,
-      "frameWidth": 192,
-      "frameHeight": 160,
+      "width": 224,
+      "height": 192,
+      "frameWidth": 224,
+      "frameHeight": 192,
       "frames": [
         "house"
-      ],
-      "origin": {
-        "x": 0.5,
-        "y": 0.88
-      }
-    },
-    "village_hub_gate": {
-      "key": "village_hub_gate",
-      "file": "village_hub_gate.png",
-      "width": 160,
-      "height": 128,
-      "frameWidth": 160,
-      "frameHeight": 128,
-      "frames": [
-        "gate"
       ],
       "origin": {
         "x": 0.5,
         "y": 0.9
       }
     },
+    "village_hub_gate": {
+      "key": "village_hub_gate",
+      "file": "village_hub_gate.png",
+      "width": 192,
+      "height": 160,
+      "frameWidth": 192,
+      "frameHeight": 160,
+      "frames": [
+        "gate"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.92
+      }
+    },
     "npc_weapon_master": {
       "key": "npc_weapon_master",
       "file": "npc_weapon_master.png",
-      "width": 192,
-      "height": 48,
-      "frameWidth": 48,
-      "frameHeight": 48,
+      "width": 320,
+      "height": 80,
+      "frameWidth": 80,
+      "frameHeight": 80,
       "frames": [
         "idle0",
         "idle1",
@@ -2161,10 +2161,10 @@
     "npc_lyra": {
       "key": "npc_lyra",
       "file": "npc_lyra.png",
-      "width": 192,
-      "height": 48,
-      "frameWidth": 48,
-      "frameHeight": 48,
+      "width": 320,
+      "height": 80,
+      "frameWidth": 80,
+      "frameHeight": 80,
       "frames": [
         "idle0",
         "idle1",
@@ -2175,10 +2175,10 @@
     "npc_gorran": {
       "key": "npc_gorran",
       "file": "npc_gorran.png",
-      "width": 384,
-      "height": 48,
-      "frameWidth": 48,
-      "frameHeight": 48,
+      "width": 640,
+      "height": 80,
+      "frameWidth": 80,
+      "frameHeight": 80,
       "frames": [
         "idle0",
         "idle1",
@@ -2189,6 +2189,54 @@
         "hammer2",
         "hammer3"
       ]
+    },
+    "village_hub_props_large": {
+      "key": "village_hub_props_large",
+      "file": "village_hub_props_large.png",
+      "width": 768,
+      "height": 64,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "frames": [
+        "campfire_large_0",
+        "campfire_large_1",
+        "campfire_large_2",
+        "campfire_large_3",
+        "forge_large_0",
+        "forge_large_1",
+        "forge_large_2",
+        "forge_large_3",
+        "anvil_large",
+        "wooden_cart_large",
+        "palisade_tall_h",
+        "palisade_tall_v"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.88
+      },
+      "animations": {
+        "campfire_large": {
+          "frames": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "frameRate": 8,
+          "repeat": -1
+        },
+        "forge_large": {
+          "frames": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "frameRate": 7,
+          "repeat": -1
+        }
+      }
     }
   }
 }
