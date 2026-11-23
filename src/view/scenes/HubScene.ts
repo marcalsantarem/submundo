@@ -36,6 +36,15 @@ import {
   upgradeItemWithBlacksmith,
 } from '../../core/progression/ProfileManager';
 import { clearProfileStorage } from '../../core/progression/StorageAdapter';
+import {
+  getPrologueDungeonList,
+  getVillageObjective,
+  getVillageSpawn,
+  isGateUnlocked,
+  talkToMaster,
+  type VillageArrivalOrigin,
+  type VillageNpcId,
+} from '../../core/progression/VillageHub';
 import dialoguesData from '../../data/dialogues.json';
 import { soundManager } from '../audio/SoundManager';
 import {
@@ -57,6 +66,20 @@ import {
   hasUiTextureFrame,
 } from '../ui/DarkFantasyUiBuilder';
 import { DialogueBox } from '../ui/DialogueBox';
+import { GateModal } from '../ui/GateModal';
+import { VillageHud } from '../ui/VillageHud';
+import {
+  HERO_FEET_OFFSET,
+  VILLAGE_ACTOR_SCALE,
+  VILLAGE_LANDMARKS,
+  VILLAGE_MAP_H,
+  VILLAGE_MAP_W,
+  VILLAGE_NPCS,
+  VillageWorld,
+  villageDepthForY,
+  type VillageInteractableId,
+  type VillageProximity,
+} from './VillageMap';
 import { HubHud, type HubHudSnapshot } from '../ui/HubHud';
 import {
   InventoryModal,
@@ -78,11 +101,33 @@ export interface SubmundoHubDebugApi {
   getDialogueBox: () => DialogueBox;
 }
 
+/** Estado da Vila exposto no debug (T-138). */
+export interface VillageDebugState {
+  hero: Vector2D;
+  nearby: VillageInteractableId | null;
+  gateUnlocked: boolean;
+  objective: string;
+  alertNpcId: VillageNpcId | null;
+  dialogueOpen: boolean;
+  gateModalOpen: boolean;
+}
+
+export interface SubmundoVillageDebugApi {
+  getVillageState: () => VillageDebugState | null;
+  talkTo: (npcId: VillageNpcId) => boolean;
+  openGate: () => boolean;
+}
+
 declare global {
   interface Window {
-    __SUBMUNDO_HUB_DEBUG__?: SubmundoHubDebugApi;
+    __SUBMUNDO_HUB_DEBUG__?: SubmundoHubDebugApi & Partial<SubmundoVillageDebugApi>;
   }
 }
+
+type HubCreateData = HubTransitionData & {
+  applyOutcome?: boolean;
+  villageOrigin?: VillageArrivalOrigin;
+};
 
 interface HubStationConfig {
   id: HubStationId;
@@ -192,7 +237,14 @@ export class HubScene extends Phaser.Scene {
   private hero!: HeroState;
   private viewport!: ViewportConfig;
 
-  private hud!: HubHud;
+  private hud?: HubHud;
+  private isVillage = false;
+  private villageWorld?: VillageWorld;
+  private villageHud?: VillageHud;
+  private gateModal?: GateModal;
+  private villageNearby: VillageProximity | null = null;
+  private villageLineIdx: Record<'lyra' | 'gorran', number> = { lyra: 0, gorran: 0 };
+  private heroFacingX = 1;
   private altarModal!: AltarModal;
   private blacksmithModal!: BlacksmithModal;
   private inventoryModal!: InventoryModal;
@@ -242,9 +294,13 @@ export class HubScene extends Phaser.Scene {
     this.profile = loadOrCreateProfile();
     const campaign = ensureCampaignProgress(this.profile);
 
-    const transitionExt = data as
-      | (HubTransitionData & { applyOutcome?: boolean })
-      | undefined;
+    const transitionExt = data as HubCreateData | undefined;
+
+    this.isVillage = campaign.phase === 'prologue';
+    if (this.isVillage) {
+      this.createVillage(transitionExt);
+      return;
+    }
 
     if (transitionExt?.fromRun) {
       if (transitionExt.applyOutcome === true) {
@@ -317,6 +373,496 @@ export class HubScene extends Phaser.Scene {
       onResetSave: () => this.resetSaveAndRestart(),
     });
 
+    this.createModals();
+
+    this.pointerUnlockHandler = () => {
+      soundManager.unlock();
+    };
+    this.input.on('pointerdown', this.pointerUnlockHandler);
+
+    // Register HubScene keydown BEFORE DialogueBox so Space checks dialogueBox.isOpen() first
+    this.keydownHandler = (event: KeyboardEvent) => {
+      soundManager.unlock();
+      if (this.dialogueBox?.isOpen() || this.isAnyModalOpen()) {
+        return;
+      }
+
+      if (event.code === 'Space' && this.nearbyStationId) {
+        event.preventDefault();
+        this.interactWithNearbyStation();
+      }
+    };
+    this.input.keyboard?.on('keydown', this.keydownHandler);
+
+    this.dialogueBox = new DialogueBox(this);
+
+    this.cameraRig = new SceneCameraRig(this, {
+      width: this.viewport.width,
+      height: this.viewport.height,
+      worldZoom: this.getWorldZoom(),
+      boundsWidth: this.viewport.width,
+      boundsHeight: this.viewport.height,
+    });
+    this.cameraRig.follow(this.heroSprite);
+    this.cameraRig.syncLayers();
+
+    this.resizeHandler = (gameSize: Phaser.Structs.Size) => {
+      this.handleViewportResize(gameSize.width, gameSize.height);
+    };
+    this.scale.on('resize', this.resizeHandler);
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.cleanupScene();
+    });
+
+    if (typeof window !== 'undefined') {
+      window.__SUBMUNDO_HUB_DEBUG__ = {
+        scene: this,
+        getProfile: () => this.profile,
+        openAltar: () => this.openAltar(),
+        openBlacksmith: () => this.openBlacksmith(),
+        openStash: () => this.openStash(),
+        enterDungeon: (stageId?: CampaignStageId) => this.enterDungeon(stageId),
+        grantTestResources: (souls: number, essences = 0) => {
+          this.grantTestResources(souls, essences);
+        },
+        setCampaignPhase: (phase: CampaignPhase, stageId?: CampaignStageId) => {
+          this.setCampaignPhase(phase, stageId);
+        },
+        openDialogue: (ids: string[]) => this.openDialogue(ids),
+        getDialogueBox: () => this.dialogueBox,
+      };
+    }
+
+    this.triggerAutomaticEntryDialogues(transitionExt);
+    this.updateProximityState();
+    this.syncVisuals();
+    this.weaponRig?.sync(false, this.time?.now ?? this.elapsedTimeMs);
+    this.cameraRig?.syncLayers();
+    this.updateHud();
+  }
+
+  public update(time: number, delta: number): void {
+    if (!this.hero || (!this.hud && !this.villageHud) || this.enteringDungeon) {
+      return;
+    }
+
+    const clampedDelta = Math.min(Math.max(0, delta), 100);
+    this.elapsedTimeMs += clampedDelta;
+
+    if (this.bannerText && this.elapsedTimeMs >= this.bannerExpiresAtMs) {
+      this.bannerText = undefined;
+    }
+
+    if (this.isVillage) {
+      this.updateVillage(time, clampedDelta);
+      return;
+    }
+    if (!this.hud) {
+      return;
+    }
+
+    const canMove = !this.isAnyModalOpen();
+    let moveDir: Vector2D = { x: 0, y: 0 };
+    let dx = 0;
+    let dy = 0;
+
+    if (canMove) {
+      moveDir = this.hud.getMoveVector();
+      const bounds = this.getMovementBounds(this.viewport);
+      const prevX = this.hero.position.x;
+      const prevY = this.hero.position.y;
+      moveHero(this.hero, moveDir, clampedDelta, {
+        width: this.viewport.width,
+        height: this.viewport.height,
+        padding: ARENA_PADDING_X,
+      });
+      this.hero.position.x = Math.max(
+        bounds.minX,
+        Math.min(bounds.maxX, this.hero.position.x)
+      );
+      this.hero.position.y = Math.max(
+        bounds.minY,
+        Math.min(bounds.maxY, this.hero.position.y)
+      );
+      dx = this.hero.position.x - prevX;
+      dy = this.hero.position.y - prevY;
+      this.updateProximityState();
+    }
+
+    if (canMove && Math.abs(moveDir.x) > 0.05) {
+      this.heroSprite.setFlipX(moveDir.x < 0);
+    } else if (Math.abs(dx) > 0.05) {
+      this.heroSprite.setFlipX(dx < 0);
+    }
+
+    const hasMoveIntent =
+      canMove && (Math.abs(moveDir.x) > 0.05 || Math.abs(moveDir.y) > 0.05);
+    const isMoving = hasMoveIntent && Math.hypot(dx, dy) > 0.05;
+
+    const walkKey = `${this.heroSpriteKey}_walk`;
+    const idleKey = `${this.heroSpriteKey}_idle`;
+    const desiredKey =
+      isMoving && this.anims.exists(walkKey) ? walkKey : idleKey;
+    if (
+      this.anims.exists(desiredKey) &&
+      this.heroSprite.anims.currentAnim?.key !== desiredKey
+    ) {
+      this.heroSprite.play(desiredKey, true);
+    }
+
+    this.syncVisuals();
+
+    if (isMoving && this.heroSprite.anims.currentAnim?.key === walkKey) {
+      const frameIdx = Number(this.heroSprite.frame?.name);
+      if (Number.isFinite(frameIdx) && frameIdx !== this.lastFootstepFrame) {
+        this.lastFootstepFrame = frameIdx;
+        if (HERO_WALK_FOOTSTEP_FRAMES.includes(frameIdx)) {
+          spawnFootstepDust(
+            this,
+            this.heroSprite.x,
+            this.heroSprite.y + 31 * this.heroSprite.scaleY,
+            this.heroSpriteKey === 'hero_wraith'
+          );
+        }
+      }
+    } else {
+      this.lastFootstepFrame = -1;
+    }
+
+    this.weaponRig?.sync(isMoving, time);
+    this.cameraRig?.syncLayers();
+    this.updateHud();
+  }
+
+  // ===========================================================================
+  // VILA NATAL (T-138 / T-139): fase `prologue`
+  // ===========================================================================
+
+  private createVillage(data?: HubCreateData): void {
+    if (data?.fromRun) {
+      if (data.applyOutcome === true) {
+        applyRunOutcomeToProfile(this.profile, data.fromRun);
+        persistProfile(this.profile);
+      }
+      this.showTimedBanner(this.formatRunEndBanner(data.fromRun), 7000);
+    }
+    this.syncSelectedStage(data?.stageId);
+    this.cameras.main.setBackgroundColor('#141a12');
+    this.villageNearby = null;
+    this.villageLineIdx = { lyra: 0, gorran: 0 };
+    this.heroFacingX = 1;
+
+    const origin: VillageArrivalOrigin = data?.villageOrigin ?? 'boot';
+    const world = new VillageWorld(this, isGateUnlocked(this.profile));
+    this.villageWorld = world;
+    const spawn = world.getSpawn(getVillageSpawn(this.profile, origin));
+    this.hero = buildHeroFromProfile(this.profile, spawn);
+
+    this.heroSpriteKey = 'hero_living';
+    this.heroSprite = this.add
+      .sprite(spawn.x, spawn.y - HERO_FEET_OFFSET, this.heroSpriteKey, 0)
+      .setScale(VILLAGE_ACTOR_SCALE)
+      .setDepth(villageDepthForY(spawn.y));
+    if (this.anims.exists(`${this.heroSpriteKey}_idle`)) {
+      this.heroSprite.play(`${this.heroSpriteKey}_idle`, true);
+    }
+    this.weaponRig = new HeroWeaponRig(this, this.heroSprite, this.profile.equipped.weapon, false);
+
+    this.villageHud = new VillageHud(this, {
+      onInteract: () => {
+        if (!this.isAnyModalOpen()) {
+          this.interactInVillage();
+        }
+      },
+      onOpenInventory: () => this.openStash(),
+      onToggleMute: () => {
+        soundManager.unlock();
+        soundManager.toggleMute();
+        if (!soundManager.isMuted()) {
+          soundManager.play('ui_click');
+        }
+        this.updateHud();
+      },
+      onResetSave: () => this.resetSaveAndRestart(),
+    });
+
+    this.createModals();
+    this.gateModal = new GateModal(this, {
+      onSelectStage: (stageId) => this.enterDungeon(stageId),
+      onClose: () => {
+        soundManager.play('ui_click');
+        this.updateHud();
+      },
+    });
+
+    this.pointerUnlockHandler = () => {
+      soundManager.unlock();
+    };
+    this.input.on('pointerdown', this.pointerUnlockHandler);
+
+    this.dialogueBox = new DialogueBox(this);
+
+    this.cameraRig = new SceneCameraRig(this, {
+      width: this.viewport.width,
+      height: this.viewport.height,
+      worldZoom: this.getWorldZoom(),
+      boundsWidth: VILLAGE_MAP_W,
+      boundsHeight: VILLAGE_MAP_H,
+    });
+    this.cameraRig.follow(this.heroSprite);
+    this.cameras.main.centerOn(this.heroSprite.x, this.heroSprite.y);
+    this.cameraRig.syncLayers();
+
+    this.resizeHandler = (gameSize: Phaser.Structs.Size) => {
+      this.handleViewportResize(gameSize.width, gameSize.height);
+    };
+    this.scale.on('resize', this.resizeHandler);
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.cleanupScene();
+    });
+
+    this.installDebugApi();
+    this.triggerAutomaticEntryDialogues(data);
+    this.updateVillageProximity();
+    world.update(this.time?.now ?? 0, this.hero.position, null);
+    this.weaponRig.sync(false, this.time?.now ?? 0);
+    this.cameraRig.syncLayers();
+    this.updateHud();
+  }
+
+  private updateVillage(time: number, delta: number): void {
+    const world = this.villageWorld;
+    const hud = this.villageHud;
+    if (!world || !hud) {
+      return;
+    }
+    const canMove = !this.isAnyModalOpen();
+    let moveDir: Vector2D = { x: 0, y: 0 };
+    let dx = 0;
+    let dy = 0;
+    if (canMove) {
+      moveDir = hud.getMoveVector();
+      const prev = { ...this.hero.position };
+      moveHero(this.hero, moveDir, delta, {
+        width: VILLAGE_MAP_W,
+        height: VILLAGE_MAP_H,
+        padding: 0,
+      });
+      const next = world.resolveMove(prev, this.hero.position);
+      this.hero.position.x = next.x;
+      this.hero.position.y = next.y;
+      dx = next.x - prev.x;
+      dy = next.y - prev.y;
+    }
+
+    if (canMove && Math.abs(moveDir.x) > 0.05) {
+      this.heroFacingX = moveDir.x < 0 ? -1 : 1;
+      this.heroSprite.setFlipX(moveDir.x < 0);
+    }
+    const isMoving =
+      canMove &&
+      (Math.abs(moveDir.x) > 0.05 || Math.abs(moveDir.y) > 0.05) &&
+      Math.hypot(dx, dy) > 0.05;
+
+    const walkKey = `${this.heroSpriteKey}_walk`;
+    const idleKey = `${this.heroSpriteKey}_idle`;
+    const desiredKey = isMoving && this.anims.exists(walkKey) ? walkKey : idleKey;
+    if (this.anims.exists(desiredKey) && this.heroSprite.anims.currentAnim?.key !== desiredKey) {
+      this.heroSprite.play(desiredKey, true);
+    }
+
+    const feet = this.hero.position;
+    this.heroSprite
+      .setPosition(feet.x, feet.y - HERO_FEET_OFFSET)
+      .setDepth(villageDepthForY(feet.y + 0.2));
+
+    if (isMoving && this.heroSprite.anims.currentAnim?.key === walkKey) {
+      const frameIdx = Number(this.heroSprite.frame?.name);
+      if (Number.isFinite(frameIdx) && frameIdx !== this.lastFootstepFrame) {
+        this.lastFootstepFrame = frameIdx;
+        if (HERO_WALK_FOOTSTEP_FRAMES.includes(frameIdx)) {
+          spawnFootstepDust(this, feet.x, feet.y - 4, false);
+        }
+      }
+    } else {
+      this.lastFootstepFrame = -1;
+    }
+
+    this.weaponRig?.sync(isMoving, time);
+    this.updateVillageProximity();
+    world.update(time, feet, this.villageNearby?.id ?? null);
+    this.cameraRig?.syncLayers();
+    this.updateHud();
+  }
+
+  private updateVillageProximity(): void {
+    this.villageNearby = this.villageWorld?.findInteractable(this.hero.position) ?? null;
+  }
+
+  private updateVillageHud(): void {
+    if (!this.villageHud || !this.villageWorld) {
+      return;
+    }
+    const objective = getVillageObjective(this.profile);
+    this.villageWorld.setAlertNpc(objective.alertNpcId);
+    const heroLevel =
+      1 + Object.values(this.profile.altarLevels).reduce((a, b) => a + b, 0);
+    this.villageHud.update({
+      heroName: 'Jovem Guerreiro',
+      heroLevel,
+      hp: this.hero.stats.hp,
+      maxHp: this.hero.stats.maxHp,
+      objectiveText: objective.text,
+      interactLabel: this.villageNearby?.label,
+      isMuted: soundManager.isMuted(),
+      bannerText: this.bannerText,
+      minimap: {
+        mapWidth: VILLAGE_MAP_W,
+        mapTop: VILLAGE_LANDMARKS.topY,
+        mapBottom: VILLAGE_LANDMARKS.bottomY,
+        hero: this.hero.position,
+        heroFacingX: this.heroFacingX,
+        gate: VILLAGE_LANDMARKS.gate,
+        house: VILLAGE_LANDMARKS.house,
+        campfire: VILLAGE_LANDMARKS.campfire,
+        npcs: VILLAGE_NPCS.map((n) => ({
+          id: n.id,
+          pos: n.pos,
+          alert: objective.alertNpcId === n.id,
+        })),
+      },
+    });
+  }
+
+  private interactInVillage(): void {
+    const near = this.villageNearby;
+    if (!near || this.enteringDungeon) {
+      return;
+    }
+    soundManager.unlock();
+    if (near.id === 'gate') {
+      if (isGateUnlocked(this.profile)) {
+        this.openGateModal();
+      } else {
+        this.openDialogue(['village_gate_locked']);
+      }
+      return;
+    }
+    this.talkToVillageNpc(near.id);
+  }
+
+  private talkToVillageNpc(id: VillageNpcId): void {
+    if (id === 'master') {
+      const firstTalk = talkToMaster(this.profile);
+      persistProfile(this.profile);
+      this.villageWorld?.setGateOpen(isGateUnlocked(this.profile));
+      const stage = ensureCampaignProgress(this.profile).currentStageId;
+      const missionKey: Partial<Record<CampaignStageId, string>> = {
+        prologue_grotto: 'village_master_mission_grotto',
+        prologue_mine: 'village_master_mission_mine',
+        prologue_seal: 'village_master_mission_seal',
+      };
+      const line = firstTalk
+        ? (missionKey[stage] ?? 'village_master_idle')
+        : 'village_master_idle';
+      this.openDialogue([line]);
+      this.updateHud();
+      return;
+    }
+    const idx = this.villageLineIdx[id];
+    this.villageLineIdx[id] = idx + 1;
+    this.openDialogue([idx % 2 === 0 ? `village_${id}_idle` : `village_${id}_idle_2`]);
+  }
+
+  private openGateModal(): void {
+    if (!this.gateModal || this.enteringDungeon) {
+      return;
+    }
+    soundManager.play('ui_click');
+    this.closeAllModalsExcept('gate');
+    this.gateModal.open(getPrologueDungeonList(this.profile));
+    this.updateHud();
+  }
+
+  private teleportHeroInVillage(id: VillageInteractableId): void {
+    if (!this.villageWorld) {
+      return;
+    }
+    const p = this.villageWorld.getApproachPoint(id);
+    this.hero.position.x = p.x;
+    this.hero.position.y = p.y;
+    this.heroSprite
+      .setPosition(p.x, p.y - HERO_FEET_OFFSET)
+      .setDepth(villageDepthForY(p.y + 0.2));
+    this.updateVillageProximity();
+  }
+
+  private getVillageDebugState(): VillageDebugState | null {
+    if (!this.isVillage || !this.hero) {
+      return null;
+    }
+    const objective = getVillageObjective(this.profile);
+    return {
+      hero: { x: Math.round(this.hero.position.x), y: Math.round(this.hero.position.y) },
+      nearby: this.villageNearby?.id ?? null,
+      gateUnlocked: isGateUnlocked(this.profile),
+      objective: objective.text,
+      alertNpcId: objective.alertNpcId,
+      dialogueOpen: Boolean(this.dialogueBox?.isOpen()),
+      gateModalOpen: Boolean(this.gateModal?.isOpen()),
+    };
+  }
+
+  private installDebugApi(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const village: SubmundoVillageDebugApi = {
+      getVillageState: () => this.getVillageDebugState(),
+      talkTo: (npcId: VillageNpcId) => {
+        if (!this.isVillage) {
+          return false;
+        }
+        this.closeAllModalsExcept(null);
+        this.teleportHeroInVillage(npcId);
+        this.interactInVillage();
+        return Boolean(this.dialogueBox?.isOpen());
+      },
+      openGate: () => {
+        if (!this.isVillage) {
+          return false;
+        }
+        this.closeAllModalsExcept(null);
+        this.teleportHeroInVillage('gate');
+        this.interactInVillage();
+        return Boolean(this.gateModal?.isOpen());
+      },
+    };
+    window.__SUBMUNDO_HUB_DEBUG__ = {
+      scene: this,
+      getProfile: () => this.profile,
+      openAltar: () => this.openAltar(),
+      openBlacksmith: () => this.openBlacksmith(),
+      openStash: () => this.openStash(),
+      enterDungeon: (stageId?: CampaignStageId) => this.enterDungeon(stageId),
+      grantTestResources: (souls: number, essences = 0) => {
+        this.grantTestResources(souls, essences);
+      },
+      setCampaignPhase: (phase: CampaignPhase, stageId?: CampaignStageId) => {
+        this.setCampaignPhase(phase, stageId);
+      },
+      openDialogue: (ids: string[]) => this.openDialogue(ids),
+      getDialogueBox: () => this.dialogueBox,
+      ...village,
+    };
+    // Também em `window.__SUBMUNDO_DEBUG__` (objeto da DungeonScene, quando existir).
+    const w = window as unknown as { __SUBMUNDO_DEBUG__?: Record<string, unknown> };
+    w.__SUBMUNDO_DEBUG__ = Object.assign(w.__SUBMUNDO_DEBUG__ ?? {}, village);
+  }
+
+  private createModals(): void {
     this.altarModal = new AltarModal(this, {
       onPurchaseUpgrade: (upgradeId) => {
         soundManager.unlock();
@@ -414,157 +960,6 @@ export class HubScene extends Phaser.Scene {
         this.updateHud();
       },
     });
-
-    this.pointerUnlockHandler = () => {
-      soundManager.unlock();
-    };
-    this.input.on('pointerdown', this.pointerUnlockHandler);
-
-    // Register HubScene keydown BEFORE DialogueBox so Space checks dialogueBox.isOpen() first
-    this.keydownHandler = (event: KeyboardEvent) => {
-      soundManager.unlock();
-      if (this.dialogueBox?.isOpen() || this.isAnyModalOpen()) {
-        return;
-      }
-
-      if (event.code === 'Space' && this.nearbyStationId) {
-        event.preventDefault();
-        this.interactWithNearbyStation();
-      }
-    };
-    this.input.keyboard?.on('keydown', this.keydownHandler);
-
-    this.dialogueBox = new DialogueBox(this);
-
-    this.cameraRig = new SceneCameraRig(this, {
-      width: this.viewport.width,
-      height: this.viewport.height,
-      worldZoom: this.getWorldZoom(),
-      boundsWidth: this.viewport.width,
-      boundsHeight: this.viewport.height,
-    });
-    this.cameraRig.follow(this.heroSprite);
-    this.cameraRig.syncLayers();
-
-    this.resizeHandler = (gameSize: Phaser.Structs.Size) => {
-      this.handleViewportResize(gameSize.width, gameSize.height);
-    };
-    this.scale.on('resize', this.resizeHandler);
-
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.cleanupScene();
-    });
-
-    if (typeof window !== 'undefined') {
-      window.__SUBMUNDO_HUB_DEBUG__ = {
-        scene: this,
-        getProfile: () => this.profile,
-        openAltar: () => this.openAltar(),
-        openBlacksmith: () => this.openBlacksmith(),
-        openStash: () => this.openStash(),
-        enterDungeon: (stageId?: CampaignStageId) => this.enterDungeon(stageId),
-        grantTestResources: (souls: number, essences = 0) => {
-          this.grantTestResources(souls, essences);
-        },
-        setCampaignPhase: (phase: CampaignPhase, stageId?: CampaignStageId) => {
-          this.setCampaignPhase(phase, stageId);
-        },
-        openDialogue: (ids: string[]) => this.openDialogue(ids),
-        getDialogueBox: () => this.dialogueBox,
-      };
-    }
-
-    this.triggerAutomaticEntryDialogues(transitionExt);
-    this.updateProximityState();
-    this.syncVisuals();
-    this.weaponRig?.sync(false, this.time?.now ?? this.elapsedTimeMs);
-    this.cameraRig?.syncLayers();
-    this.updateHud();
-  }
-
-  public update(time: number, delta: number): void {
-    if (!this.hero || !this.hud || this.enteringDungeon) {
-      return;
-    }
-
-    const clampedDelta = Math.min(Math.max(0, delta), 100);
-    this.elapsedTimeMs += clampedDelta;
-
-    if (this.bannerText && this.elapsedTimeMs >= this.bannerExpiresAtMs) {
-      this.bannerText = undefined;
-    }
-
-    const canMove = !this.isAnyModalOpen();
-    let moveDir: Vector2D = { x: 0, y: 0 };
-    let dx = 0;
-    let dy = 0;
-
-    if (canMove) {
-      moveDir = this.hud.getMoveVector();
-      const bounds = this.getMovementBounds(this.viewport);
-      const prevX = this.hero.position.x;
-      const prevY = this.hero.position.y;
-      moveHero(this.hero, moveDir, clampedDelta, {
-        width: this.viewport.width,
-        height: this.viewport.height,
-        padding: ARENA_PADDING_X,
-      });
-      this.hero.position.x = Math.max(
-        bounds.minX,
-        Math.min(bounds.maxX, this.hero.position.x)
-      );
-      this.hero.position.y = Math.max(
-        bounds.minY,
-        Math.min(bounds.maxY, this.hero.position.y)
-      );
-      dx = this.hero.position.x - prevX;
-      dy = this.hero.position.y - prevY;
-      this.updateProximityState();
-    }
-
-    if (canMove && Math.abs(moveDir.x) > 0.05) {
-      this.heroSprite.setFlipX(moveDir.x < 0);
-    } else if (Math.abs(dx) > 0.05) {
-      this.heroSprite.setFlipX(dx < 0);
-    }
-
-    const hasMoveIntent =
-      canMove && (Math.abs(moveDir.x) > 0.05 || Math.abs(moveDir.y) > 0.05);
-    const isMoving = hasMoveIntent && Math.hypot(dx, dy) > 0.05;
-
-    const walkKey = `${this.heroSpriteKey}_walk`;
-    const idleKey = `${this.heroSpriteKey}_idle`;
-    const desiredKey =
-      isMoving && this.anims.exists(walkKey) ? walkKey : idleKey;
-    if (
-      this.anims.exists(desiredKey) &&
-      this.heroSprite.anims.currentAnim?.key !== desiredKey
-    ) {
-      this.heroSprite.play(desiredKey, true);
-    }
-
-    this.syncVisuals();
-
-    if (isMoving && this.heroSprite.anims.currentAnim?.key === walkKey) {
-      const frameIdx = Number(this.heroSprite.frame?.name);
-      if (Number.isFinite(frameIdx) && frameIdx !== this.lastFootstepFrame) {
-        this.lastFootstepFrame = frameIdx;
-        if (HERO_WALK_FOOTSTEP_FRAMES.includes(frameIdx)) {
-          spawnFootstepDust(
-            this,
-            this.heroSprite.x,
-            this.heroSprite.y + 31 * this.heroSprite.scaleY,
-            this.heroSpriteKey === 'hero_wraith'
-          );
-        }
-      }
-    } else {
-      this.lastFootstepFrame = -1;
-    }
-
-    this.weaponRig?.sync(isMoving, time);
-    this.cameraRig?.syncLayers();
-    this.updateHud();
   }
 
   public openAltar(): void {
@@ -636,6 +1031,11 @@ export class HubScene extends Phaser.Scene {
     setCampaignStageOrPhase(this.profile, phase, stageId);
     this.syncSelectedStage(stageId);
     persistProfile(this.profile);
+    if (this.isVillage || phase === 'prologue') {
+      // Vila e Refúgio são cenários diferentes: recria a cena.
+      this.scene.restart({});
+      return;
+    }
     this.rebuildPhaseScenario();
   }
 
@@ -710,8 +1110,11 @@ export class HubScene extends Phaser.Scene {
   }
 
   private closeAllModalsExcept(
-    keep: 'altar' | 'blacksmith' | 'stash' | 'dialogue' | null
+    keep: 'altar' | 'blacksmith' | 'stash' | 'dialogue' | 'gate' | null
   ): void {
+    if (keep !== 'gate' && this.gateModal?.isOpen()) {
+      this.gateModal.hide();
+    }
     if (keep !== 'altar' && this.altarModal?.isOpen()) {
       this.altarModal.close();
     }
@@ -739,7 +1142,9 @@ export class HubScene extends Phaser.Scene {
       Boolean(this.altarModal?.isOpen()) ||
       Boolean(this.blacksmithModal?.isOpen()) ||
       Boolean(this.inventoryModal?.isOpen()) ||
-      Boolean(this.dialogueBox?.isOpen())
+      Boolean(this.dialogueBox?.isOpen()) ||
+      Boolean(this.gateModal?.isOpen()) ||
+      Boolean(this.villageHud?.isConfigOpen())
     );
   }
 
@@ -794,6 +1199,13 @@ export class HubScene extends Phaser.Scene {
   }
 
   private updateHud(): void {
+    if (this.isVillage) {
+      this.updateVillageHud();
+      return;
+    }
+    if (!this.hud) {
+      return;
+    }
     const equippedCount = DF_EQUIP_SLOT_ORDER.filter(
       (slot) => this.profile.equipped[slot] !== null
     ).length;
@@ -1299,11 +1711,32 @@ export class HubScene extends Phaser.Scene {
   }
 
   private handleViewportResize(width: number, height: number): void {
-    if (!this.hero || !this.hud) {
+    if (!this.hero) {
       return;
     }
 
     this.viewport = resolveViewportConfig(width, height);
+    if (this.isVillage) {
+      this.cameraRig?.resize(
+        this.viewport.width,
+        this.viewport.height,
+        this.getWorldZoom(),
+        VILLAGE_MAP_W,
+        VILLAGE_MAP_H
+      );
+      this.villageHud?.resize(this.viewport);
+      this.gateModal?.resize(this.viewport);
+      this.altarModal?.resize(this.viewport);
+      this.blacksmithModal?.resize(this.viewport);
+      this.inventoryModal?.resize(this.viewport);
+      this.dialogueBox?.handleResize();
+      this.cameraRig?.syncLayers();
+      this.updateHud();
+      return;
+    }
+    if (!this.hud) {
+      return;
+    }
     this.buildArenaTilesAndLighting(this.viewport);
     this.layoutStations(this.viewport);
 
@@ -1411,6 +1844,24 @@ export class HubScene extends Phaser.Scene {
     this.blacksmithModal?.destroy();
     this.inventoryModal?.destroy();
     this.hud?.destroy();
+    this.hud = undefined;
+    this.gateModal?.destroy();
+    this.gateModal = undefined;
+    this.villageHud?.destroy();
+    this.villageHud = undefined;
+    this.villageWorld?.destroy();
+    this.villageWorld = undefined;
+    this.villageNearby = null;
+
+    if (typeof window !== 'undefined') {
+      const w = window as unknown as { __SUBMUNDO_DEBUG__?: Record<string, unknown> };
+      const dbg = w.__SUBMUNDO_DEBUG__;
+      if (dbg) {
+        delete dbg.getVillageState;
+        delete dbg.talkTo;
+        delete dbg.openGate;
+      }
+    }
 
     if (
       typeof window !== 'undefined' &&

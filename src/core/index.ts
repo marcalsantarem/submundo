@@ -231,6 +231,7 @@ export type PortraitId =
   | 'hero_wraith'
   | 'weapon_master'
   | 'village_blacksmith'
+  | 'village_healer'
   | 'emissary'
   | 'spectral_blacksmith'
   | 'infernal_warden'

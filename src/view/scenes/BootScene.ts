@@ -1,5 +1,11 @@
 import Phaser from 'phaser';
 import { GAME_VERSION } from '../../version';
+import {
+  VILLAGE_ANIM_SPECS,
+  VILLAGE_FALLBACK_COLORS,
+  VILLAGE_FRAME_SIZES,
+  VILLAGE_TEXTURE_KEYS,
+} from './VillageAssets';
 
 interface SpritesheetSpec {
   key: string;
@@ -263,10 +269,28 @@ const BIOME_SPRITESHEET_SPECS: readonly SpritesheetSpec[] = BIOME_IDS.flatMap((i
   }));
 });
 
+// Vila Natal e NPCs (T-140): contrato em VillageAssets.ts.
+const VILLAGE_SPRITESHEET_SPECS: readonly SpritesheetSpec[] = VILLAGE_TEXTURE_KEYS.map((key) => ({
+  key,
+  file: `assets/sprites/${key}.png`,
+  ...VILLAGE_FRAME_SIZES[key],
+  fallbackColor: VILLAGE_FALLBACK_COLORS[key],
+}));
+
 const ALL_SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
   ...SPRITESHEET_SPECS,
   ...BIOME_SPRITESHEET_SPECS,
+  ...VILLAGE_SPRITESHEET_SPECS,
 ];
+
+/**
+ * Entrada do jogo (T-140): a Vila (HubScene) por padrão; a testArena com `?test`,
+ * `?map=`, `?biome=` ou `?seed=` (URLs dos E2E da M6/M8).
+ */
+export function shouldOpenTestArena(search: string): boolean {
+  const params = new URLSearchParams(search);
+  return ['test', 'map', 'biome', 'seed'].some((name) => params.has(name));
+}
 
 const DUNGEON_BASIC_TORCH_ANIM_KEY = 'dungeon_basic_torch';
 
@@ -314,10 +338,14 @@ export class BootScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    if ('DungeonScene' in this.scene.manager.keys) {
+    const keys = this.scene.manager.keys;
+    const wantsTestArena = shouldOpenTestArena(window.location.search);
+    if (wantsTestArena && 'DungeonScene' in keys) {
       this.scene.start('DungeonScene', { testArena: true });
-    } else if ('HubScene' in this.scene.manager.keys) {
+    } else if ('HubScene' in keys) {
       this.scene.start('HubScene');
+    } else if ('DungeonScene' in keys) {
+      this.scene.start('DungeonScene', { testArena: true });
     }
   }
 
@@ -354,6 +382,29 @@ export class BootScene extends Phaser.Scene {
           repeat: -1,
         });
       }
+    }
+
+    this.createVillageAnimations();
+  }
+
+  private createVillageAnimations(): void {
+    // Mesmo guarda de fallback: só cria se a folha real (com o último frame) carregou.
+    for (const spec of VILLAGE_ANIM_SPECS) {
+      const last = spec.frames[spec.frames.length - 1];
+      if (
+        this.anims.exists(spec.key) ||
+        !this.textures.exists(spec.texture) ||
+        !this.textures.get(spec.texture).has(String(last))
+      ) {
+        continue;
+      }
+      this.anims.create({
+        key: spec.key,
+        frames: this.anims.generateFrameNumbers(spec.texture, { frames: [...spec.frames] }),
+        frameRate: spec.frameRate,
+        repeat: spec.repeat,
+        ...(spec.repeatDelay !== undefined ? { repeatDelay: spec.repeatDelay } : {}),
+      });
     }
   }
 

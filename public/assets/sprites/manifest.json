@@ -2013,6 +2013,766 @@
         "x": 0.5,
         "y": 0.95
       }
+    },
+    "village_hub_tiles": {
+      "key": "village_hub_tiles",
+      "file": "village_hub_tiles.png",
+      "width": 1024,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "dirt_0",
+        "dirt_1",
+        "dirt_2",
+        "dirt_3",
+        "dirt_pebbles",
+        "dirt_cracks",
+        "dirt_tufts",
+        "dirt_damp",
+        "grass_0",
+        "grass_1",
+        "grass_2",
+        "grass_flowers",
+        "grass_tall",
+        "edge_0001",
+        "edge_0010",
+        "edge_0011",
+        "edge_0100",
+        "edge_0101",
+        "edge_0110",
+        "edge_0111",
+        "edge_1000",
+        "edge_1001",
+        "edge_1010",
+        "edge_1011",
+        "edge_1100",
+        "edge_1101",
+        "edge_1110",
+        "path_v",
+        "path_h",
+        "path_x",
+        "cobble_0",
+        "cobble_1"
+      ]
+    },
+    "village_hub_house": {
+      "key": "village_hub_house",
+      "file": "village_hub_house.png",
+      "width": 176,
+      "height": 160,
+      "frameWidth": 176,
+      "frameHeight": 160,
+      "frames": [
+        "house"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.95
+      },
+      "footprints": {
+        "house": [
+          {
+            "x": -72,
+            "y": -44,
+            "w": 144,
+            "h": 44
+          }
+        ]
+      }
+    },
+    "village_hub_palisade": {
+      "key": "village_hub_palisade",
+      "file": "village_hub_palisade.png",
+      "width": 256,
+      "height": 80,
+      "frameWidth": 32,
+      "frameHeight": 80,
+      "frames": [
+        "h_0",
+        "h_1",
+        "h_broken",
+        "v_0",
+        "v_1",
+        "corner",
+        "post",
+        "spikes"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.95
+      },
+      "footprints": {
+        "h_0": [
+          {
+            "x": -16,
+            "y": -6,
+            "w": 32,
+            "h": 6
+          }
+        ],
+        "h_1": [
+          {
+            "x": -16,
+            "y": -6,
+            "w": 32,
+            "h": 6
+          }
+        ],
+        "h_broken": [
+          {
+            "x": -16,
+            "y": -6,
+            "w": 32,
+            "h": 6
+          }
+        ],
+        "v_0": [
+          {
+            "x": -5,
+            "y": -32,
+            "w": 10,
+            "h": 32
+          }
+        ],
+        "v_1": [
+          {
+            "x": -5,
+            "y": -32,
+            "w": 10,
+            "h": 32
+          }
+        ],
+        "corner": [
+          {
+            "x": -10,
+            "y": -10,
+            "w": 20,
+            "h": 10
+          }
+        ],
+        "post": [
+          {
+            "x": -6,
+            "y": -6,
+            "w": 12,
+            "h": 6
+          }
+        ],
+        "spikes": [
+          {
+            "x": -12,
+            "y": -6,
+            "w": 24,
+            "h": 6
+          }
+        ]
+      }
+    },
+    "village_hub_gate": {
+      "key": "village_hub_gate",
+      "file": "village_hub_gate.png",
+      "width": 352,
+      "height": 152,
+      "frameWidth": 176,
+      "frameHeight": 152,
+      "frames": [
+        "gate_closed",
+        "gate_open"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.947368
+      },
+      "footprints": {
+        "gate_closed": [
+          {
+            "x": -80,
+            "y": -14,
+            "w": 32,
+            "h": 14
+          },
+          {
+            "x": 48,
+            "y": -14,
+            "w": 32,
+            "h": 14
+          },
+          {
+            "x": -48,
+            "y": -6,
+            "w": 96,
+            "h": 6
+          }
+        ],
+        "gate_open": [
+          {
+            "x": -80,
+            "y": -14,
+            "w": 32,
+            "h": 14
+          },
+          {
+            "x": 48,
+            "y": -14,
+            "w": 32,
+            "h": 14
+          }
+        ]
+      }
+    },
+    "village_hub_campfire": {
+      "key": "village_hub_campfire",
+      "file": "village_hub_campfire.png",
+      "width": 384,
+      "height": 64,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "frames": [
+        "campfire_0",
+        "campfire_1",
+        "campfire_2",
+        "campfire_3",
+        "campfire_4",
+        "campfire_5"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.875
+      },
+      "animations": {
+        "campfire": {
+          "frames": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "frameRate": 10,
+          "repeat": -1
+        }
+      },
+      "footprints": {
+        "campfire_0": [
+          {
+            "x": -20,
+            "y": -14,
+            "w": 40,
+            "h": 14
+          }
+        ],
+        "campfire_1": [
+          {
+            "x": -20,
+            "y": -14,
+            "w": 40,
+            "h": 14
+          }
+        ],
+        "campfire_2": [
+          {
+            "x": -20,
+            "y": -14,
+            "w": 40,
+            "h": 14
+          }
+        ],
+        "campfire_3": [
+          {
+            "x": -20,
+            "y": -14,
+            "w": 40,
+            "h": 14
+          }
+        ],
+        "campfire_4": [
+          {
+            "x": -20,
+            "y": -14,
+            "w": 40,
+            "h": 14
+          }
+        ],
+        "campfire_5": [
+          {
+            "x": -20,
+            "y": -14,
+            "w": 40,
+            "h": 14
+          }
+        ]
+      }
+    },
+    "village_hub_forge": {
+      "key": "village_hub_forge",
+      "file": "village_hub_forge.png",
+      "width": 256,
+      "height": 80,
+      "frameWidth": 64,
+      "frameHeight": 80,
+      "frames": [
+        "forge_0",
+        "forge_1",
+        "forge_2",
+        "forge_3"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.95
+      },
+      "animations": {
+        "forge": {
+          "frames": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "frameRate": 6,
+          "repeat": -1
+        }
+      },
+      "footprints": {
+        "forge_0": [
+          {
+            "x": -28,
+            "y": -16,
+            "w": 56,
+            "h": 16
+          }
+        ],
+        "forge_1": [
+          {
+            "x": -28,
+            "y": -16,
+            "w": 56,
+            "h": 16
+          }
+        ],
+        "forge_2": [
+          {
+            "x": -28,
+            "y": -16,
+            "w": 56,
+            "h": 16
+          }
+        ],
+        "forge_3": [
+          {
+            "x": -28,
+            "y": -16,
+            "w": 56,
+            "h": 16
+          }
+        ]
+      }
+    },
+    "village_hub_brazier": {
+      "key": "village_hub_brazier",
+      "file": "village_hub_brazier.png",
+      "width": 128,
+      "height": 64,
+      "frameWidth": 32,
+      "frameHeight": 64,
+      "frames": [
+        "brazier_0",
+        "brazier_1",
+        "brazier_2",
+        "brazier_3"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.953125
+      },
+      "animations": {
+        "brazier": {
+          "frames": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "frameRate": 8,
+          "repeat": -1
+        }
+      },
+      "footprints": {
+        "brazier_0": [
+          {
+            "x": -7,
+            "y": -4,
+            "w": 14,
+            "h": 4
+          }
+        ],
+        "brazier_1": [
+          {
+            "x": -7,
+            "y": -4,
+            "w": 14,
+            "h": 4
+          }
+        ],
+        "brazier_2": [
+          {
+            "x": -7,
+            "y": -4,
+            "w": 14,
+            "h": 4
+          }
+        ],
+        "brazier_3": [
+          {
+            "x": -7,
+            "y": -4,
+            "w": 14,
+            "h": 4
+          }
+        ]
+      }
+    },
+    "village_hub_torch": {
+      "key": "village_hub_torch",
+      "file": "village_hub_torch.png",
+      "width": 128,
+      "height": 80,
+      "frameWidth": 32,
+      "frameHeight": 80,
+      "frames": [
+        "torch_0",
+        "torch_1",
+        "torch_2",
+        "torch_3"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.95
+      },
+      "animations": {
+        "torch": {
+          "frames": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "frameRate": 8,
+          "repeat": -1
+        }
+      },
+      "footprints": {
+        "torch_0": [
+          {
+            "x": -3,
+            "y": -3,
+            "w": 6,
+            "h": 3
+          }
+        ],
+        "torch_1": [
+          {
+            "x": -3,
+            "y": -3,
+            "w": 6,
+            "h": 3
+          }
+        ],
+        "torch_2": [
+          {
+            "x": -3,
+            "y": -3,
+            "w": 6,
+            "h": 3
+          }
+        ],
+        "torch_3": [
+          {
+            "x": -3,
+            "y": -3,
+            "w": 6,
+            "h": 3
+          }
+        ]
+      }
+    },
+    "village_hub_cart": {
+      "key": "village_hub_cart",
+      "file": "village_hub_cart.png",
+      "width": 112,
+      "height": 80,
+      "frameWidth": 112,
+      "frameHeight": 80,
+      "frames": [
+        "cart"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.9
+      },
+      "footprints": {
+        "cart": [
+          {
+            "x": -38,
+            "y": -14,
+            "w": 84,
+            "h": 14
+          }
+        ]
+      }
+    },
+    "village_hub_props": {
+      "key": "village_hub_props",
+      "file": "village_hub_props.png",
+      "width": 640,
+      "height": 64,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "frames": [
+        "anvil",
+        "firewood",
+        "barrel",
+        "crate",
+        "sacks",
+        "pots",
+        "herb_rack",
+        "weapon_rack",
+        "bench",
+        "bucket"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.9375
+      },
+      "footprints": {
+        "anvil": [
+          {
+            "x": -13,
+            "y": -6,
+            "w": 26,
+            "h": 6
+          }
+        ],
+        "firewood": [
+          {
+            "x": -28,
+            "y": -8,
+            "w": 58,
+            "h": 8
+          }
+        ],
+        "barrel": [
+          {
+            "x": -12,
+            "y": -6,
+            "w": 24,
+            "h": 6
+          }
+        ],
+        "crate": [
+          {
+            "x": -18,
+            "y": -8,
+            "w": 36,
+            "h": 8
+          }
+        ],
+        "sacks": [
+          {
+            "x": -20,
+            "y": -8,
+            "w": 38,
+            "h": 8
+          }
+        ],
+        "pots": [
+          {
+            "x": -18,
+            "y": -6,
+            "w": 36,
+            "h": 6
+          }
+        ],
+        "herb_rack": [
+          {
+            "x": -25,
+            "y": -4,
+            "w": 50,
+            "h": 4
+          }
+        ],
+        "weapon_rack": [
+          {
+            "x": -25,
+            "y": -4,
+            "w": 50,
+            "h": 4
+          }
+        ],
+        "bench": [
+          {
+            "x": -26,
+            "y": -4,
+            "w": 52,
+            "h": 4
+          }
+        ],
+        "bucket": [
+          {
+            "x": -8,
+            "y": -4,
+            "w": 16,
+            "h": 4
+          }
+        ]
+      }
+    },
+    "village_hub_light": {
+      "key": "village_hub_light",
+      "file": "village_hub_light.png",
+      "width": 128,
+      "height": 128,
+      "frameWidth": 128,
+      "frameHeight": 128,
+      "frames": [
+        "light_warm"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "village_npc_master": {
+      "key": "village_npc_master",
+      "file": "village_npc_master.png",
+      "width": 480,
+      "height": 80,
+      "frameWidth": 80,
+      "frameHeight": 80,
+      "frames": [
+        "idle0",
+        "idle1",
+        "idle2",
+        "idle3",
+        "idle4",
+        "idle5"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.95
+      },
+      "animations": {
+        "idle": {
+          "frames": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "frameRate": 5,
+          "repeat": -1
+        }
+      }
+    },
+    "village_npc_lyra": {
+      "key": "village_npc_lyra",
+      "file": "village_npc_lyra.png",
+      "width": 480,
+      "height": 80,
+      "frameWidth": 80,
+      "frameHeight": 80,
+      "frames": [
+        "idle0",
+        "idle1",
+        "idle2",
+        "idle3",
+        "idle4",
+        "idle5"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.95
+      },
+      "animations": {
+        "idle": {
+          "frames": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "frameRate": 5,
+          "repeat": -1
+        }
+      }
+    },
+    "village_npc_gorran": {
+      "key": "village_npc_gorran",
+      "file": "village_npc_gorran.png",
+      "width": 1120,
+      "height": 80,
+      "frameWidth": 80,
+      "frameHeight": 80,
+      "frames": [
+        "idle0",
+        "idle1",
+        "idle2",
+        "idle3",
+        "idle4",
+        "idle5",
+        "hammer0",
+        "hammer1",
+        "hammer2",
+        "hammer3",
+        "hammer4",
+        "hammer5",
+        "hammer6",
+        "hammer7"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.95
+      },
+      "animations": {
+        "idle": {
+          "frames": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "frameRate": 5,
+          "repeat": -1
+        },
+        "hammer": {
+          "frames": [
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13
+          ],
+          "frameRate": 10,
+          "repeat": -1,
+          "repeatDelay": 400
+        }
+      },
+      "hammerImpact": {
+        "frame": 11,
+        "frameName": "hammer5",
+        "dx": -28.7,
+        "dy": -17.3
+      }
     }
   }
 }

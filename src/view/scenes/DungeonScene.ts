@@ -796,7 +796,20 @@ export class DungeonScene extends Phaser.Scene {
 
   public returnToHub(): void {
     if ('HubScene' in this.scene.manager.keys) {
-      this.scene.start('HubScene', { fromRun: this.lastRunReport });
+      if (this.isTestArena) {
+        this.scene.start('HubScene', { fromRun: this.lastRunReport });
+        return;
+      }
+      // Decisão #23: o herói volta à Vila e aparece no portão.
+      const won =
+        this.lastRunReport?.victory ?? this.runState?.status === 'victory';
+      const villageOrigin: 'dungeon_victory' | 'dungeon_defeat' = won
+        ? 'dungeon_victory'
+        : 'dungeon_defeat';
+      this.scene.start('HubScene', {
+        fromRun: this.lastRunReport,
+        villageOrigin,
+      });
       return;
     }
     this.startNewRun();
