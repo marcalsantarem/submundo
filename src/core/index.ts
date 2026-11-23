@@ -216,6 +216,8 @@ export interface RunEndReport {
 export interface HubTransitionData {
   fromRun?: RunEndReport;
   stageId?: CampaignStageId;
+  returnedFromDungeon?: boolean;
+  applyOutcome?: boolean;
 }
 
 export type CampaignPhase = 'prologue' | 'act1';
@@ -281,5 +283,8 @@ export interface CampaignProgress {
   seenDialogues: string[];
   villageFallTriggered: boolean;
 }
+
+export * from './progression/VillageHubManager';
+
 
 

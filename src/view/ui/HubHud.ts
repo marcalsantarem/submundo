@@ -1,5 +1,9 @@
 import Phaser from 'phaser';
-import { Vector2D, ViewportConfig, resolveViewportConfig } from '../../core/index';
+import {
+  type Vector2D,
+  type ViewportConfig,
+  resolveViewportConfig,
+} from '../../core/index';
 import {
   DF_FONTS,
   DF_PALETTE,
@@ -8,6 +12,7 @@ import {
   type OrnateButtonVariant,
   drawOrnateButton,
   drawOrnatePanel,
+  getChamferPoints,
   hasUiTextureFrame,
 } from './DarkFantasyUiBuilder';
 import { VirtualJoystick } from './VirtualJoystick';
@@ -24,6 +29,15 @@ export interface HubHudSnapshot {
   canCycleStage?: boolean;
   isPrologue?: boolean;
   isMuted?: boolean;
+  heroHp?: number;
+  heroMaxHp?: number;
+  heroLevel?: number;
+  heroName?: string;
+  trackerTitle?: string;
+  trackerText?: string;
+  heroNormalizedPos?: Vector2D;
+  masterExclamation?: boolean;
+  gateUnlocked?: boolean;
 }
 
 interface MovementKeys {
@@ -52,6 +66,19 @@ interface ActionButtonView {
   disabled: boolean;
 }
 
+interface VillageCircularBtnView {
+  container: Phaser.GameObjects.Container;
+  bg: Phaser.GameObjects.Graphics;
+  icon: Phaser.GameObjects.Image | null;
+  fallbackGfx: Phaser.GameObjects.Graphics;
+  badgeBg?: Phaser.GameObjects.Graphics;
+  badgeText?: Phaser.GameObjects.Text;
+  label: Phaser.GameObjects.Text;
+  zone: Phaser.GameObjects.Zone;
+  hovered: boolean;
+  pressed: boolean;
+}
+
 export interface HubHudCallbacks {
   onOpenAltar: () => void;
   onOpenBlacksmith: () => void;
@@ -63,6 +90,14 @@ export interface HubHudCallbacks {
   onResetSave?: () => void;
 }
 
+const PORTRAITS_KEY = 'portraits';
+const VILLAGE_PORTRAIT_CX = 46;
+const VILLAGE_PORTRAIT_CY = 44;
+const VILLAGE_PORTRAIT_R = 32;
+const VILLAGE_MINIMAP_R = 46;
+const VILLAGE_UTILITY_R = 18;
+const VILLAGE_INTERACT_R = 42;
+
 export class HubHud {
   private readonly scene: Phaser.Scene;
   private readonly callbacks: HubHudCallbacks;
@@ -72,6 +107,9 @@ export class HubHud {
   private movementKeys?: MovementKeys;
   private readonly keydownHandler: (event: KeyboardEvent) => void;
 
+  // ---------------------------------------------------------------------------
+  // ACT 1 / REFÚGIO DO SUBMUNDO LEGACY HUD ELEMENTS
+  // ---------------------------------------------------------------------------
   private readonly topPanelBg: Phaser.GameObjects.Graphics;
   private readonly locationText: Phaser.GameObjects.Text;
   private readonly soulsIcon: Phaser.GameObjects.Image | null;
@@ -94,6 +132,48 @@ export class HubHud {
   private readonly stageBtn: ActionButtonView;
   private readonly muteBtn: ActionButtonView;
   private readonly resetBtn: ActionButtonView;
+
+  // ---------------------------------------------------------------------------
+  // PROLOGUE / VILA NATAL HUD ELEMENTS (Decision #23 & mockup_m9_village_hub)
+  // ---------------------------------------------------------------------------
+  private readonly villageHeroContainer: Phaser.GameObjects.Container;
+  private readonly villagePortraitBg: Phaser.GameObjects.Graphics;
+  private readonly villagePortraitImg: Phaser.GameObjects.Image | null;
+  private readonly villagePortraitMaskGfx: Phaser.GameObjects.Graphics | null;
+  private readonly villagePortraitFallback: Phaser.GameObjects.Text;
+  private readonly villagePortraitRing: Phaser.GameObjects.Graphics;
+  private readonly villageLevelBadgeBg: Phaser.GameObjects.Graphics;
+  private readonly villageLevelBadgeText: Phaser.GameObjects.Text;
+  private readonly villageHeroNameText: Phaser.GameObjects.Text;
+  private readonly villageHpBarGfx: Phaser.GameObjects.Graphics;
+  private readonly villageHpText: Phaser.GameObjects.Text;
+  private readonly villageSecBarGfx: Phaser.GameObjects.Graphics;
+
+  private readonly villageTrackerContainer: Phaser.GameObjects.Container;
+  private readonly villageTrackerGfx: Phaser.GameObjects.Graphics;
+  private readonly villageTrackerTitle: Phaser.GameObjects.Text;
+  private readonly villageTrackerText: Phaser.GameObjects.Text;
+
+  private readonly villageMinimapContainer: Phaser.GameObjects.Container;
+  private readonly villageMinimapBg: Phaser.GameObjects.Graphics;
+  private readonly villageMinimapDynamic: Phaser.GameObjects.Graphics;
+  private readonly villageMinimapFrame: Phaser.GameObjects.Graphics;
+  private readonly villageMinimapNorthText: Phaser.GameObjects.Text;
+
+  private readonly villageBagBtn: VillageCircularBtnView;
+  private readonly villageAudioBtn: VillageCircularBtnView;
+  private readonly villageConfigBtn: VillageCircularBtnView;
+
+  private readonly villageInteractContainer: Phaser.GameObjects.Container;
+  private readonly villageInteractGlow: Phaser.GameObjects.Graphics;
+  private readonly villageInteractBg: Phaser.GameObjects.Graphics;
+  private readonly villageInteractEmblem: Phaser.GameObjects.Graphics;
+  private readonly villageInteractLabel: Phaser.GameObjects.Text;
+  private readonly villageInteractTargetBg: Phaser.GameObjects.Graphics;
+  private readonly villageInteractTargetText: Phaser.GameObjects.Text;
+  private readonly villageInteractZone: Phaser.GameObjects.Zone;
+  private villageInteractHovered = false;
+  private villageInteractPressed = false;
 
   private resetArmed = false;
   private resetArmTimer?: ReturnType<typeof setTimeout>;
@@ -121,7 +201,7 @@ export class HubHud {
     this.joystick = new VirtualJoystick(scene);
 
     // -------------------------------------------------------------------------
-    // TOP BAR (960x540 Landscape)
+    // ACT 1 TOP BAR (960x540 Landscape)
     // -------------------------------------------------------------------------
     this.topPanelBg = scene.add.graphics().setScrollFactor(0).setDepth(1010);
 
@@ -240,7 +320,7 @@ export class HubHud {
       .setVisible(false);
 
     // -------------------------------------------------------------------------
-    // ORNATE 2D CHAMFERED ACTION BUTTONS
+    // ACT 1 ORNATE 2D CHAMFERED ACTION BUTTONS
     // -------------------------------------------------------------------------
     this.altarBtn = this.createActionButton(
       'Altar',
@@ -303,6 +383,274 @@ export class HubHud {
       DF_PALETTE.textDanger,
       () => this.handleResetClick()
     );
+
+    // -------------------------------------------------------------------------
+    // PROLOGUE / VILA NATAL HUD: 1. TOP-LEFT HERO FRAME & TRACKER
+    // -------------------------------------------------------------------------
+    this.villagePortraitBg = scene.add.graphics();
+    this.villagePortraitImg = hasUiTextureFrame(scene, PORTRAITS_KEY, 0)
+      ? scene.add
+          .image(VILLAGE_PORTRAIT_CX, VILLAGE_PORTRAIT_CY + 1, PORTRAITS_KEY, 0)
+          .setOrigin(0.5)
+      : null;
+
+    this.villagePortraitMaskGfx =
+      this.villagePortraitImg && typeof scene.make?.graphics === 'function'
+        ? scene.make.graphics({}, false)
+        : null;
+    if (
+      this.villagePortraitImg &&
+      this.villagePortraitMaskGfx &&
+      typeof this.villagePortraitMaskGfx.createGeometryMask === 'function'
+    ) {
+      this.villagePortraitMaskGfx.fillStyle(0xffffff, 1);
+      this.villagePortraitMaskGfx.fillCircle(
+        VILLAGE_PORTRAIT_CX,
+        VILLAGE_PORTRAIT_CY,
+        VILLAGE_PORTRAIT_R - 2
+      );
+      this.villagePortraitImg.setMask(
+        this.villagePortraitMaskGfx.createGeometryMask()
+      );
+    }
+
+    this.villagePortraitFallback = scene.add
+      .text(VILLAGE_PORTRAIT_CX, VILLAGE_PORTRAIT_CY, 'JG', {
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '15px',
+        color: DF_PALETTE.textParchment,
+        fontStyle: 'bold',
+        resolution: 2,
+      })
+      .setOrigin(0.5);
+
+    this.villagePortraitRing = scene.add.graphics();
+    this.villageLevelBadgeBg = scene.add.graphics();
+    this.villageLevelBadgeText = scene.add
+      .text(
+        VILLAGE_PORTRAIT_CX,
+        VILLAGE_PORTRAIT_CY + VILLAGE_PORTRAIT_R + 1,
+        'Nv. 1',
+        {
+          fontFamily: DF_FONTS.BODY,
+          fontSize: '10px',
+          color: DF_PALETTE.textGold,
+          fontStyle: 'bold',
+          resolution: 2,
+        }
+      )
+      .setOrigin(0.5);
+
+    this.villageHeroNameText = scene.add
+      .text(88, 17, 'JOVEM GUERREIRO', {
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '13px',
+        color: DF_PALETTE.textParchment,
+        fontStyle: 'bold',
+        stroke: '#05070c',
+        strokeThickness: 3,
+        resolution: 2,
+      })
+      .setOrigin(0, 0.5);
+
+    this.villageHpBarGfx = scene.add.graphics();
+    this.villageHpText = scene.add
+      .text(86 + 188 * 0.46, 30 + 9, '100/100', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '11px',
+        color: '#fff7ed',
+        fontStyle: 'bold',
+        stroke: '#05070c',
+        strokeThickness: 2.5,
+        resolution: 2,
+      })
+      .setOrigin(0.5);
+
+    this.villageSecBarGfx = scene.add.graphics();
+
+    const heroChildren: Phaser.GameObjects.GameObject[] = [
+      this.villagePortraitBg,
+      this.villagePortraitFallback,
+    ];
+    if (this.villagePortraitImg) {
+      heroChildren.push(this.villagePortraitImg);
+    }
+    heroChildren.push(
+      this.villagePortraitRing,
+      this.villageLevelBadgeBg,
+      this.villageLevelBadgeText,
+      this.villageHeroNameText,
+      this.villageHpBarGfx,
+      this.villageHpText,
+      this.villageSecBarGfx
+    );
+
+    this.villageHeroContainer = scene.add
+      .container(0, 0, heroChildren)
+      .setScrollFactor(0)
+      .setDepth(1015);
+
+    // Tracker da Missão (x = 16, y = 94)
+    this.villageTrackerGfx = scene.add.graphics();
+    this.villageTrackerTitle = scene.add
+      .text(24, 10, 'VILA NATAL', {
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '13px',
+        color: DF_PALETTE.textGold,
+        fontStyle: 'bold',
+        stroke: '#05070c',
+        strokeThickness: 3,
+        resolution: 2,
+      })
+      .setOrigin(0, 0.5);
+
+    this.villageTrackerText = scene.add
+      .text(24, 26, 'Falar com o Mestre', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '11.5px',
+        color: DF_PALETTE.textParchment,
+        stroke: '#05070c',
+        strokeThickness: 2.5,
+        resolution: 2,
+      })
+      .setOrigin(0, 0.5);
+
+    this.villageTrackerContainer = scene.add
+      .container(16, 94, [
+        this.villageTrackerGfx,
+        this.villageTrackerTitle,
+        this.villageTrackerText,
+      ])
+      .setScrollFactor(0)
+      .setDepth(1015);
+
+    // -------------------------------------------------------------------------
+    // PROLOGUE / VILA NATAL HUD: 2. TOP-RIGHT CIRCULAR MINIMAP & 3 UTILITY BTNS
+    // -------------------------------------------------------------------------
+    this.villageMinimapBg = scene.add.graphics();
+    this.villageMinimapDynamic = scene.add.graphics();
+    this.villageMinimapFrame = scene.add.graphics();
+    this.villageMinimapNorthText = scene.add
+      .text(0, -VILLAGE_MINIMAP_R + 8, 'N', {
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '8.5px',
+        color: DF_PALETTE.textGold,
+        fontStyle: 'bold',
+        stroke: '#05070c',
+        strokeThickness: 2,
+        resolution: 2,
+      })
+      .setOrigin(0.5);
+
+    this.villageMinimapContainer = scene.add
+      .container(0, 0, [
+        this.villageMinimapBg,
+        this.villageMinimapDynamic,
+        this.villageMinimapFrame,
+        this.villageMinimapNorthText,
+      ])
+      .setScrollFactor(0)
+      .setDepth(1015);
+
+    this.villageBagBtn = this.createVillageCircularButton(
+      'Inventário',
+      DF_UI_ICON_FRAMES.bag,
+      () => this.callbacks.onOpenStash(),
+      true
+    );
+    this.villageAudioBtn = this.createVillageCircularButton(
+      'Áudio',
+      DF_UI_ICON_FRAMES.audioOn,
+      () => this.callbacks.onToggleMute?.(),
+      false
+    );
+    this.villageConfigBtn = this.createVillageCircularButton(
+      'Config.',
+      DF_UI_ICON_FRAMES.settings,
+      () => this.handleResetClick(),
+      false
+    );
+
+    // -------------------------------------------------------------------------
+    // PROLOGUE / VILA NATAL HUD: 3. BOTTOM-RIGHT CIRCULAR "INTERAGIR" MEDALLION
+    // -------------------------------------------------------------------------
+    this.villageInteractGlow = scene.add.graphics();
+    this.villageInteractBg = scene.add.graphics();
+    this.villageInteractEmblem = scene.add.graphics();
+    this.villageInteractLabel = scene.add
+      .text(0, 20, 'INTERAGIR', {
+        fontFamily: DF_FONTS.TITLE,
+        fontSize: '11.5px',
+        color: DF_PALETTE.textParchment,
+        fontStyle: 'bold',
+        stroke: '#07090e',
+        strokeThickness: 3,
+        resolution: 2,
+      })
+      .setOrigin(0.5);
+
+    this.villageInteractTargetBg = scene.add.graphics();
+    this.villageInteractTargetText = scene.add
+      .text(0, -VILLAGE_INTERACT_R - 16, '', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '11px',
+        color: DF_PALETTE.textGold,
+        fontStyle: 'bold',
+        stroke: '#05070c',
+        strokeThickness: 3,
+        resolution: 2,
+      })
+      .setOrigin(0.5);
+
+    this.villageInteractZone = scene.add
+      .zone(0, 0, VILLAGE_INTERACT_R * 2 + 12, VILLAGE_INTERACT_R * 2 + 12)
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+
+    this.villageInteractZone.on('pointerover', () => {
+      this.villageInteractHovered = true;
+      this.drawVillageInteractButton();
+    });
+    this.villageInteractZone.on('pointerout', () => {
+      this.villageInteractHovered = false;
+      this.villageInteractPressed = false;
+      this.drawVillageInteractButton();
+    });
+    this.villageInteractZone.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _lx: number,
+        _ly: number,
+        event?: Phaser.Types.Input.EventData
+      ) => {
+        event?.stopPropagation?.();
+        this.villageInteractPressed = true;
+        this.drawVillageInteractButton();
+        this.callbacks.onInteract?.();
+      }
+    );
+    this.villageInteractZone.on('pointerup', () => {
+      this.villageInteractPressed = false;
+      this.drawVillageInteractButton();
+    });
+
+    this.villageInteractContainer = scene.add
+      .container(0, 0, [
+        this.villageInteractGlow,
+        this.villageInteractBg,
+        this.villageInteractEmblem,
+        this.villageInteractLabel,
+        this.villageInteractTargetBg,
+        this.villageInteractTargetText,
+        this.villageInteractZone,
+      ])
+      .setScrollFactor(0)
+      .setDepth(1020);
+
+    this.drawVillageHeroStaticShell();
+    this.drawVillageTrackerStatic();
+    this.drawVillageMinimapStaticShell();
 
     // -------------------------------------------------------------------------
     // MOVEMENT KEYS (WASD + ARROWS) & CONTEXTUAL INTERACT [E]
@@ -371,13 +719,28 @@ export class HubHud {
     this.lastSnapshot = snap;
 
     const isPrologue = Boolean(snap.isPrologue);
+    this.setLayoutVisibility(isPrologue);
+
+    const banner = snap.bannerText?.trim() ?? '';
+    if (banner.length > 0) {
+      this.bannerContainer.setVisible(true);
+      this.bannerLabel.setText(banner);
+      this.drawBannerBox();
+    } else {
+      this.bannerContainer.setVisible(false);
+    }
+
+    if (isPrologue) {
+      this.updateVillageHud(snap);
+      return;
+    }
+
     const locationTitle =
-      snap.locationTitle?.trim() ||
-      (isPrologue ? 'Vila Natal' : 'Refúgio do Submundo');
+      snap.locationTitle?.trim() || 'Refúgio do Submundo';
 
     this.locationText
       .setText(locationTitle)
-      .setColor(isPrologue ? DF_PALETTE.textSuccess : DF_PALETTE.textGold);
+      .setColor(DF_PALETTE.textGold);
 
     this.soulsText.setText(`Almas: ${snap.souls}`);
     this.essencesText.setText(`Essências: ${snap.generalEssences}`);
@@ -389,10 +752,8 @@ export class HubHud {
     this.stashBtn.label.setText(
       snap.stashCount > 0 ? `Inventário (${snap.stashCount})` : 'Inventário'
     );
-    this.altarBtn.label.setText(isPrologue ? 'Santuário' : 'Altar');
-    this.enterBtn.label.setText(
-      isPrologue ? 'Iniciar Missão' : 'Entrar na Fenda'
-    );
+    this.altarBtn.label.setText('Altar');
+    this.enterBtn.label.setText('Entrar na Fenda');
     this.syncButtonIconLayout(this.stashBtn);
     this.syncButtonIconLayout(this.enterBtn);
 
@@ -428,15 +789,6 @@ export class HubHud {
     } else {
       this.interactBtn.container.setVisible(false);
     }
-
-    const banner = snap.bannerText?.trim() ?? '';
-    if (banner.length > 0) {
-      this.bannerContainer.setVisible(true);
-      this.bannerLabel.setText(banner);
-      this.drawBannerBox();
-    } else {
-      this.bannerContainer.setVisible(false);
-    }
   }
 
   public resize(viewport: ViewportConfig): void {
@@ -447,7 +799,7 @@ export class HubHud {
     const h = viewport.height;
 
     // -------------------------------------------------------------------------
-    // TOP BAR (54px height, 960x540 landscape)
+    // ACT 1 TOP BAR (54px height, 960x540 landscape)
     // -------------------------------------------------------------------------
     const topBarHeight = 54;
     const barMidY = Math.round(topBarHeight / 2);
@@ -462,10 +814,8 @@ export class HubHud {
     this.topPanelBg.lineStyle(1.2, DF_PALETTE.bronzeBorder, 0.95);
     this.topPanelBg.lineBetween(0, topBarHeight, w, topBarHeight);
 
-    // Left: Area title in Cinzel
     this.locationText.setFontSize(14).setPosition(18, barMidY);
 
-    // Center-Right: Souls, Essences, and Equip/Stash summary
     const resBaseX = Math.max(286, Math.round(w * 0.34));
     this.soulsIcon?.setPosition(resBaseX, barMidY).setDisplaySize(17, 17);
     this.soulsFallbackGraphic.setPosition(resBaseX, barMidY);
@@ -478,26 +828,37 @@ export class HubHud {
 
     this.gearText.setFontSize(11).setPosition(w - 186, barMidY);
 
-    // Top-Right: Audio & Reset buttons
     this.layoutButton(this.muteBtn, w - 132, barMidY, 78, 30, 11);
     this.layoutButton(this.resetBtn, w - 48, barMidY, 76, 30, 11);
 
-    // Banner below top bar
     this.bannerContainer.setPosition(w / 2, 80);
     this.bannerLabel.setWordWrapWidth(Math.min(500, w - 64));
 
-    // -------------------------------------------------------------------------
-    // BOTTOM-RIGHT 2-HAND CLUSTER (Clear of left VirtualJoystick x <= 0.46*w)
-    // -------------------------------------------------------------------------
     this.layoutButton(this.altarBtn, w - 352, h - 42, 100, 40, 12);
     this.layoutButton(this.blacksmithBtn, w - 244, h - 42, 100, 40, 12);
     this.layoutButton(this.enterBtn, w - 100, h - 42, 172, 44, 13);
 
     this.layoutButton(this.stashBtn, w - 298, h - 92, 208, 38, 12);
     this.layoutButton(this.stageBtn, w - 100, h - 92, 172, 38, 11);
-
-    // Contextual Interact [E] button cleanly above the right-hand cluster
     this.layoutButton(this.interactBtn, w - 208, h - 140, 264, 36, 12);
+
+    // -------------------------------------------------------------------------
+    // PROLOGUE / VILA NATAL LAYOUT (960x540 Landscape)
+    // -------------------------------------------------------------------------
+    this.villageHeroContainer.setPosition(0, 0);
+    this.villageTrackerContainer.setPosition(16, 94);
+
+    // Minimap circular (cx = width - 60, cy = 60, r = 46)
+    this.villageMinimapContainer.setPosition(w - 60, 60);
+
+    // 3 Botões Circulares Compactos abaixo do minimapa (y = 128, r = 18, gap = 50)
+    const rowY = 128;
+    this.villageBagBtn.container.setPosition(w - 134, rowY);
+    this.villageAudioBtn.container.setPosition(w - 84, rowY);
+    this.villageConfigBtn.container.setPosition(w - 34, rowY);
+
+    // Botão Circular Principal Interagir (cx = width - 92, cy = height - 104, r = 42)
+    this.villageInteractContainer.setPosition(w - 92, h - 104);
 
     this.update(this.lastSnapshot);
   }
@@ -531,6 +892,756 @@ export class HubHud {
     this.stageBtn.container.destroy();
     this.muteBtn.container.destroy();
     this.resetBtn.container.destroy();
+
+    this.villagePortraitMaskGfx?.destroy();
+    this.villageHeroContainer.destroy(true);
+    this.villageTrackerContainer.destroy(true);
+    this.villageMinimapContainer.destroy(true);
+    this.villageBagBtn.container.destroy(true);
+    this.villageAudioBtn.container.destroy(true);
+    this.villageConfigBtn.container.destroy(true);
+    this.villageInteractContainer.destroy(true);
+  }
+
+  private setLayoutVisibility(isPrologue: boolean): void {
+    // Act 1 / Refúgio elements
+    const showAct1 = !isPrologue;
+    this.topPanelBg.setVisible(showAct1);
+    this.locationText.setVisible(showAct1);
+    if (!showAct1) {
+      this.soulsIcon?.setVisible(false);
+      this.soulsFallbackGraphic.setVisible(false);
+      this.essencesIcon?.setVisible(false);
+      this.essencesFallbackGraphic.setVisible(false);
+    }
+    this.soulsText.setVisible(showAct1);
+    this.essencesText.setVisible(showAct1);
+    this.gearText.setVisible(showAct1);
+
+    this.altarBtn.container.setVisible(showAct1);
+    this.blacksmithBtn.container.setVisible(showAct1);
+    this.stashBtn.container.setVisible(showAct1);
+    this.enterBtn.container.setVisible(showAct1);
+    this.muteBtn.container.setVisible(showAct1);
+    this.resetBtn.container.setVisible(showAct1);
+    if (isPrologue) {
+      this.interactBtn.container.setVisible(false);
+      this.stageBtn.container.setVisible(false);
+    }
+
+    // Prologue / Vila Natal elements
+    this.villageHeroContainer.setVisible(isPrologue);
+    this.villageTrackerContainer.setVisible(isPrologue);
+    this.villageMinimapContainer.setVisible(isPrologue);
+    this.villageBagBtn.container.setVisible(isPrologue);
+    this.villageAudioBtn.container.setVisible(isPrologue);
+    this.villageConfigBtn.container.setVisible(isPrologue);
+    this.villageInteractContainer.setVisible(isPrologue);
+  }
+
+  private updateVillageHud(snap: HubHudSnapshot): void {
+    // 1. Hero Portrait, Name, Level & HP Bar
+    const heroName = (snap.heroName?.trim() || 'JOVEM GUERREIRO').toUpperCase();
+    const heroLevel = Math.max(1, Math.floor(snap.heroLevel ?? 1));
+    const maxHp = Math.max(1, Math.round(snap.heroMaxHp ?? 100));
+    const hp = Math.max(0, Math.min(maxHp, Math.round(snap.heroHp ?? maxHp)));
+
+    this.villageHeroNameText.setText(heroName);
+    this.villageLevelBadgeText.setText(`Nv. ${heroLevel}`);
+    this.villageHpText.setText(`${hp}/${maxHp}`);
+
+    const hasPortrait =
+      this.villagePortraitImg !== null &&
+      hasUiTextureFrame(this.scene, PORTRAITS_KEY, 0);
+    if (this.villagePortraitImg) {
+      this.villagePortraitImg.setVisible(hasPortrait);
+      if (hasPortrait) {
+        this.villagePortraitImg.setFrame(0);
+        const size = (VILLAGE_PORTRAIT_R - 1) * 2;
+        this.villagePortraitImg.setDisplaySize(size, size);
+      }
+    }
+    this.villagePortraitFallback.setVisible(!hasPortrait);
+
+    this.drawVillageHpBars(hp / maxHp);
+
+    // 2. Mission Tracker
+    const trackerTitle = (snap.trackerTitle?.trim() || 'VILA NATAL').toUpperCase();
+    const trackerText = snap.trackerText?.trim() || 'Falar com o Mestre';
+    this.villageTrackerTitle.setText(trackerTitle);
+    this.villageTrackerText.setText(trackerText);
+
+    // 3. Minimap Dynamic Layer
+    this.drawVillageMinimapDynamic(snap);
+
+    // 4. Utility Circular Trio (Inventário, Áudio, Config.)
+    this.refreshVillageUtilityButtons(snap);
+
+    // 5. Primary Circular "INTERAGIR" Button
+    this.drawVillageInteractButton();
+  }
+
+  private drawVillageHeroStaticShell(): void {
+    const cx = VILLAGE_PORTRAIT_CX;
+    const cy = VILLAGE_PORTRAIT_CY;
+    const r = VILLAGE_PORTRAIT_R;
+
+    this.villagePortraitBg.clear();
+    this.villagePortraitBg.fillStyle(0x000000, 0.5);
+    this.villagePortraitBg.fillCircle(cx, cy + 2, r + 3);
+    this.villagePortraitBg.fillStyle(DF_PALETTE.deepRecess, 0.96);
+    this.villagePortraitBg.fillCircle(cx, cy, r);
+
+    this.villagePortraitRing.clear();
+    this.villagePortraitRing.lineStyle(3.5, DF_PALETTE.metalDark, 0.98);
+    this.villagePortraitRing.strokeCircle(cx, cy, r + 1.5);
+    this.villagePortraitRing.lineStyle(2.2, DF_PALETTE.bronzeBorder, 0.98);
+    this.villagePortraitRing.strokeCircle(cx, cy, r);
+    this.villagePortraitRing.lineStyle(1, DF_PALETTE.agedGold, 0.75);
+    this.villagePortraitRing.strokeCircle(cx, cy, r - 2);
+
+    this.villagePortraitRing.fillStyle(DF_PALETTE.agedGold, 0.96);
+    for (const pt of [
+      { x: cx, y: cy - r },
+      { x: cx + r, y: cy },
+      { x: cx - r, y: cy },
+    ]) {
+      this.villagePortraitRing.fillCircle(pt.x, pt.y, 2);
+    }
+
+    const bw = 46;
+    const bh = 15;
+    const by = cy + r + 1;
+    this.villageLevelBadgeBg.clear();
+    this.villageLevelBadgeBg.fillStyle(DF_PALETTE.obsidianBg, 0.96);
+    this.villageLevelBadgeBg.fillRoundedRect(
+      cx - bw / 2,
+      by - bh / 2,
+      bw,
+      bh,
+      4
+    );
+    this.villageLevelBadgeBg.lineStyle(1.3, DF_PALETTE.agedGold, 0.95);
+    this.villageLevelBadgeBg.strokeRoundedRect(
+      cx - bw / 2,
+      by - bh / 2,
+      bw,
+      bh,
+      4
+    );
+  }
+
+  private drawVillageHpBars(ratio: number): void {
+    const clampedRatio = Math.max(0, Math.min(1, ratio));
+    const barX = 86;
+    const hpY = 30;
+    const hpW = 188;
+    const hpH = 18;
+    const bevel = 9;
+
+    this.villageHpBarGfx.clear();
+    const bgPts = getChamferPoints(barX, hpY, hpW, hpH, bevel);
+    this.villageHpBarGfx.fillStyle(DF_PALETTE.deepRecess, 0.95);
+    this.villageHpBarGfx.fillPoints(bgPts, true);
+
+    if (clampedRatio > 0) {
+      const fw = Math.max(bevel + 2, hpW * clampedRatio);
+      const fillPts = getChamferPoints(
+        barX + 1,
+        hpY + 1,
+        fw - 2,
+        hpH - 2,
+        Math.min(bevel, fw * 0.35)
+      );
+      this.villageHpBarGfx.fillStyle(0xb91c1c, 0.98);
+      this.villageHpBarGfx.fillPoints(fillPts, true);
+
+      const hiPts = getChamferPoints(
+        barX + 2,
+        hpY + 2,
+        Math.max(4, fw - 6),
+        6,
+        4
+      );
+      this.villageHpBarGfx.fillStyle(0xef4444, 0.55);
+      this.villageHpBarGfx.fillPoints(hiPts, true);
+    }
+
+    this.villageHpBarGfx.lineStyle(1.6, DF_PALETTE.bronzeBorder, 0.98);
+    this.villageHpBarGfx.strokePoints(bgPts, true);
+    const outerPts = getChamferPoints(barX - 1, hpY - 1, hpW + 2, hpH + 2, bevel);
+    this.villageHpBarGfx.lineStyle(1, DF_PALETTE.metalDark, 0.92);
+    this.villageHpBarGfx.strokePoints(outerPts, true);
+
+    // Secondary amber bar below HP bar
+    const secY = 53;
+    const secW = 154;
+    const secH = 6;
+    this.villageSecBarGfx.clear();
+    const secBgPts = getChamferPoints(barX, secY, secW, secH, 4);
+    this.villageSecBarGfx.fillStyle(DF_PALETTE.deepRecess, 0.92);
+    this.villageSecBarGfx.fillPoints(secBgPts, true);
+
+    const secFillPts = getChamferPoints(
+      barX + 1,
+      secY + 1,
+      (secW - 2) * 0.45,
+      secH - 2,
+      3
+    );
+    this.villageSecBarGfx.fillStyle(0xd97706, 0.95);
+    this.villageSecBarGfx.fillPoints(secFillPts, true);
+    this.villageSecBarGfx.lineStyle(1, DF_PALETTE.metalBorder, 0.88);
+    this.villageSecBarGfx.strokePoints(secBgPts, true);
+  }
+
+  private drawVillageTrackerStatic(): void {
+    const dcx = 10;
+    const dcy = 10;
+
+    this.villageTrackerGfx.clear();
+    this.villageTrackerGfx.fillStyle(DF_PALETTE.agedGold, 0.96);
+    this.villageTrackerGfx.fillPoints(
+      [
+        new Phaser.Geom.Point(dcx, dcy - 6.2),
+        new Phaser.Geom.Point(dcx + 6.2, dcy),
+        new Phaser.Geom.Point(dcx, dcy + 6.2),
+        new Phaser.Geom.Point(dcx - 6.2, dcy),
+      ],
+      true
+    );
+    this.villageTrackerGfx.fillStyle(DF_PALETTE.bronzeDark, 0.95);
+    this.villageTrackerGfx.fillPoints(
+      [
+        new Phaser.Geom.Point(dcx, dcy - 5),
+        new Phaser.Geom.Point(dcx + 5, dcy),
+        new Phaser.Geom.Point(dcx, dcy + 5),
+        new Phaser.Geom.Point(dcx - 5, dcy),
+      ],
+      true
+    );
+    this.villageTrackerGfx.fillStyle(DF_PALETTE.goldBright, 0.98);
+    this.villageTrackerGfx.fillPoints(
+      [
+        new Phaser.Geom.Point(dcx, dcy - 3),
+        new Phaser.Geom.Point(dcx + 3, dcy),
+        new Phaser.Geom.Point(dcx, dcy + 3),
+        new Phaser.Geom.Point(dcx - 3, dcy),
+      ],
+      true
+    );
+
+    this.villageTrackerGfx.lineStyle(1, DF_PALETTE.bronzeBorder, 0.5);
+    this.villageTrackerGfx.lineBetween(0, 44, 214, 44);
+    this.villageTrackerGfx.lineStyle(1.2, DF_PALETTE.agedGold, 0.65);
+    this.villageTrackerGfx.lineBetween(0, 44, 56, 44);
+  }
+
+  private drawVillageMinimapStaticShell(): void {
+    const r = VILLAGE_MINIMAP_R;
+
+    this.villageMinimapBg.clear();
+    this.villageMinimapBg.fillStyle(0x000000, 0.5);
+    this.villageMinimapBg.fillCircle(0, 2, r + 4);
+    this.villageMinimapBg.fillStyle(0x0a101a, 0.94);
+    this.villageMinimapBg.fillCircle(0, 0, r);
+
+    // Stylized silhouette of the village clearing with North gate corridor & South opening
+    const clearingPts = [
+      new Phaser.Geom.Point(-26, -12),
+      new Phaser.Geom.Point(4, -12),
+      new Phaser.Geom.Point(4, -28),
+      new Phaser.Geom.Point(16, -28),
+      new Phaser.Geom.Point(16, -12),
+      new Phaser.Geom.Point(28, -12),
+      new Phaser.Geom.Point(32, -6),
+      new Phaser.Geom.Point(32, 12),
+      new Phaser.Geom.Point(24, 18),
+      new Phaser.Geom.Point(5, 18),
+      new Phaser.Geom.Point(5, 25),
+      new Phaser.Geom.Point(-5, 25),
+      new Phaser.Geom.Point(-5, 18),
+      new Phaser.Geom.Point(-24, 18),
+      new Phaser.Geom.Point(-32, 10),
+      new Phaser.Geom.Point(-32, -6),
+    ];
+    this.villageMinimapBg.fillStyle(0x28364a, 0.92);
+    this.villageMinimapBg.fillPoints(clearingPts, true);
+    this.villageMinimapBg.lineStyle(1, 0x64748b, 0.9);
+    this.villageMinimapBg.strokePoints(clearingPts, true);
+
+    this.villageMinimapFrame.clear();
+    this.villageMinimapFrame.lineStyle(3.5, DF_PALETTE.metalDark, 0.98);
+    this.villageMinimapFrame.strokeCircle(0, 0, r + 1.5);
+    this.villageMinimapFrame.lineStyle(2.2, DF_PALETTE.bronzeBorder, 0.98);
+    this.villageMinimapFrame.strokeCircle(0, 0, r);
+    this.villageMinimapFrame.lineStyle(1, DF_PALETTE.agedGold, 0.6);
+    this.villageMinimapFrame.strokeCircle(0, 0, r - 2);
+
+    this.villageMinimapFrame.fillStyle(DF_PALETTE.agedGold, 0.96);
+    for (const pt of [
+      { x: r, y: 0 },
+      { x: 0, y: r },
+      { x: -r, y: 0 },
+      { x: 0, y: -r },
+    ]) {
+      this.villageMinimapFrame.fillCircle(pt.x, pt.y, 2);
+    }
+  }
+
+  private drawVillageMinimapDynamic(snap: HubHudSnapshot): void {
+    this.villageMinimapDynamic.clear();
+
+    const projectNorm = (nx: number, ny: number): Vector2D => {
+      const clampedX = Math.max(0.1, Math.min(0.9, nx));
+      const clampedY = Math.max(0.15, Math.min(0.85, ny));
+      const px = (clampedX - 0.5) * 68;
+      const py = (clampedY - 0.5) * 44;
+      const dist = Math.hypot(px, py);
+      const maxR = VILLAGE_MINIMAP_R - 7;
+      if (dist > maxR && dist > 0) {
+        return { x: (px / dist) * maxR, y: (py / dist) * maxR };
+      }
+      return { x: px, y: py };
+    };
+
+    // Campfire at center (640/1280 = 0.5, 390/720 = 0.542)
+    const firePt = projectNorm(0.5, 0.542);
+    this.villageMinimapDynamic.fillStyle(0xf97316, 0.98);
+    this.villageMinimapDynamic.fillCircle(firePt.x, firePt.y, 2.1);
+
+    // Exit Gate marker at north-east corridor (860/1280 = 0.672, 235/720 = 0.326)
+    const gatePt = projectNorm(0.672, 0.326);
+    this.villageMinimapDynamic.fillStyle(
+      snap.gateUnlocked ? 0xfde047 : 0x94a3b8,
+      0.92
+    );
+    this.villageMinimapDynamic.fillRect(gatePt.x - 3, gatePt.y - 1.5, 6, 3);
+
+    // Lyra at north-west in front of house (372/1280 = 0.291, 296/720 = 0.411)
+    const lyraPt = projectNorm(0.291, 0.411);
+    this.villageMinimapDynamic.fillStyle(0x4ade80, 0.96);
+    this.villageMinimapDynamic.fillCircle(lyraPt.x, lyraPt.y, 2.2);
+
+    // Gorran at east forge (922/1280 = 0.720, 392/720 = 0.544)
+    const gorranPt = projectNorm(0.72, 0.544);
+    this.villageMinimapDynamic.fillStyle(0xfb923c, 0.96);
+    this.villageMinimapDynamic.fillCircle(gorranPt.x, gorranPt.y, 2.2);
+
+    // Weapon Master at west clearing (310/1280 = 0.242, 410/720 = 0.569)
+    const masterPt = projectNorm(0.242, 0.569);
+    this.villageMinimapDynamic.fillStyle(0xfacc15, 1);
+    this.villageMinimapDynamic.fillCircle(masterPt.x, masterPt.y, 2.7);
+
+    // Hero cyan triangle
+    const heroNorm = snap.heroNormalizedPos ?? { x: 0.4, y: 0.59 };
+    const heroPt = projectNorm(heroNorm.x, heroNorm.y);
+    this.villageMinimapDynamic.fillStyle(0x38bdf8, 1);
+    this.villageMinimapDynamic.fillPoints(
+      [
+        new Phaser.Geom.Point(heroPt.x, heroPt.y - 4),
+        new Phaser.Geom.Point(heroPt.x + 3.5, heroPt.y + 3),
+        new Phaser.Geom.Point(heroPt.x - 3.5, heroPt.y + 3),
+      ],
+      true
+    );
+  }
+
+  private createVillageCircularButton(
+    labelText: string,
+    iconFrame: number,
+    onClick: () => void,
+    hasBadge: boolean
+  ): VillageCircularBtnView {
+    const bg = this.scene.add.graphics();
+    const fallbackGfx = this.scene.add.graphics();
+    const icon = hasUiTextureFrame(this.scene, DF_UI_ICONS_KEY, iconFrame)
+      ? this.scene.add
+          .image(0, 0, DF_UI_ICONS_KEY, iconFrame)
+          .setOrigin(0.5)
+          .setDisplaySize(20, 20)
+      : null;
+
+    const badgeBg = hasBadge ? this.scene.add.graphics() : undefined;
+    const badgeText = hasBadge
+      ? this.scene.add
+          .text(13, -13, '0', {
+            fontFamily: DF_FONTS.BODY,
+            fontSize: '9px',
+            color: '#ffffff',
+            fontStyle: 'bold',
+            resolution: 2,
+          })
+          .setOrigin(0.5)
+          .setVisible(false)
+      : undefined;
+
+    const label = this.scene.add
+      .text(0, VILLAGE_UTILITY_R + 9, labelText, {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '9px',
+        color: DF_PALETTE.textMuted,
+        stroke: '#05070c',
+        strokeThickness: 2.5,
+        resolution: 2,
+      })
+      .setOrigin(0.5);
+
+    const hitSize = VILLAGE_UTILITY_R * 2 + 8;
+    const zone = this.scene.add
+      .zone(0, 0, hitSize, hitSize)
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+
+    const children: Phaser.GameObjects.GameObject[] = [bg, fallbackGfx];
+    if (icon) {
+      children.push(icon);
+    }
+    if (badgeBg && badgeText) {
+      children.push(badgeBg, badgeText);
+    }
+    children.push(label, zone);
+
+    const container = this.scene.add
+      .container(0, 0, children)
+      .setScrollFactor(0)
+      .setDepth(1020);
+
+    const view: VillageCircularBtnView = {
+      container,
+      bg,
+      icon,
+      fallbackGfx,
+      badgeBg,
+      badgeText,
+      label,
+      zone,
+      hovered: false,
+      pressed: false,
+    };
+
+    zone.on('pointerover', () => {
+      view.hovered = true;
+      this.refreshVillageUtilityButtons(this.lastSnapshot);
+    });
+    zone.on('pointerout', () => {
+      view.hovered = false;
+      view.pressed = false;
+      this.refreshVillageUtilityButtons(this.lastSnapshot);
+    });
+    zone.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _lx: number,
+        _ly: number,
+        event?: Phaser.Types.Input.EventData
+      ) => {
+        event?.stopPropagation?.();
+        view.pressed = true;
+        onClick();
+        this.refreshVillageUtilityButtons(this.lastSnapshot);
+      }
+    );
+    zone.on('pointerup', () => {
+      view.pressed = false;
+      this.refreshVillageUtilityButtons(this.lastSnapshot);
+    });
+
+    return view;
+  }
+
+  private refreshVillageUtilityButtons(snap: HubHudSnapshot): void {
+    const r = VILLAGE_UTILITY_R;
+
+    // 1. Inventário
+    this.drawCircularMetalShell(
+      this.villageBagBtn.bg,
+      r,
+      DF_PALETTE.agedGold,
+      this.villageBagBtn.hovered
+    );
+    const hasBagIcon =
+      this.villageBagBtn.icon !== null &&
+      hasUiTextureFrame(this.scene, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.bag);
+    this.villageBagBtn.icon?.setVisible(hasBagIcon);
+    this.villageBagBtn.fallbackGfx.clear();
+    if (!hasBagIcon) {
+      this.villageBagBtn.fallbackGfx.lineStyle(1.6, DF_PALETTE.agedGold, 0.95);
+      this.villageBagBtn.fallbackGfx.strokeRoundedRect(-6, -5, 12, 11, 2);
+    }
+    if (this.villageBagBtn.badgeBg && this.villageBagBtn.badgeText) {
+      this.villageBagBtn.badgeBg.clear();
+      if (snap.stashCount > 0) {
+        this.villageBagBtn.badgeBg.fillStyle(0xb91c1c, 0.98);
+        this.villageBagBtn.badgeBg.fillCircle(13, -13, 7.5);
+        this.villageBagBtn.badgeBg.lineStyle(1.2, DF_PALETTE.agedGold, 0.98);
+        this.villageBagBtn.badgeBg.strokeCircle(13, -13, 7.5);
+        this.villageBagBtn.badgeText
+          .setText(`${Math.min(99, snap.stashCount)}`)
+          .setVisible(true);
+      } else {
+        this.villageBagBtn.badgeText.setVisible(false);
+      }
+    }
+
+    // 2. Áudio
+    const muted = Boolean(snap.isMuted);
+    this.drawCircularMetalShell(
+      this.villageAudioBtn.bg,
+      r,
+      muted ? DF_PALETTE.buttonCrimsonBorder : DF_PALETTE.bronzeBorder,
+      this.villageAudioBtn.hovered
+    );
+    const audioFrame = muted
+      ? DF_UI_ICON_FRAMES.audioOff
+      : DF_UI_ICON_FRAMES.audioOn;
+    const hasAudioIcon =
+      this.villageAudioBtn.icon !== null &&
+      hasUiTextureFrame(this.scene, DF_UI_ICONS_KEY, audioFrame);
+    if (this.villageAudioBtn.icon) {
+      this.villageAudioBtn.icon.setVisible(hasAudioIcon);
+      if (hasAudioIcon) {
+        this.villageAudioBtn.icon.setFrame(audioFrame);
+      }
+    }
+    this.villageAudioBtn.fallbackGfx.clear();
+    if (!hasAudioIcon) {
+      this.villageAudioBtn.fallbackGfx.lineStyle(
+        1.6,
+        muted ? 0xf87171 : DF_PALETTE.agedGold,
+        0.95
+      );
+      this.villageAudioBtn.fallbackGfx.strokeCircle(0, 0, 5);
+    }
+    this.villageAudioBtn.label
+      .setText(muted ? 'Mudo' : 'Áudio')
+      .setColor(muted ? DF_PALETTE.textDanger : DF_PALETTE.textMuted);
+
+    // 3. Config. (clean 2D gear graphic + 2-click reset confirmation)
+    this.drawCircularMetalShell(
+      this.villageConfigBtn.bg,
+      r,
+      this.resetArmed ? 0xef4444 : DF_PALETTE.bronzeBorder,
+      this.villageConfigBtn.hovered,
+      this.resetArmed ? 0x5c151b : undefined
+    );
+    const hasSettingsIcon =
+      this.villageConfigBtn.icon !== null &&
+      hasUiTextureFrame(this.scene, DF_UI_ICONS_KEY, DF_UI_ICON_FRAMES.settings);
+    this.villageConfigBtn.icon?.setVisible(hasSettingsIcon);
+    this.drawConfigGearFallback(
+      this.villageConfigBtn.fallbackGfx,
+      !hasSettingsIcon
+    );
+    this.villageConfigBtn.label
+      .setText(this.resetArmed ? 'Confirmar?' : 'Config.')
+      .setColor(this.resetArmed ? '#ffffff' : DF_PALETTE.textMuted);
+  }
+
+  private drawCircularMetalShell(
+    gfx: Phaser.GameObjects.Graphics,
+    r: number,
+    accentColor: number,
+    hovered: boolean,
+    fillOverride?: number
+  ): void {
+    gfx.clear();
+    gfx.fillStyle(0x000000, 0.45);
+    gfx.fillCircle(0, 2, r + 2);
+    gfx.fillStyle(
+      fillOverride ?? (hovered ? 0x1e2534 : DF_PALETTE.innerSurface),
+      0.95
+    );
+    gfx.fillCircle(0, 0, r);
+    gfx.lineStyle(2.4, DF_PALETTE.metalDark, 0.98);
+    gfx.strokeCircle(0, 0, r + 1.2);
+    gfx.lineStyle(hovered ? 2 : 1.6, accentColor, 0.96);
+    gfx.strokeCircle(0, 0, r);
+    gfx.lineStyle(0.9, DF_PALETTE.metalDark, 0.85);
+    gfx.strokeCircle(0, 0, r - 2.5);
+  }
+
+  private drawConfigGearFallback(
+    gfx: Phaser.GameObjects.Graphics,
+    visible: boolean
+  ): void {
+    gfx.clear();
+    if (!visible) {
+      return;
+    }
+    const color = this.resetArmed ? 0xfca5a5 : 0xcbd5e1;
+    gfx.lineStyle(1.8, color, 0.95);
+    gfx.strokeCircle(0, 0, 5.2);
+    gfx.fillStyle(color, 0.95);
+    for (let i = 0; i < 8; i += 1) {
+      const angle = (i * Math.PI) / 4;
+      gfx.fillCircle(Math.cos(angle) * 7.2, Math.sin(angle) * 7.2, 1.4);
+    }
+  }
+
+  private drawVillageInteractButton(): void {
+    const r = VILLAGE_INTERACT_R;
+    const nearbyTarget = this.lastSnapshot.nearbyStationLabel?.trim() ?? '';
+    const isActive = nearbyTarget.length > 0;
+
+    this.villageInteractGlow.clear();
+    if (isActive) {
+      this.villageInteractGlow.fillStyle(0xfacc15, 0.16);
+      this.villageInteractGlow.fillCircle(0, 0, r + 14);
+      this.villageInteractGlow.fillStyle(0xfbbf24, 0.28);
+      this.villageInteractGlow.fillCircle(0, 0, r + 7);
+    } else {
+      this.villageInteractGlow.fillStyle(0xfaae46, 0.12);
+      this.villageInteractGlow.fillCircle(0, 0, r + 10);
+    }
+
+    this.villageInteractBg.clear();
+    this.villageInteractBg.fillStyle(0x000000, 0.5);
+    this.villageInteractBg.fillCircle(0, 3, r + 4);
+
+    const fillColor = this.villageInteractPressed
+      ? 0x331015
+      : this.villageInteractHovered || isActive
+        ? 0x581c22
+        : DF_PALETTE.buttonCrimsonFill;
+    this.villageInteractBg.fillStyle(fillColor, 0.95);
+    this.villageInteractBg.fillCircle(0, 0, r);
+
+    this.villageInteractBg.fillStyle(0x6e242c, 0.35);
+    this.villageInteractBg.fillCircle(0, -6, r - 8);
+
+    this.villageInteractBg.lineStyle(3.5, DF_PALETTE.metalDark, 0.98);
+    this.villageInteractBg.strokeCircle(0, 0, r + 1.5);
+    this.villageInteractBg.lineStyle(
+      2.4,
+      isActive ? DF_PALETTE.goldBright : DF_PALETTE.buttonCrimsonBorder,
+      0.98
+    );
+    this.villageInteractBg.strokeCircle(0, 0, r);
+    this.villageInteractBg.lineStyle(1.2, DF_PALETTE.agedGold, 0.88);
+    this.villageInteractBg.strokeCircle(0, 0, r - 3);
+
+    this.drawInteractEmblemGraphics(this.villageInteractEmblem, 0, -9);
+
+    this.villageInteractLabel.setColor(
+      isActive ? '#fef08a' : DF_PALETTE.textParchment
+    );
+
+    this.villageInteractTargetBg.clear();
+    if (isActive) {
+      this.villageInteractTargetText.setText(nearbyTarget).setVisible(true);
+      const pillW = Math.max(92, (this.villageInteractTargetText.width || 80) + 18);
+      const pillH = 20;
+      const pillY = -r - 16;
+      this.villageInteractTargetBg.fillStyle(DF_PALETTE.obsidianBg, 0.94);
+      this.villageInteractTargetBg.fillRoundedRect(
+        -pillW / 2,
+        pillY - pillH / 2,
+        pillW,
+        pillH,
+        5
+      );
+      this.villageInteractTargetBg.lineStyle(1.3, DF_PALETTE.agedGold, 0.95);
+      this.villageInteractTargetBg.strokeRoundedRect(
+        -pillW / 2,
+        pillY - pillH / 2,
+        pillW,
+        pillH,
+        5
+      );
+    } else {
+      this.villageInteractTargetText.setVisible(false);
+    }
+  }
+
+  private drawInteractEmblemGraphics(
+    gfx: Phaser.GameObjects.Graphics,
+    cx: number,
+    cy: number
+  ): void {
+    gfx.clear();
+    const bw = 30;
+    const bh = 20;
+    const x0 = cx - bw / 2;
+    const y0 = cy - bh / 2 - 1;
+
+    // Shadow
+    gfx.fillStyle(0x060508, 0.72);
+    gfx.fillPoints(getChamferPoints(x0 + 1, y0 + 2, bw, bh, 5), true);
+
+    // Outer metallic dark plate
+    gfx.fillStyle(DF_PALETTE.metalDark, 0.98);
+    gfx.fillPoints(getChamferPoints(x0, y0, bw, bh, 5), true);
+
+    // Inner warm bronze/gold plate
+    gfx.fillStyle(DF_PALETTE.bronzeDark, 0.96);
+    gfx.fillPoints(getChamferPoints(x0 + 1.6, y0 + 1.6, bw - 3.2, bh - 3.2, 4), true);
+    gfx.fillStyle(DF_PALETTE.bronzeBorder, 0.75);
+    gfx.fillPoints(
+      getChamferPoints(x0 + 2.6, y0 + 2.4, bw - 5.2, (bh - 4.8) * 0.55, 3),
+      true
+    );
+
+    // Dialogue crest lower tail
+    gfx.fillStyle(DF_PALETTE.metalDark, 0.98);
+    gfx.fillPoints(
+      [
+        new Phaser.Geom.Point(cx - 6.5, y0 + bh - 1),
+        new Phaser.Geom.Point(cx - 10.5, y0 + bh + 6),
+        new Phaser.Geom.Point(cx - 0.5, y0 + bh - 1),
+      ],
+      true
+    );
+    gfx.fillStyle(DF_PALETTE.agedGold, 0.96);
+    gfx.fillPoints(
+      [
+        new Phaser.Geom.Point(cx - 5.5, y0 + bh - 1.8),
+        new Phaser.Geom.Point(cx - 8.5, y0 + bh + 3.8),
+        new Phaser.Geom.Point(cx - 1.5, y0 + bh - 1.8),
+      ],
+      true
+    );
+
+    // Double golden fillet
+    gfx.lineStyle(1.5, DF_PALETTE.agedGold, 0.96);
+    gfx.strokePoints(
+      getChamferPoints(x0 + 1.2, y0 + 1.2, bw - 2.4, bh - 2.4, 4.2),
+      true
+    );
+    gfx.lineStyle(0.9, DF_PALETTE.goldBright, 0.55);
+    gfx.strokePoints(
+      getChamferPoints(x0 + 2.4, y0 + 2.4, bw - 4.8, bh - 4.8, 3.2),
+      true
+    );
+
+    // 3 golden diamond gems in the center
+    for (const dx of [-7.5, 0, 7.5]) {
+      const px = cx + dx;
+      const py = y0 + bh / 2;
+      const r1 = 2.7;
+      gfx.fillStyle(DF_PALETTE.metalDark, 0.95);
+      gfx.fillPoints(
+        [
+          new Phaser.Geom.Point(px, py - r1),
+          new Phaser.Geom.Point(px + r1, py),
+          new Phaser.Geom.Point(px, py + r1),
+          new Phaser.Geom.Point(px - r1, py),
+        ],
+        true
+      );
+      const r2 = 2.0;
+      gfx.fillStyle(DF_PALETTE.goldBright, 0.98);
+      gfx.fillPoints(
+        [
+          new Phaser.Geom.Point(px, py - r2),
+          new Phaser.Geom.Point(px + r2, py),
+          new Phaser.Geom.Point(px, py + r2),
+          new Phaser.Geom.Point(px - r2, py),
+        ],
+        true
+      );
+    }
   }
 
   private handleResetClick(): void {
@@ -539,6 +1650,7 @@ export class HubHud {
       this.resetBtn.label.setText('Confirmar?').setColor('#ffffff');
       this.resetBtn.variant = 'crimson';
       this.redrawButtonGraphics(this.resetBtn);
+      this.refreshVillageUtilityButtons(this.lastSnapshot);
 
       if (this.resetArmTimer !== undefined) {
         clearTimeout(this.resetArmTimer);
@@ -562,6 +1674,7 @@ export class HubHud {
     this.resetBtn.label.setText('Resetar').setColor(DF_PALETTE.textDanger);
     this.resetBtn.variant = 'crimson';
     this.redrawButtonGraphics(this.resetBtn);
+    this.refreshVillageUtilityButtons(this.lastSnapshot);
   }
 
   private createActionButton(

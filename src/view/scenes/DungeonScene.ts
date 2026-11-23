@@ -166,7 +166,7 @@ export interface SubmundoDebugApi {
   forceClearRoom: () => void;
   advanceRoom: () => void;
   restartRun: (stageId?: CampaignStageId) => void;
-  returnToHub?: () => void;
+  returnToHub?: (options?: { returnedFromDungeon?: boolean }) => void;
   /** Procedural map of the test arena (T-128); undefined outside it. */
   getDungeonMap: () => DungeonMap | undefined;
   /** Index of the active zone (wave) of the test arena. */
@@ -260,6 +260,7 @@ export class DungeonScene extends Phaser.Scene {
 
   private activeProfile!: SaveProfile;
   private activeStage!: CampaignStageDef;
+  private campaignStageId?: CampaignStageId;
   private startingHubItemIds = new Set<string>();
   private runState!: DungeonRunState;
   private hero!: HeroState;
@@ -405,7 +406,7 @@ export class DungeonScene extends Phaser.Scene {
         this.handleUseSkill(skillId);
       },
       onRestartRun: () => {
-        this.returnToHub();
+        this.returnToHub({ returnedFromDungeon: true });
       },
       onToggleInventory: () => {
         this.toggleInventoryModal();
@@ -520,7 +521,8 @@ export class DungeonScene extends Phaser.Scene {
         advanceRoom: () => this.advanceRoomNow(),
         restartRun: (stageId?: CampaignStageId) =>
           this.startNewRun(stageId ? { stageId } : undefined),
-        returnToHub: () => this.returnToHub(),
+        returnToHub: (options?: { returnedFromDungeon?: boolean }) =>
+          this.returnToHub(options),
         getDungeonMap: () => this.dungeonMap,
         getActiveZoneIndex: () => this.testArenaRoomIndex,
         getTestRoomIndex: () => this.testArenaRoomIndex,
@@ -794,9 +796,15 @@ export class DungeonScene extends Phaser.Scene {
     this.loadCurrentRoom();
   }
 
-  public returnToHub(): void {
+  public returnToHub(options?: { returnedFromDungeon?: boolean }): void {
     if ('HubScene' in this.scene.manager.keys) {
-      this.scene.start('HubScene', { fromRun: this.lastRunReport });
+      const returned =
+        options?.returnedFromDungeon ?? Boolean(this.lastRunReport);
+      this.scene.start('HubScene', {
+        fromRun: this.lastRunReport,
+        stageId: this.campaignStageId,
+        returnedFromDungeon: returned,
+      });
       return;
     }
     this.startNewRun();
@@ -860,6 +868,7 @@ export class DungeonScene extends Phaser.Scene {
     this.activeProfile = data?.profileSnapshot ?? loadOrCreateProfile();
     const campaign = ensureCampaignProgress(this.activeProfile);
     this.activeStage = getCampaignStage(data?.stageId ?? campaign.currentStageId);
+    this.campaignStageId = this.activeStage.id;
     this.runState = createDungeonRun(
       width,
       height,

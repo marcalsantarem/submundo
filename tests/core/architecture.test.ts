@@ -2,10 +2,13 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  PROLOGUE_STAGE_IDS,
+  resolveVillageHubState,
   resolveViewportConfig,
   type AffixDef,
   type EquipSlot,
   type EquippedGear,
+  type HubTransitionData,
   type ItemDef,
   type ItemInstance,
   type LegendaryPowerDef,
@@ -17,8 +20,8 @@ import {
 import { GAME_VERSION } from '../../src/version';
 
 describe('Architecture & Viewport Contracts (T-001)', () => {
-  it('exports GAME_VERSION as 0.8.0', () => {
-    expect(GAME_VERSION).toBe('0.8.0');
+  it('exports GAME_VERSION as 0.9.0', () => {
+    expect(GAME_VERSION).toBe('0.9.0');
   });
 
   it('always resolves exclusive landscape viewport (960x540, 16:9) for landscape windows with isPortraitWindow false', () => {
@@ -194,6 +197,49 @@ describe('Architecture & Viewport Contracts (T-001)', () => {
     expect(mainContent).toContain("addEventListener('load'");
     expect(mainContent).toContain("navigator.serviceWorker.register('./sw.js')");
     expect(mainContent).toContain('.catch(');
+  });
+
+  it('preloads Village Natal assets/animations, defaults BootScene to HubScene, re-exports VillageHubManager and bumps sw.js cache to submundo-v0.9.0 (T-140)', () => {
+    const transition: HubTransitionData = {
+      stageId: 'prologue_grotto',
+      returnedFromDungeon: true,
+      applyOutcome: true,
+    };
+    expect(transition.returnedFromDungeon).toBe(true);
+    expect(transition.applyOutcome).toBe(true);
+    expect(PROLOGUE_STAGE_IDS).toEqual(['prologue_grotto', 'prologue_mine', 'prologue_seal']);
+    expect(typeof resolveVillageHubState).toBe('function');
+
+    const bootPath = resolve(process.cwd(), 'src/view/scenes/BootScene.ts');
+    const bootContent = readFileSync(bootPath, 'utf-8');
+    for (const key of [
+      'village_hub_tiles',
+      'village_hub_props',
+      'village_hub_props_large',
+      'village_hub_house',
+      'village_hub_gate',
+      'npc_weapon_master',
+      'npc_lyra',
+      'npc_gorran',
+      'village_campfire_idle',
+      'village_brazier_idle',
+      'village_torch_idle',
+      'village_forge_idle',
+      'village_campfire_large_idle',
+      'village_forge_large_idle',
+      'npc_weapon_master_idle',
+      'npc_lyra_idle',
+      'npc_gorran_idle',
+      'npc_gorran_hammer',
+    ]) {
+      expect(bootContent).toContain(`'${key}'`);
+    }
+    expect(bootContent).toContain("this.scene.start('HubScene')");
+    expect(bootContent).toContain("this.scene.start('DungeonScene', { testArena: true })");
+
+    const swPath = resolve(process.cwd(), 'public/sw.js');
+    const swContent = readFileSync(swPath, 'utf-8');
+    expect(swContent).toContain("const CACHE_NAME = 'submundo-v0.9.0';");
   });
 });
 

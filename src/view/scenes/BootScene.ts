@@ -214,6 +214,62 @@ const SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
     frameHeight: 32,
     fallbackColor: 0x292524,
   },
+  {
+    key: 'village_hub_tiles',
+    file: 'assets/sprites/village_hub_tiles.png',
+    frameWidth: 32,
+    frameHeight: 32,
+    fallbackColor: 0x4b382a,
+  },
+  {
+    key: 'village_hub_props',
+    file: 'assets/sprites/village_hub_props.png',
+    frameWidth: 32,
+    frameHeight: 32,
+    fallbackColor: 0x78350f,
+  },
+  {
+    key: 'village_hub_props_large',
+    file: 'assets/sprites/village_hub_props_large.png',
+    frameWidth: 64,
+    frameHeight: 64,
+    fallbackColor: 0x92400e,
+  },
+  {
+    key: 'village_hub_house',
+    file: 'assets/sprites/village_hub_house.png',
+    frameWidth: 224,
+    frameHeight: 192,
+    fallbackColor: 0x713f12,
+  },
+  {
+    key: 'village_hub_gate',
+    file: 'assets/sprites/village_hub_gate.png',
+    frameWidth: 192,
+    frameHeight: 160,
+    fallbackColor: 0x57534e,
+  },
+  {
+    key: 'npc_weapon_master',
+    file: 'assets/sprites/npc_weapon_master.png',
+    frameWidth: 80,
+    frameHeight: 80,
+    fallbackColor: 0x64748b,
+  },
+  {
+    key: 'npc_lyra',
+    file: 'assets/sprites/npc_lyra.png',
+    frameWidth: 80,
+    frameHeight: 80,
+    fallbackColor: 0x15803d,
+  },
+  {
+    key: 'npc_gorran',
+    file: 'assets/sprites/npc_gorran.png',
+    frameWidth: 80,
+    frameHeight: 80,
+    fallbackColor: 0xb45309,
+  },
 ];
 
 /** The 7 approved biomes (Decision #21). Texture keys: biome_<id>_{tiles,doors,props,props_tall}. */
@@ -270,6 +326,37 @@ const ALL_SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
 
 const DUNGEON_BASIC_TORCH_ANIM_KEY = 'dungeon_basic_torch';
 
+const VILLAGE_GLOBAL_ANIMATIONS: readonly {
+  key: string;
+  texture: string;
+  start: number;
+  end: number;
+  frameRate: number;
+}[] = [
+  { key: 'village_campfire_idle', texture: 'village_hub_props', start: 6, end: 9, frameRate: 8 },
+  { key: 'village_brazier_idle', texture: 'village_hub_props', start: 10, end: 13, frameRate: 8 },
+  { key: 'village_torch_idle', texture: 'village_hub_props', start: 14, end: 17, frameRate: 8 },
+  { key: 'village_forge_idle', texture: 'village_hub_props', start: 18, end: 21, frameRate: 8 },
+  {
+    key: 'village_campfire_large_idle',
+    texture: 'village_hub_props_large',
+    start: 0,
+    end: 3,
+    frameRate: 8,
+  },
+  {
+    key: 'village_forge_large_idle',
+    texture: 'village_hub_props_large',
+    start: 4,
+    end: 7,
+    frameRate: 8,
+  },
+  { key: 'npc_weapon_master_idle', texture: 'npc_weapon_master', start: 0, end: 3, frameRate: 5 },
+  { key: 'npc_lyra_idle', texture: 'npc_lyra', start: 0, end: 3, frameRate: 5 },
+  { key: 'npc_gorran_idle', texture: 'npc_gorran', start: 0, end: 3, frameRate: 5 },
+  { key: 'npc_gorran_hammer', texture: 'npc_gorran', start: 4, end: 7, frameRate: 7 },
+];
+
 const LINEAR_TEXTURE_KEYS: readonly string[] = ['ui_icons', 'portraits'];
 
 export class BootScene extends Phaser.Scene {
@@ -314,10 +401,24 @@ export class BootScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    if ('DungeonScene' in this.scene.manager.keys) {
+    const shouldStartTestArena =
+      typeof window !== 'undefined' &&
+      (() => {
+        const params = new URLSearchParams(window.location.search);
+        return (
+          params.has('testArena') ||
+          params.has('biome') ||
+          params.has('map') ||
+          params.has('seed')
+        );
+      })();
+
+    if (shouldStartTestArena && 'DungeonScene' in this.scene.manager.keys) {
       this.scene.start('DungeonScene', { testArena: true });
     } else if ('HubScene' in this.scene.manager.keys) {
       this.scene.start('HubScene');
+    } else if ('DungeonScene' in this.scene.manager.keys) {
+      this.scene.start('DungeonScene');
     }
   }
 
@@ -351,6 +452,25 @@ export class BootScene extends Phaser.Scene {
           key: animKey,
           frames: this.anims.generateFrameNumbers(biomePropsKey, { start: 0, end: 3 }),
           frameRate: BIOME_SHEET_SPECS[id].torchFrameRate,
+          repeat: -1,
+        });
+      }
+    }
+
+    // Village Natal Hub props and NPC global animations (T-140).
+    for (const anim of VILLAGE_GLOBAL_ANIMATIONS) {
+      if (
+        !this.anims.exists(anim.key) &&
+        this.textures.exists(anim.texture) &&
+        this.textures.get(anim.texture).has(String(anim.end))
+      ) {
+        this.anims.create({
+          key: anim.key,
+          frames: this.anims.generateFrameNumbers(anim.texture, {
+            start: anim.start,
+            end: anim.end,
+          }),
+          frameRate: anim.frameRate,
           repeat: -1,
         });
       }
