@@ -65,7 +65,7 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 &
     });
 
     await page.setViewportSize(DESKTOP_VIEWPORT);
-    await page.goto('/');
+    await page.goto('/?test');
 
     await expect(page).toHaveTitle(`SUBMUNDO v${GAME_VERSION}`);
 
@@ -295,7 +295,7 @@ test.describe('SUBMUNDO M6 — Monsters & Bosses 20f testArena E2E (PC 960x540 &
       });
 
     try {
-      await mobilePage.goto('/');
+      await mobilePage.goto('/?test');
       await mobilePage.waitForFunction(
         () =>
           typeof window.__SUBMUNDO_DEBUG__ !== 'undefined' &&
