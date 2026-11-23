@@ -32,6 +32,12 @@ import {
   DUNGEON_TILE_FRAMES,
   type AutotileLayout,
 } from './DungeonMapRenderer';
+import {
+  getBiomeTheme,
+  resolveTestArenaBiome,
+  themePropFrame,
+  type ArenaBiomeId,
+} from './BiomeTheme';
 import { moveHero, type HeroState } from '../../core/entities/Hero';
 import { spawnMonster, type MonsterInstance } from '../../core/entities/Monster';
 import {
@@ -126,16 +132,6 @@ const ANIMATED_SPRITESHEET_MONSTERS = new Set<string>([
 const TEST_ARENA_FINISHED_TEXT = 'Teste finalizado';
 const TEST_ARENA_FINISH_DELAY_MS = 800;
 
-// --- Masmorra Básica 2.5D room (Decision #17, BRF-128) ---------------------
-const DUNGEON_BASIC_TILES_KEY = 'dungeon_basic_tiles';
-const DUNGEON_BASIC_PROPS_KEY = 'dungeon_basic_props';
-const DUNGEON_BASIC_TALL_KEY = 'dungeon_basic_props_tall';
-const DUNGEON_BASIC_TORCH_ANIM = 'dungeon_basic_torch';
-const DUNGEON_BASIC_PROP_FRAMES = [
-  'torch_0', 'torch_1', 'torch_2', 'torch_3', 'chest_closed', 'barrel', 'urn',
-  'bones', 'rubble', 'chain', 'skulls_candle',
-] as const;
-type DungeonBasicProp = (typeof DUNGEON_BASIC_PROP_FRAMES)[number];
 /** Distance from an actor's center (sprite origin) to its feet, in world px. */
 const ACTOR_FEET_OFFSET = 30;
 interface GroundDrop {
@@ -186,6 +182,8 @@ export interface SubmundoDebugApi {
   pickUpDropAt: (index: number) => boolean;
   /** Same as the "Pegar" button / E key (T-132). */
   pickUpNearest: () => boolean;
+  /** Biome of the test arena (`?biome=`, T-073); `dungeon_basic` by default. */
+  getBiomeId: () => ArenaBiomeId;
 }
 
 declare global {
@@ -319,6 +317,10 @@ export class DungeonScene extends Phaser.Scene {
   public testArenaRoomIndex = 0;
   /** `?map=rooms` (default) or `?map=giant`. */
   public testArenaMapMode: DungeonMapMode = 'rooms';
+  /** Biome of the test arena from `?biome=<id>` (T-073); `dungeon_basic` by default. */
+  public testArenaBiome: ArenaBiomeId = 'dungeon_basic';
+  /** Soft light that follows the hero in dark biomes. */
+  private heroLight?: Phaser.GameObjects.Image;
   private dungeonMap?: DungeonMap;
   private mapLayout?: AutotileLayout;
   private mapView?: DungeonMapView;
@@ -536,6 +538,7 @@ export class DungeonScene extends Phaser.Scene {
           return drop ? this.handleDropClick(drop) : false;
         },
         pickUpNearest: () => this.pickUpNearestDrop(),
+        getBiomeId: () => this.testArenaBiome,
       };
     }
   }
@@ -818,6 +821,7 @@ export class DungeonScene extends Phaser.Scene {
     if (this.isTestArena) {
       this.testArenaSeed = resolveTestArenaSeed();
       this.testArenaMapMode = resolveTestArenaMapMode();
+      this.testArenaBiome = resolveTestArenaBiome();
       const map = generateDungeonMap(this.testArenaSeed, {
         mode: this.testArenaMapMode,
       });
@@ -1592,19 +1596,17 @@ export class DungeonScene extends Phaser.Scene {
       this.trackTestObject(obj);
     this.lightingGraphics.clear();
 
+    const theme = getBiomeTheme(this.testArenaBiome, this.textures);
+    const light = theme.lighting;
     const hasTiles =
-      this.textures.exists(DUNGEON_BASIC_TILES_KEY) &&
-      this.textures
-        .get(DUNGEON_BASIC_TILES_KEY)
-        .has(String(DUNGEON_TILE_FRAMES.length - 1));
+      this.textures.exists(theme.tilesKey) &&
+      this.textures.get(theme.tilesKey).has(String(DUNGEON_TILE_FRAMES.length - 1));
     const hasProps =
-      this.textures.exists(DUNGEON_BASIC_PROPS_KEY) &&
-      this.textures
-        .get(DUNGEON_BASIC_PROPS_KEY)
-        .has(String(DUNGEON_BASIC_PROP_FRAMES.length - 1));
+      this.textures.exists(theme.propsKey) &&
+      this.textures.get(theme.propsKey).has(String(theme.propFrames.length - 1));
     const hasTall =
-      this.textures.exists(DUNGEON_BASIC_TALL_KEY) &&
-      this.textures.get(DUNGEON_BASIC_TALL_KEY).has('1');
+      this.textures.exists(theme.tallKey) &&
+      this.textures.get(theme.tallKey).has(String(theme.tallFrames.length - 1));
 
     if (!this.mapLayout) {
       this.mapLayout = autotileDungeonMap(map);
@@ -1613,7 +1615,7 @@ export class DungeonScene extends Phaser.Scene {
 
     if (hasTiles) {
       // Static tilemap (culled to the camera): keeps the FPS on the giant map.
-      this.mapView = new DungeonMapView(this, layout, 1);
+      this.mapView = new DungeonMapView(this, layout, 1, theme);
       for (const id of this.sealedDoorIds) {
         this.mapView.setDoorSealed(id, true);
       }
@@ -1636,30 +1638,40 @@ export class DungeonScene extends Phaser.Scene {
       return !!ref && ref.frame.startsWith('wall_face_upper');
     };
     const torches = map.torches.filter((t) => isFaceCell(t.col, t.row));
+    // Lights emitted by props (candles, crystals, braziers...).
+    const propLights: Array<{ x: number; y: number; color: number; size: number; alpha: number }> = [];
     if (hasProps) {
-      const propFrame = (name: string) =>
-        DUNGEON_BASIC_PROP_FRAMES.indexOf(name as DungeonBasicProp);
       torches.forEach((t, i) => {
+        // Above the darkness layer: the flame itself is never dimmed.
         const torch = track(
           this.add
-            .sprite(t.col * T, t.row * T, DUNGEON_BASIC_PROPS_KEY, i % 4)
+            .sprite(t.col * T, t.row * T, theme.propsKey, i % 4)
             .setOrigin(0, 0)
-            .setDepth(1.2)
+            .setDepth(5.5)
         );
-        if (this.anims.exists(DUNGEON_BASIC_TORCH_ANIM)) {
-          torch.play({ key: DUNGEON_BASIC_TORCH_ANIM, startFrame: [0, 2, 1, 3][i % 4] });
+        if (this.anims.exists(theme.torchAnim)) {
+          torch.play({ key: theme.torchAnim, startFrame: [0, 2, 1, 3][i % 4] });
         }
       });
       map.props
-        .filter((p) => p.kind === 'floor' && propFrame(p.name) >= 0)
+        .filter((p) => p.kind === 'floor')
         .sort((a, b) => a.y - b.y)
         .forEach((p, i) => {
+          const frame = themePropFrame(theme, p.name, p.x, p.y);
+          const index = frame ? theme.propFrames.indexOf(frame) : -1;
+          if (!frame || index < 0) {
+            return;
+          }
           track(
             this.add
-              .image(p.x, p.y, DUNGEON_BASIC_PROPS_KEY, propFrame(p.name))
+              .image(p.x, p.y, theme.propsKey, index)
               .setOrigin(0, 0)
               .setDepth(1.3 + i * 0.0001)
           );
+          const glow = theme.propLights[frame];
+          if (glow) {
+            propLights.push({ ...glow, x: p.x + 16, y: p.y + (glow.dy ?? 16) });
+          }
         });
     }
     if (hasTall) {
@@ -1667,32 +1679,54 @@ export class DungeonScene extends Phaser.Scene {
         if (p.kind !== 'tall') {
           continue;
         }
+        const frame = themePropFrame(theme, p.name, p.x, p.y);
+        const index = frame ? theme.tallFrames.indexOf(frame) : -1;
         const image = track(
           this.add
-            .image(p.x + 16, p.y + 64 * 0.95, DUNGEON_BASIC_TALL_KEY, p.frame ?? 0)
+            .image(p.x + 16, p.y + 64 * 0.95, theme.tallKey, index >= 0 ? index : (p.frame ?? 0))
             .setOrigin(0.5, 0.95)
             .setDepth(4.5)
+            .setTint(light.tallTint)
         );
         this.testArenaTallProps.push({ image, baseY: p.y + 61 });
+        const glow = frame ? theme.propLights[frame] : undefined;
+        if (glow) {
+          propLights.push({ ...glow, x: p.x + 16, y: p.y + 61 + (glow.dy ?? 0) });
+        }
       }
     }
 
-    // Cold ambient (normal blend, under the actors).
-    this.lightingGraphics.fillStyle(0x05070d, 0.14);
-    this.lightingGraphics.fillRect(0, 0, mapW, mapH);
+    // Biome ambient darkness (normal blend, over floor/walls, under the actors).
+    if (light.ambientAlpha > 0) {
+      this.lightingGraphics.fillStyle(light.ambientColor, light.ambientAlpha);
+      this.lightingGraphics.fillRect(0, 0, mapW, mapH);
+    }
 
-    // Warm torch halos (additive radial gradients) — #f59e0b / #fde047.
+    // Torch halos in the biome's color (additive radial gradients).
+    const k = light.torchIntensity;
     for (const t of torches) {
       const fx = t.col * T + 15.5;
       const fy = t.row * T + 9;
-      this.addTestLight(fx, fy + 34, 230, 190, 0xf59e0b, 0.34, true);
-      this.addTestLight(fx, (t.row + 2) * T + 18, 120, 48, 0xf59e0b, 0.22, true);
-      this.addTestLight(fx, fy, 34, 34, 0xfde047, 0.55, true);
+      this.addTestLight(fx, fy + 34, 230, 190, light.torchColor, 0.34 * k, true);
+      this.addTestLight(fx, (t.row + 2) * T + 18, 120, 48, light.torchColor, 0.22 * k, true);
+      this.addTestLight(fx, fy, 34, 34, light.torchCore, 0.55 * k, true);
     }
-    for (const p of map.props) {
-      if (p.name === 'skulls_candle') {
-        this.addTestLight(p.x + 16, p.y + 8, 48, 48, 0xf59e0b, 0.35, true);
-      }
+    for (const l of propLights) {
+      this.addTestLight(l.x, l.y, l.size, l.size, l.color, l.alpha, true);
+    }
+    // Soft light around the hero in the dark biomes (follows him every frame).
+    this.heroLight = undefined;
+    if (light.heroLight) {
+      const h = light.heroLight;
+      this.heroLight = this.addTestLight(
+        this.hero?.position.x ?? 0,
+        (this.hero?.position.y ?? 0) + ACTOR_FEET_OFFSET * 0.5,
+        h.w,
+        h.h,
+        h.color,
+        h.alpha,
+        false
+      );
     }
 
     // Rune glow over every sealed door.
@@ -1839,6 +1873,7 @@ export class DungeonScene extends Phaser.Scene {
     this.testArenaObjects = [];
     this.testArenaTallProps = [];
     this.testArenaLights = [];
+    this.heroLight = undefined;
     this.doorGlows.clear();
     this.mapView?.destroy();
     this.mapView = undefined;
@@ -2079,6 +2114,13 @@ export class DungeonScene extends Phaser.Scene {
         isFlyer ? w * 0.6 : w,
         isFlyer ? 7 : 10,
         isFlyer ? 0.2 : 0.32
+      );
+    }
+
+    if (this.heroLight && this.hero) {
+      this.heroLight.setPosition(
+        this.hero.position.x,
+        this.hero.position.y + ACTOR_FEET_OFFSET * 0.5
       );
     }
 

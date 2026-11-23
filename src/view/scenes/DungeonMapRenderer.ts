@@ -20,6 +20,13 @@ import {
 export const DUNGEON_TILES_KEY = 'dungeon_basic_tiles';
 export const DUNGEON_DOORS_KEY = 'dungeon_basic_doors';
 
+/** Texture keys of the map sheets (T-073: one pair per biome, same frame contract). */
+export interface MapSheetKeys {
+  tilesKey: string;
+  doorsKey: string;
+}
+const DEFAULT_SHEETS: MapSheetKeys = { tilesKey: DUNGEON_TILES_KEY, doorsKey: DUNGEON_DOORS_KEY };
+
 export const DUNGEON_TILE_FRAMES = [
   'floor_0', 'floor_1', 'floor_2', 'floor_cracked', 'floor_moss', 'floor_blood',
   'wall_top', 'wall_top_s', 'wall_side_l', 'wall_side_r', 'wall_bottom',
@@ -286,7 +293,7 @@ export function doorCenter(d: MapDoor): { x: number; y: number } {
   }
 }
 
-/** Fallback (no `dungeon_basic_doors` texture): closest frame of the tiles sheet. */
+/** Fallback (no doors sheet for the theme): closest frame of the tiles sheet. */
 function doorFallback(frame: string): string {
   if (frame.startsWith('door_arch_sealed_')) return frame.replace('_sealed', '');
   if (frame.startsWith('door_open_sealed_')) return 'wall_face_lower';
@@ -311,16 +318,21 @@ export class DungeonMapView {
   private readonly hasDoorSheet: boolean;
   private readonly doorsGid0: number;
 
-  constructor(scene: Phaser.Scene, readonly layout: AutotileLayout, depth: number) {
+  constructor(
+    scene: Phaser.Scene,
+    readonly layout: AutotileLayout,
+    depth: number,
+    sheets: MapSheetKeys = DEFAULT_SHEETS
+  ) {
     const T = MAP_TILE;
     this.tilemap = scene.make.tilemap({ tileWidth: T, tileHeight: T, width: layout.cols, height: layout.rows });
-    const tsTiles = this.tilemap.addTilesetImage('dungeon_basic_tiles', DUNGEON_TILES_KEY, T, T, 0, 0, 1);
+    const tsTiles = this.tilemap.addTilesetImage('map_tiles', sheets.tilesKey, T, T, 0, 0, 1);
     this.hasDoorSheet =
-      scene.textures.exists(DUNGEON_DOORS_KEY) &&
-      scene.textures.get(DUNGEON_DOORS_KEY).has(String(DUNGEON_DOOR_FRAMES.length - 1));
+      scene.textures.exists(sheets.doorsKey) &&
+      scene.textures.get(sheets.doorsKey).has(String(DUNGEON_DOOR_FRAMES.length - 1));
     this.doorsGid0 = 1 + DUNGEON_TILE_FRAMES.length;
     const tsDoors = this.hasDoorSheet
-      ? this.tilemap.addTilesetImage('dungeon_basic_doors', DUNGEON_DOORS_KEY, T, T, 0, 0, this.doorsGid0)
+      ? this.tilemap.addTilesetImage('map_doors', sheets.doorsKey, T, T, 0, 0, this.doorsGid0)
       : null;
     const sets = [tsTiles, tsDoors].filter((s): s is Phaser.Tilemaps.Tileset => !!s);
     this.baseLayer = this.tilemap.createBlankLayer('base', sets, 0, 0) as Phaser.Tilemaps.TilemapLayer;
