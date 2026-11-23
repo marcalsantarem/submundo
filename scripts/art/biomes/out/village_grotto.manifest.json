@@ -1,0 +1,182 @@
+{
+  "sprites": {
+    "biome_village_grotto_tiles": {
+      "key": "biome_village_grotto_tiles",
+      "file": "biome_village_grotto_tiles.png",
+      "width": 1088,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "floor_0",
+        "floor_1",
+        "floor_2",
+        "floor_cracked",
+        "floor_moss",
+        "floor_blood",
+        "wall_top",
+        "wall_top_s",
+        "wall_side_l",
+        "wall_side_r",
+        "wall_bottom",
+        "corner_in_tl",
+        "corner_in_tr",
+        "corner_in_bl",
+        "corner_in_br",
+        "corner_out_tl",
+        "corner_out_tr",
+        "corner_out_bl",
+        "corner_out_br",
+        "wall_face_upper",
+        "wall_face_lower",
+        "wall_face_upper_cracked",
+        "wall_face_lower_grate",
+        "door_arch_l",
+        "door_arch_r",
+        "door_open_l",
+        "door_open_r",
+        "door_threshold_l",
+        "door_threshold_r",
+        "shadow_s",
+        "shadow_l",
+        "shadow_r",
+        "shadow_corner_l",
+        "shadow_corner_r"
+      ]
+    },
+    "biome_village_grotto_doors": {
+      "key": "biome_village_grotto_doors",
+      "file": "biome_village_grotto_doors.png",
+      "width": 1376,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "door_arch_sealed_l",
+        "door_arch_sealed_r",
+        "door_open_sealed_l",
+        "door_open_sealed_r",
+        "door_n_link_l",
+        "door_n_link_r",
+        "door_s_l",
+        "door_s_r",
+        "door_s_sealed_l",
+        "door_s_sealed_r",
+        "door_w_t",
+        "door_w_b",
+        "door_w_sealed_t",
+        "door_w_sealed_b",
+        "door_e_t",
+        "door_e_b",
+        "door_e_sealed_t",
+        "door_e_sealed_b",
+        "wall_face_upper_end_l",
+        "wall_face_upper_end_r",
+        "wall_face_upper_end_lr",
+        "wall_face_lower_end_l",
+        "wall_face_lower_end_r",
+        "wall_face_lower_end_lr",
+        "cap_ns",
+        "cap_ew",
+        "cap_nes",
+        "cap_esw",
+        "cap_nsw",
+        "cap_new",
+        "cap_nesw",
+        "cap_n_dse",
+        "cap_n_dsw",
+        "cap_s_dne",
+        "cap_s_dnw",
+        "cap_e_dnw",
+        "cap_e_dsw",
+        "cap_w_dne",
+        "cap_w_dse",
+        "cap_dne_dnw",
+        "cap_dse_dsw",
+        "cap_dne_dse",
+        "cap_dnw_dsw"
+      ]
+    },
+    "biome_village_grotto_props": {
+      "key": "biome_village_grotto_props",
+      "file": "biome_village_grotto_props.png",
+      "width": 512,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "torch_0",
+        "torch_1",
+        "torch_2",
+        "torch_3",
+        "mushrooms_floor",
+        "puddle",
+        "rocks_wet",
+        "stalagmite",
+        "crystal",
+        "sulfur_spring",
+        "bones",
+        "fern",
+        "stream_top_l",
+        "stream_top_r",
+        "falls_pool_l",
+        "falls_pool_r"
+      ],
+      "animations": {
+        "torch": {
+          "frames": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "frameRate": 6,
+          "repeat": -1
+        }
+      }
+    },
+    "biome_village_grotto_props_tall": {
+      "key": "biome_village_grotto_props_tall",
+      "file": "biome_village_grotto_props_tall.png",
+      "width": 288,
+      "height": 64,
+      "frameWidth": 32,
+      "frameHeight": 64,
+      "frames": [
+        "waterfall_l_0",
+        "waterfall_r_0",
+        "waterfall_l_1",
+        "waterfall_r_1",
+        "waterfall_l_2",
+        "waterfall_r_2",
+        "stalagmite_tall",
+        "giant_mushroom",
+        "rock_column"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.95
+      },
+      "animations": {
+        "waterfall_l": {
+          "frames": [
+            0,
+            2,
+            4
+          ],
+          "frameRate": 8,
+          "repeat": -1
+        },
+        "waterfall_r": {
+          "frames": [
+            1,
+            3,
+            5
+          ],
+          "frameRate": 8,
+          "repeat": -1
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+# BRF-144 — AG07 — T-075 Carregar os tilesets dos biomas e subir a versão para 0.8.0
+**Leia:** `docs/agentes/AG07_Arquiteto.md`, a decisão #21 em `docs/decisoes.md`, `src/view/scenes/BootScene.ts` (`SPRITESHEET_SPECS`, `createGlobalAnimations`, `applyTextureFilters`), `public/assets/sprites/manifest.json` e os fragmentos `scripts/art/biomes/out/<id>.manifest.json`. **Regra:** respostas curtas; sem commit/push/branches.
+**Contexto:** os 7 biomas foram aprovados (decisão #21): `village`, `herb_field`, `village_grotto`, `village_mine`, `mine_depths`, `ancient_seal`, `submundo_abyss`. Cada um tem 4 folhas em `public/assets/sprites/`: `biome_<id>_tiles` (34 frames), `biome_<id>_doors` (43), `biome_<id>_props` (`torch_0..3` primeiro) e `biome_<id>_props_tall` (frame 32×64, origem como `dungeon_basic_props_tall`). As folhas seguem o mesmo contrato de frames da `dungeon_basic_*`.
+**Contrato (o AG01 usa em paralelo na T-073):** chaves de textura exatamente iguais aos nomes dos arquivos (`biome_<id>_tiles` etc.) e animação de tocha `biome_<id>_torch` (frames 0–3 de `biome_<id>_props`, `frameRate`/`repeat` do fragmento). Exporte de `BootScene.ts` uma constante `BIOME_IDS` (os 7 ids) e um helper `biomeTorchAnimKey(id)`.
+**Fazer:**
+(1) Una os 7 fragmentos ao `public/assets/sprites/manifest.json` (mantenha as entradas existentes intactas).
+(2) Pré-carregue as 28 folhas no `BootScene` com filtro `NEAREST`, com o mesmo fallback das outras folhas se uma faltar, e crie as 7 animações de tocha.
+(3) Suba a versão para `0.8.0` em `package.json`, `src/version.ts` e `tests/core/architecture.test.ts`.
+(4) Teste Vitest novo `tests/core/m8-biome-assets.test.ts`: as 28 PNGs existem, as dimensões batem com o manifest (largura = frames × frameWidth) e as folhas de tiles/portas têm 34/43 frames com os mesmos nomes da `dungeon_basic_*`.
+**Permitido:** `src/view/scenes/BootScene.ts`, `public/assets/sprites/manifest.json`, `package.json` (só a versão), `src/version.ts`, `tests/core/architecture.test.ts`, `tests/core/m8-biome-assets.test.ts`. **Proibido:** `DungeonScene.ts`, `DungeonMapRenderer.ts`, `src/core/`, PNGs, Git.
+**Pronto quando:** `npm test` e `npm run build` passam e, no navegador (porta 5198, encerre depois), as 28 texturas e as 7 animações existem (`game.textures.exists`) sem erro no console. Meça o tempo de boot antes/depois.
+**Entrega:** até 6 linhas: o que mudou, tempo de boot e o que não foi verificado.

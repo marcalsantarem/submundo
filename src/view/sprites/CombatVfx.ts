@@ -1,5 +1,9 @@
 import Phaser from 'phaser';
 import { DF_FONTS, formatStatNumber } from '../ui/DarkFantasyUiBuilder';
+import {
+  HERO_ATTACK_DURATION_MS,
+  HERO_ATTACK_FRAME_DURATIONS_MS,
+} from './HeroWeaponRig';
 
 export type SkillForceVfx = 'inferno' | 'submundo' | 'empireo' | 'none';
 
@@ -11,6 +15,8 @@ interface AnimationSpec {
   frames: number[];
   frameRate: number;
   repeat: number;
+  /** Optional per-frame durations (ms); overrides frameRate timing frame by frame. */
+  frameDurations?: readonly number[];
 }
 
 function createMonsterAnimSpecs(
@@ -70,8 +76,10 @@ const ANIMATION_SPECS: readonly AnimationSpec[] = [
     key: 'hero_living_attack',
     texture: 'hero_living',
     frames: [10, 11, 12, 13, 14, 15],
-    frameRate: 18,
+    // Must match HERO_ATTACK_DURATION_MS / HERO_ATTACK_IMPACT_MS (HeroWeaponRig).
+    frameRate: (6 * 1000) / HERO_ATTACK_DURATION_MS,
     repeat: 0,
+    frameDurations: HERO_ATTACK_FRAME_DURATIONS_MS,
   },
   {
     key: 'hero_living_dash',
@@ -106,8 +114,10 @@ const ANIMATION_SPECS: readonly AnimationSpec[] = [
     key: 'hero_wraith_attack',
     texture: 'hero_wraith',
     frames: [10, 11, 12, 13, 14, 15],
-    frameRate: 18,
+    // Must match HERO_ATTACK_DURATION_MS / HERO_ATTACK_IMPACT_MS (HeroWeaponRig).
+    frameRate: (6 * 1000) / HERO_ATTACK_DURATION_MS,
     repeat: 0,
+    frameDurations: HERO_ATTACK_FRAME_DURATIONS_MS,
   },
   {
     key: 'hero_wraith_dash',
@@ -222,6 +232,12 @@ export function registerGameAnimations(scene: Phaser.Scene): void {
 
     if (animFrames.length === 0) {
       continue;
+    }
+
+    if (spec.frameDurations && animFrames.length === spec.frameDurations.length) {
+      animFrames.forEach((frame, index) => {
+        frame.duration = spec.frameDurations?.[index] ?? 0;
+      });
     }
 
     scene.anims.create({

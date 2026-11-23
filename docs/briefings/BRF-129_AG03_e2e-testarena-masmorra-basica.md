@@ -1,0 +1,10 @@
+# BRF-129 — AG03 — T-120 E2E da testArena com a Masmorra Básica, sem Karnak e com "Teste finalizado"
+**Leia:** `docs/agentes/AG03_QA.md`, decisão #17 em `docs/decisoes.md`, `tests/e2e/m6-monsters.spec.ts`, `playwright.config.ts` e os testes de `tests/core/` que citam o Karnak. **Regra:** respostas curtas; sem commit/push/branches.
+**Contrato (AG01 e AG07 trabalham em paralelo; o código deles pode ainda não estar pronto enquanto você escreve):**
+- `BootScene` carrega as texturas `dungeon_basic_tiles` (34 frames), `dungeon_basic_props` (11) e `dungeon_basic_props_tall` (2) e a animação `dungeon_basic_torch`.
+- Na `DungeonScene` da testArena: `isTestArena`, `testArenaWave` (1 → 2) e o novo `testArenaFinished: boolean`. A Onda 2 tem só `wolf_alpha` e `skeleton_chief` (sem `karnak`). Ao limpar a Onda 2, aparece o texto `Teste finalizado`. O fundo deixa de ser `#000000` puro (agora a sala tem tiles).
+- Os assets e dados do Karnak continuam existindo: os testes de integridade de assets e catálogo do Karnak **continuam válidos**.
+**Fazer:** (1) Ajuste `m6-monsters.spec.ts`: remova as asserções do Karnak na Onda 2 e a do fundo `#000000`, e verifique as texturas `dungeon_basic_*`. (2) Acrescente um teste (no mesmo arquivo ou em `tests/e2e/m8-dungeon-basic.spec.ts`) que mata as duas ondas pelo debug existente e confere `testArenaFinished === true` e o texto `Teste finalizado` visível, com captura PC `960×540` em `docs/qa/screenshots/`. (3) Tente rodar o E2E (`npx playwright test`; se faltarem browsers, `npx playwright install chromium` é permitido). Se não der para rodar, diga isso claramente.
+**Permitido:** `tests/`, `docs/qa/screenshots/`. **Proibido:** `src/`, assets, configs de build, Git.
+**Pronto quando:** `npm test` passa e o E2E foi rodado depois que AG01 e AG07 terminarem (o líder avisa), ou ficou explicitamente marcado como não rodado.
+**Entrega:** até 8 linhas: testes alterados e criados, resultado do E2E (passou, falhou com o motivo, ou não rodou) e capturas geradas.
