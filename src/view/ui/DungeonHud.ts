@@ -41,6 +41,13 @@ export interface HudSnapshot {
   bagCount?: number;
   equippedCount?: number;
   lootSummaryText?: string;
+  /**
+   * T-157: modal de fim de missão do prólogo. Quando presente, substitui título/texto/botão
+   * padrão e esconde as linhas de Almas e de itens.
+   */
+  outcomeModal?: { title: string; body: string; buttonLabel: string };
+  /** T-157: esconde o contador de Almas/Essências do topo (missões do prólogo). */
+  hideCurrencies?: boolean;
   heroPortraitFrame?: number;
   heroName?: string;
   heroLevel?: number;
@@ -285,6 +292,7 @@ export class DungeonHud {
   private readonly restartBtnText: Phaser.GameObjects.Text;
   private readonly restartBtnZone: Phaser.GameObjects.Zone;
   private restartBtnHovered = false;
+  private modalTitleFitKey = '';
   private restartBtnPressed = false;
 
   private lastSnapshot: HudSnapshot = {
@@ -1180,17 +1188,38 @@ export class DungeonHud {
         ? dialoguesData.entries.run_victory
         : dialoguesData.entries.run_death;
 
-      const lootText = snapshot.lootSummaryText?.trim() ?? '';
+      const custom = snapshot.outcomeModal;
+      const lootText = custom ? '' : (snapshot.lootSummaryText?.trim() ?? '');
       const hasLootSummary = lootText.length > 0;
 
-      this.modalTitleText.setText(entry.title.toUpperCase());
+      const titleText = (custom?.title ?? entry.title).toUpperCase();
+      const titleFitKey = `${titleText}|${this.viewport.width}`;
+      if (titleFitKey !== this.modalTitleFitKey) {
+        // T-157: títulos longos ("<missão> — Missão cumprida") cabem em 1 linha no cabeçalho.
+        this.modalTitleFitKey = titleFitKey;
+        this.modalTitleText.setText(titleText).setFontSize(18);
+        for (const size of [16, 14, 12]) {
+          if (this.modalTitleText.height <= 30) {
+            break;
+          }
+          this.modalTitleText.setFontSize(size);
+        }
+      }
       this.modalTitleText.setColor(
         isVictory ? DF_PALETTE.textGold : DF_PALETTE.textDanger
       );
-      this.modalBodyText.setText(snapshot.bannerText || entry.text);
+      this.modalBodyText.setText(custom?.body || snapshot.bannerText || entry.text);
       this.modalSoulsText.setText(`Almas preservadas: ${snapshot.souls}`);
+      this.modalSoulsText.setVisible(!custom);
+      this.restartBtnText.setText(custom?.buttonLabel ?? 'Nova Incursão');
 
-      if (hasLootSummary) {
+      if (custom) {
+        // T-157: prólogo — sem Almas e sem itens; só título, texto e "Voltar à Vila".
+        this.modalTitleText.setY(-98);
+        this.modalBodyText.setY(-36);
+        this.modalLootText.setVisible(false);
+        this.restartBtnContainer.setY(74);
+      } else if (hasLootSummary) {
         this.modalTitleText.setY(-116);
         this.modalBodyText.setY(-44);
         this.modalSoulsText.setY(22);
@@ -1780,6 +1809,11 @@ export class DungeonHud {
   }
 
   private updateResources(snapshot: HudSnapshot): void {
+    // T-157: Almas ainda não existem no prólogo.
+    this.resourcesContainer.setVisible(!snapshot.hideCurrencies);
+    if (snapshot.hideCurrencies) {
+      return;
+    }
     this.soulsText.setText(`${snapshot.souls}`);
 
     const hasSoulsIcon =

@@ -439,6 +439,8 @@ export class DungeonScene extends Phaser.Scene {
   private manualAttackReadyAtMs = 0;
   private runSeedCounter = 1337;
   private lootSummaryText?: string;
+  /** T-157: end-of-mission modal of the prologue (no Souls, no item lines). */
+  private missionOutcomeModal?: { title: string; body: string; buttonLabel: string };
   private runLootResolved = false;
   private essencesCollected = 0;
   private bossDefeated = false;
@@ -915,12 +917,14 @@ export class DungeonScene extends Phaser.Scene {
         this.hero.souls += monster.soulReward;
         this.runState.soulsCollected += monster.soulReward;
         this.runState.monstersKilled += 1;
-        this.vfx.showSoulCollectEffect(
-          monster.position.x,
-          monster.position.y,
-          monster.soulReward
-        );
-        soundManager.play('soul_pickup');
+        if (monster.soulReward > 0) {
+          this.vfx.showSoulCollectEffect(
+            monster.position.x,
+            monster.position.y,
+            monster.soulReward
+          );
+          soundManager.play('soul_pickup');
+        }
         if (monster.defId === 'infernal_warden' || monster.type === 'boss') {
           this.handleBossDefeated(monster.position, monster);
         }
@@ -1485,8 +1489,9 @@ export class DungeonScene extends Phaser.Scene {
             if (killedId) {
               this.deferredDeathIds.delete(killedId);
             }
-            this.vfx.showSoulCollectEffect(deathPos.x, deathPos.y, reward);
+            // T-157: no Souls in the prologue (reward 0) -> no soul orb either.
             if (reward > 0) {
+              this.vfx.showSoulCollectEffect(deathPos.x, deathPos.y, reward);
               soundManager.play('soul_pickup');
             }
             if (droppedItem) {
@@ -1772,6 +1777,10 @@ export class DungeonScene extends Phaser.Scene {
         `test_z${zone.id}_${i}_${sp.defId}`,
         spawnPos
       );
+      if (this.isMission) {
+        // T-157: the prologue does not count Souls.
+        monster.soulReward = 0;
+      }
       this.monsters.push(monster);
       this.createMonsterVisual(monster);
     });
@@ -1814,6 +1823,8 @@ export class DungeonScene extends Phaser.Scene {
         const pos: Vector2D = { x: sp.x, y: sp.y };
         this.constrainPositionToTestArenaRoom(pos, false, zone.floorRoomId);
         const monster = spawnMonster(def, `m_z${zone.id}_${i}_${sp.defId}`, pos);
+        // T-157: the prologue does not count Souls.
+        monster.soulReward = 0;
         const isBoss = def.type === 'boss';
         makeMonsterDormant(
           monster,
@@ -3478,8 +3489,9 @@ export class DungeonScene extends Phaser.Scene {
 
       const report: RunEndReport = {
         victory: isVictory,
-        soulsGained: this.runState.soulsCollected,
-        essencesGained: this.essencesCollected,
+        // T-157: the prologue does not count Souls nor Essences.
+        soulsGained: this.isMission ? 0 : this.runState.soulsCollected,
+        essencesGained: this.isMission ? 0 : this.essencesCollected,
         monstersKilled: this.runState.monstersKilled,
         bossDefeated: this.bossDefeated,
         keptItems: runKeptDrops,
@@ -3494,6 +3506,29 @@ export class DungeonScene extends Phaser.Scene {
 
     if (this.inventoryModal?.isOpen()) {
       this.inventoryModal.close();
+    }
+
+    // T-157: prologue missions get their own modal (Karnak's death goes to "Fim do Prólogo").
+    this.missionOutcomeModal = undefined;
+    if (this.isMission && !this.prologueEnded) {
+      const missionName = this.activeStage.name;
+      const giverNames: Record<string, string> = {
+        master: 'Mestre de Armas',
+        lyra: 'Lyra',
+        gorran: 'Gorran',
+      };
+      const defeatLine = getDialogueLine('mission_return_defeat');
+      const body = isVictory
+        ? (getDialogueLine(`${this.activeStage.id}_complete`)?.text ??
+          dialoguesData.entries.run_victory.text)
+        : (defeatLine?.shortText ?? defeatLine?.text ?? 'Você recuou ferido. Tente {mission} de novo.')
+            .replace(/\{mission\}/g, missionName)
+            .replace(/\{npc\}/g, giverNames[this.activeStage.giverNpcId ?? ''] ?? 'quem te pediu');
+      this.missionOutcomeModal = {
+        title: isVictory ? `${missionName} — Missão cumprida` : 'Derrotado',
+        body,
+        buttonLabel: 'Voltar à Vila',
+      };
     }
 
     if (isVictory) {
@@ -3872,6 +3907,13 @@ export class DungeonScene extends Phaser.Scene {
       bagCount: this.inventory.bag.length,
       equippedCount,
       lootSummaryText: this.lootSummaryText,
+      // T-157: prologue end-of-mission modal and no Souls/Essences counter.
+      ...(this.isMission
+        ? {
+            hideCurrencies: true,
+            ...(this.missionOutcomeModal ? { outcomeModal: this.missionOutcomeModal } : {}),
+          }
+        : {}),
     };
 
     this.hud.update(snapshot);

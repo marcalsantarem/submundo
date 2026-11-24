@@ -619,14 +619,19 @@ export function applyRunOutcomeToProfile(
   profile: SaveProfile,
   report: RunEndReport
 ): SaveProfile {
-  const soulsGained = Math.max(0, Math.round(report.soulsGained));
-  const essencesGained = Math.max(0, Math.round(report.essencesGained));
+  const prologueMission = isPrologueMissionReport(report);
+
+  // Decisão #27: o prólogo não conta Almas nem Essências (vitória ou derrota).
+  const soulsGained = prologueMission
+    ? 0
+    : Math.max(0, Math.round(report.soulsGained));
+  const essencesGained = prologueMission
+    ? 0
+    : Math.max(0, Math.round(report.essencesGained));
 
   profile.souls += soulsGained;
   profile.stats.totalSoulsEarned += soulsGained;
   profile.generalEssences += essencesGained;
-
-  const prologueMission = isPrologueMissionReport(report);
 
   if (report.victory) {
     profile.stats.runsCompleted += 1;

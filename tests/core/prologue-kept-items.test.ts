@@ -98,7 +98,7 @@ describe('Itens da missão mantidos no prólogo (T-150)', () => {
     applyRunOutcomeToProfile(profile, report);
 
     expect(profile.stats.runsFailed).toBe(1);
-    expect(profile.souls).toBe(10);
+    expect(profile.souls).toBe(0); // Decisão #27: prólogo não conta Almas
     expect(profile.equipped.weapon?.instanceId).toBe(hubWeapon.instanceId);
     expect(profile.equipped.boots?.instanceId).toBe(boots.instanceId);
     expect(profile.equipped.ring?.instanceId).toBe(ring.instanceId);
