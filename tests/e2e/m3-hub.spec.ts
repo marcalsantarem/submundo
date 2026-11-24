@@ -16,7 +16,8 @@ import { clickGroundDrop, pickUpAllDropsViaDebug } from './helpers/testDungeon';
 
 const SCREENSHOT_DIR = resolve(process.cwd(), 'docs/qa/screenshots');
 
-test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Progression E2E (PC 960x540 & Mobile Landscape 844x390)', () => {
+// APOSENTADO — M11 (Decisão #29): a Vila/HubScene (Altar, Ferreiro, Baú) saiu do fluxo e os botões Forja/Personagem/Habilidades estão bloqueados. Extração/derrota e equipar passaram para m11-menu.spec.ts. Reativar quando a Forja voltar (marco futuro).
+test.describe.skip('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Progression E2E (PC 960x540 & Mobile Landscape 844x390)', () => {
   test('validates HubScene boot, LocalStorage persistence, Altar/Blacksmith/Stash modals, ItemTooltipCard equip, Dungeon victory extraction vs punitive death, and PC/Mobile Landscape screenshots', async ({
     page,
     browser,

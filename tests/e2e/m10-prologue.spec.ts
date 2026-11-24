@@ -956,7 +956,8 @@ async function runPrologue(page: Page, order: 'herbs_first' | 'mine_first', tag:
   await playDepths(page, tag);
 }
 
-test.describe('SUBMUNDO M10 — Prólogo em 3 missões (Decisão #24)', () => {
+// APOSENTADO — M11 (Decisão #29): o prólogo antigo dependia da Vila (Mestre, Lyra, Gorran, portão). Aposentado; o novo prólogo vem no M12.
+test.describe.skip('SUBMUNDO M10 — Prólogo em 3 missões (Decisão #24)', () => {
   test('PC 960×540: prólogo inteiro, Ervas antes da Mina', async ({ page }) => {
     test.setTimeout(420000);
     await page.setViewportSize(DESKTOP_VIEWPORT);

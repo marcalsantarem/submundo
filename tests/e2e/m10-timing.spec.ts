@@ -236,7 +236,8 @@ async function pilot(page: Page, limitMs: number): Promise<Timing> {
   };
 }
 
-test.describe('SUBMUNDO M10 — tempo das missões (piloto)', () => {
+// APOSENTADO — M11 (Decisão #29): a medição de tempo do prólogo antigo dependia da Vila. Aposentado; o novo prólogo vem no M12.
+test.describe.skip('SUBMUNDO M10 — tempo das missões (piloto)', () => {
   test.skip(!RUN, 'medida demorada: rode com M10_TIMING=1');
 
   test('mede Ervas, Mina e Fundo da Mina jogadas pelo piloto', async ({ page }) => {

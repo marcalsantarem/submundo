@@ -8,7 +8,7 @@ import {
   assertLandscapeCanvas,
   clickLogicalCanvas,
   dispatchWindowKey,
-  ensureHubScene,
+  openAct1Run,
   openMobileLandscapePage,
 } from './helpers/landscape';
 import { clickGroundDrop, pickUpAllDropsViaDebug } from './helpers/testDungeon';
@@ -38,15 +38,7 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 960x540 
 
     // 1. Desktop Landscape (960x540) + PWA checks
     await page.setViewportSize(DESKTOP_VIEWPORT);
-    await page.goto('/');
-    await ensureHubScene(page, { clearStorage: true });
-
-    await page.evaluate(() => {
-      const hub = window.__SUBMUNDO_HUB_DEBUG__!;
-      hub.getDialogueBox().close();
-      hub.setCampaignPhase('act1', 'act1_submundo');
-      hub.enterDungeon('act1_submundo');
-    });
+    await openAct1Run(page);
 
     await page.waitForFunction(
       () =>
@@ -382,15 +374,7 @@ test.describe('SUBMUNDO M2 — Loot, Synergies, Inventory & PWA E2E (PC 960x540 
       });
 
     try {
-      await mobilePage.goto('/');
-      await ensureHubScene(mobilePage, { clearStorage: true });
-
-      await mobilePage.evaluate(() => {
-        const hub = window.__SUBMUNDO_HUB_DEBUG__!;
-        hub.getDialogueBox().close();
-        hub.setCampaignPhase('act1', 'act1_submundo');
-        hub.enterDungeon('act1_submundo');
-      });
+      await openAct1Run(mobilePage);
 
       await mobilePage.waitForFunction(
         () =>

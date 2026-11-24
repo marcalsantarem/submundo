@@ -342,7 +342,8 @@ async function trackerText(page: Page): Promise<string> {
   );
 }
 
-test.describe('SUBMUNDO M9 — Vila Natal (hub do prólogo) E2E (PC 960x540 & Mobile Landscape 844x390)', () => {
+// APOSENTADO — M11 (Decisão #29): a Vila Natal saiu do fluxo (HubScene arquivada); o jogo abre no menu-hub. Aposentado; o novo prólogo vem no M12.
+test.describe.skip('SUBMUNDO M9 — Vila Natal (hub do prólogo) E2E (PC 960x540 & Mobile Landscape 844x390)', () => {
   test('raiz abre a Vila; "!" no Mestre; portão travado; Mestre por teclado + E; Lyra libera o portão; lista do portão; Ervas; volta no portão (vitória e derrota); perfil persiste', async ({
     page,
   }) => {
