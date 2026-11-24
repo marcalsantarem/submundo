@@ -7,6 +7,7 @@ import {
   getVillageSpawn,
   isGateUnlocked,
   talkToMaster,
+  talkToNpc,
   type SaveProfile,
 } from '../../src/core';
 import { applyStageOutcomeToCampaign } from '../../src/core/progression/CampaignManager';
@@ -34,7 +35,11 @@ function statuses(profile: SaveProfile): string[] {
   return getPrologueDungeonList(profile).map((entry) => `${entry.stageId}:${entry.status}`);
 }
 
-describe('VillageHub (T-136)', () => {
+/**
+ * VillageHub do M9 virou adaptador da `PrologueQuests` (T-142) até a T-147
+ * trocar a UI. Aqui só se garante que os adaptadores refletem o fluxo novo.
+ */
+describe('VillageHub adapters (T-136 → T-142)', () => {
   it('has zero Phaser imports', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/core/progression/VillageHub.ts'),
@@ -43,7 +48,7 @@ describe('VillageHub (T-136)', () => {
     expect(source).not.toMatch(/phaser/i);
   });
 
-  it('handles an old save without campaign nor briefing field', () => {
+  it('starts with the Master alert, gate closed and empty list (old save without campaign)', () => {
     const old = createDefaultProfile() as Partial<SaveProfile>;
     delete old.campaign;
     const storage = memoryStorage({ [SAVE_STORAGE_KEY]: JSON.stringify(old) });
@@ -54,98 +59,46 @@ describe('VillageHub (T-136)', () => {
       text: 'Falar com o Mestre',
       alertNpcId: 'master',
     });
-    expect(statuses(profile)).toEqual([
-      'prologue_grotto:available',
-      'prologue_mine:locked',
-      'prologue_seal:locked',
-    ]);
+    expect(statuses(profile)).toEqual([]);
   });
 
-  it('handles an old campaign object without the briefing field', () => {
-    const profile = createDefaultProfile();
-    profile.campaign = {
-      phase: 'prologue',
-      currentStageId: 'prologue_mine',
-      completedStages: ['prologue_grotto'],
-      seenDialogues: [],
-      villageFallTriggered: false,
-    };
-    const storage = memoryStorage({ [SAVE_STORAGE_KEY]: JSON.stringify(profile) });
-    const loaded = loadOrCreateProfile(storage);
-    expect(loaded.campaign?.masterBriefedStageId).toBeUndefined();
-    expect(isGateUnlocked(loaded)).toBe(false);
-  });
-
-  it('persists the briefing field across save/load', () => {
+  it('talkToMaster runs the intro once; the gate opens only after accepting a mission', () => {
     const storage = memoryStorage();
     const profile = loadOrCreateProfile(storage);
-    talkToMaster(profile);
-    persistProfile(profile, storage);
-    const reloaded = loadOrCreateProfile(storage);
-    expect(reloaded.campaign?.masterBriefedStageId).toBe('prologue_grotto');
-    expect(isGateUnlocked(reloaded)).toBe(true);
-  });
-
-  it('talking to the Master unlocks the gate and is idempotent', () => {
-    const profile = createDefaultProfile();
     expect(talkToMaster(profile)).toBe(true);
     expect(talkToMaster(profile)).toBe(false);
-    expect(isGateUnlocked(profile)).toBe(true);
-    expect(getVillageObjective(profile)).toEqual({
-      text: 'Saia pelo portão',
-      alertNpcId: null,
-    });
+    expect(isGateUnlocked(profile)).toBe(false);
+    expect(getVillageObjective(profile).alertNpcId).toBe('lyra');
+
+    talkToNpc(profile, 'gorran');
+    persistProfile(profile, storage);
+    const reloaded = loadOrCreateProfile(storage);
+    expect(isGateUnlocked(reloaded)).toBe(true);
+    expect(statuses(reloaded)).toEqual(['mission_mine:available']);
   });
 
-  it('runs the Gruta → Mina → Selo sequence, re-locking the gate after each victory', () => {
-    const profile = createDefaultProfile();
-    const order = ['prologue_grotto', 'prologue_mine', 'prologue_seal'] as const;
-
-    for (const [index, stageId] of order.entries()) {
-      expect(isGateUnlocked(profile)).toBe(false);
-      expect(getVillageObjective(profile).alertNpcId).toBe('master');
-      talkToMaster(profile);
-      expect(isGateUnlocked(profile)).toBe(true);
-
-      const list = getPrologueDungeonList(profile);
-      expect(list.map((entry) => entry.stageId)).toEqual([...order]);
-      expect(list[index].status).toBe('available');
-      list.slice(0, index).forEach((entry) => expect(entry.status).toBe('completed'));
-      list.slice(index + 1).forEach((entry) => expect(entry.status).toBe('locked'));
-
-      applyStageOutcomeToCampaign(profile, stageId, true);
-      expect(getVillageSpawn(profile, 'dungeon_victory')).toBe('gate');
-    }
-
-    expect(statuses(profile)).toEqual([
-      'prologue_grotto:completed',
-      'prologue_mine:completed',
-      'prologue_seal:completed',
-    ]);
-    expect(getVillageObjective(profile)).toEqual({
-      text: 'Prólogo concluído',
-      alertNpcId: null,
-    });
-  });
-
-  it('keeps the gate unlocked and the list unchanged after a death', () => {
+  it('lists only accepted missions and removes them once completed; death keeps the list', () => {
     const profile = createDefaultProfile();
     talkToMaster(profile);
-    applyStageOutcomeToCampaign(profile, 'prologue_grotto', false);
-
-    expect(getVillageSpawn(profile, 'dungeon_defeat')).toBe('gate');
-    expect(isGateUnlocked(profile)).toBe(true);
-    expect(getVillageObjective(profile).text).toBe('Saia pelo portão');
-    expect(statuses(profile)).toEqual([
-      'prologue_grotto:available',
-      'prologue_mine:locked',
-      'prologue_seal:locked',
+    talkToNpc(profile, 'lyra');
+    talkToNpc(profile, 'gorran');
+    expect(statuses(profile)).toEqual(['mission_herbs:available', 'mission_mine:available']);
+    expect(getPrologueDungeonList(profile).map((e) => e.title)).toEqual([
+      'A Plantação de Ervas',
+      'A Mina Iluminada',
     ]);
-  });
 
-  it('exposes Gruta/Mina/Selo titles from campaign.json', () => {
-    const titles = getPrologueDungeonList(createDefaultProfile()).map((entry) => entry.title);
-    expect(titles).toEqual(['A Gruta da Cachoeira', 'A Mina Abandonada', 'O Selo Antigo']);
+    applyStageOutcomeToCampaign(profile, 'mission_mine', false);
+    expect(getVillageSpawn(profile, 'dungeon_defeat')).toBe('gate');
+    expect(statuses(profile)).toEqual(['mission_herbs:available', 'mission_mine:available']);
+
+    applyStageOutcomeToCampaign(profile, 'mission_mine', true);
+    expect(getVillageSpawn(profile, 'dungeon_victory')).toBe('gate');
+    expect(statuses(profile)).toEqual(['mission_herbs:available']);
+    expect(getVillageObjective(profile)).toEqual({
+      text: 'Volte a Gorran',
+      alertNpcId: 'gorran',
+    });
   });
 
   it('spawns at start on first arrival and at the gate when coming back', () => {

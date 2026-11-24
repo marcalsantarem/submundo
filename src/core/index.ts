@@ -220,11 +220,38 @@ export interface HubTransitionData {
 
 export type CampaignPhase = 'prologue' | 'act1';
 
-export type CampaignStageId =
-  | 'prologue_grotto'
-  | 'prologue_mine'
-  | 'prologue_seal'
-  | 'act1_submundo';
+/** Missões do prólogo (Decisão #24). */
+export type PrologueMissionId = 'mission_herbs' | 'mission_mine' | 'mission_depths';
+
+/**
+ * Ids das fases do prólogo antigo (até o M9). Não existem mais no `campaign.json`;
+ * ficam no tipo só para a `HubScene`/`DungeonScene` do M9 compilarem até a T-147
+ * e para a migração de saves antigos.
+ * @deprecated
+ */
+export type LegacyPrologueStageId = 'prologue_grotto' | 'prologue_mine' | 'prologue_seal';
+
+export type CampaignStageId = PrologueMissionId | 'act1_submundo' | LegacyPrologueStageId;
+
+/** NPC da vila que dá ou recebe missões. */
+export type QuestGiverNpcId = 'lyra' | 'gorran' | 'master';
+
+/** Estado de uma missão do prólogo. */
+export type PrologueQuestState = 'hidden' | 'available' | 'accepted' | 'completed' | 'turned_in';
+
+export type MissionMapMode = 'rooms' | 'giant';
+
+export interface MissionObjective {
+  kind: 'collect';
+  itemId: string;
+  count: number;
+}
+
+export interface MissionDropPolicy {
+  /** Chance (0..1) de um monstro soltar item. */
+  chance: number;
+  maxRarity: Rarity;
+}
 
 export type PortraitId =
   | 'hero_living'
@@ -241,7 +268,9 @@ export type BiomeId =
   | 'village_grotto'
   | 'village_mine'
   | 'ancient_seal'
-  | 'submundo_abyss';
+  | 'submundo_abyss'
+  | 'herb_field'
+  | 'mine_depths';
 
 export interface DialogueLine {
   id: string;
@@ -263,12 +292,27 @@ export interface CampaignStageDef {
   totalRooms: number;
   difficultyScale: number;
   monsterPool: string[];
+  /** Boss da última sala/zona. Ausente nas missões sem boss (ex.: `mission_herbs`). */
   bossId: string;
   introDialogueIds: string[];
   victoryDialogueIds: string[];
   defeatDialogueIds?: string[];
   unlocksStageId?: CampaignStageId;
   triggersFallOfVillage?: boolean;
+  /** Missões do prólogo (Decisão #24). */
+  giverNpcId?: QuestGiverNpcId;
+  /** Missões que precisam estar entregues para esta aparecer. */
+  requires?: PrologueMissionId[];
+  mapMode?: MissionMapMode;
+  /** Monstros comuns por sala/zona (um id por monstro); o `bossId` entra à parte na última. */
+  waves?: string[][];
+  bossInvincible?: boolean;
+  objective?: MissionObjective;
+  /** Evento no fim da missão (ex.: `strange_sight` no fim da Mina). */
+  finalEventId?: string;
+  dropPolicy?: MissionDropPolicy;
+  /** Concluir esta missão encerra o prólogo (missão 3, morte para o Karnak). */
+  endsPrologue?: boolean;
 }
 
 export interface CampaignCatalog {
@@ -283,6 +327,10 @@ export interface CampaignProgress {
   villageFallTriggered: boolean;
   /** Missão sobre a qual o Mestre de Armas já falou (libera o portão da vila). Opcional para saves antigos. */
   masterBriefedStageId?: CampaignStageId;
+  /** Fluxo de missões do prólogo (Decisão #24). Opcionais para saves antigos. */
+  masterIntroDone?: boolean;
+  prologueQuests?: Partial<Record<PrologueMissionId, PrologueQuestState>>;
 }
 
 export * from './progression/VillageHub';
+export * from './progression/PrologueQuests';

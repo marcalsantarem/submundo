@@ -8,6 +8,8 @@ import type {
   CampaignProgress,
   CampaignStageId,
   EquipSlot,
+  PrologueMissionId,
+  PrologueQuestState,
   HeroStats,
   ItemInstance,
   ProgressionCatalog,
@@ -16,6 +18,7 @@ import type {
   StatBonus,
   Vector2D,
 } from '../index';
+import { isPrologueMissionId, isPrologueQuestState } from './PrologueQuests';
 import {
   applyGearToHero,
   computeGearBonuses,
@@ -52,10 +55,16 @@ const ALTAR_IDS: readonly AltarUpgradeId[] = [
 ];
 const CAMPAIGN_PHASES: readonly CampaignPhase[] = ['prologue', 'act1'];
 const CAMPAIGN_STAGE_IDS: readonly CampaignStageId[] = [
+  'mission_herbs',
+  'mission_mine',
+  'mission_depths',
+  'act1_submundo',
+];
+/** Fases do prólogo antigo (até o M9); saves com elas recomeçam o prólogo novo (T-142). */
+const LEGACY_PROLOGUE_STAGE_IDS: readonly string[] = [
   'prologue_grotto',
   'prologue_mine',
   'prologue_seal',
-  'act1_submundo',
 ];
 
 function isCampaignPhase(value: unknown): value is CampaignPhase {
@@ -72,31 +81,70 @@ function isCampaignStageId(value: unknown): value is CampaignStageId {
   );
 }
 
+function normalizePrologueQuests(
+  raw: unknown
+): Partial<Record<PrologueMissionId, PrologueQuestState>> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return undefined;
+  }
+  const quests: Partial<Record<PrologueMissionId, PrologueQuestState>> = {};
+  for (const [id, state] of Object.entries(raw as Record<string, unknown>)) {
+    if (isPrologueMissionId(id) && isPrologueQuestState(state)) {
+      quests[id] = state;
+    }
+  }
+  return quests;
+}
+
 function normalizeCampaign(raw: unknown): CampaignProgress | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return undefined;
   }
   const candidate = raw as Partial<CampaignProgress>;
+  const phase: CampaignPhase = isCampaignPhase(candidate.phase) ? candidate.phase : 'prologue';
+  const villageFallTriggered =
+    typeof candidate.villageFallTriggered === 'boolean'
+      ? candidate.villageFallTriggered
+      : false;
+  const seenDialogues = Array.isArray(candidate.seenDialogues)
+    ? candidate.seenDialogues.filter((id): id is string => typeof id === 'string')
+    : [];
+  const completedStages = Array.isArray(candidate.completedStages)
+    ? candidate.completedStages.filter(isCampaignStageId)
+    : [];
+  const inAct1 = phase === 'act1' || villageFallTriggered;
+
+  // Migração (T-142): save no prólogo antigo recomeça o fluxo novo do zero.
+  const hasLegacyPrologue =
+    LEGACY_PROLOGUE_STAGE_IDS.includes(candidate.currentStageId as string) ||
+    LEGACY_PROLOGUE_STAGE_IDS.includes(candidate.masterBriefedStageId as string) ||
+    (Array.isArray(candidate.completedStages) &&
+      candidate.completedStages.some((id) => LEGACY_PROLOGUE_STAGE_IDS.includes(id as string)));
+  if (hasLegacyPrologue && !inAct1) {
+    return {
+      phase: 'prologue',
+      currentStageId: 'mission_herbs',
+      completedStages: [],
+      seenDialogues,
+      villageFallTriggered: false,
+    };
+  }
+
+  const prologueQuests = normalizePrologueQuests(candidate.prologueQuests);
   return {
-    phase: isCampaignPhase(candidate.phase) ? candidate.phase : 'prologue',
+    phase,
     currentStageId: isCampaignStageId(candidate.currentStageId)
       ? candidate.currentStageId
-      : 'prologue_grotto',
-    completedStages: Array.isArray(candidate.completedStages)
-      ? candidate.completedStages.filter(isCampaignStageId)
-      : [],
-    seenDialogues: Array.isArray(candidate.seenDialogues)
-      ? candidate.seenDialogues.filter(
-          (id): id is string => typeof id === 'string'
-        )
-      : [],
-    villageFallTriggered:
-      typeof candidate.villageFallTriggered === 'boolean'
-        ? candidate.villageFallTriggered
-        : false,
-    ...(isCampaignStageId(candidate.masterBriefedStageId)
-      ? { masterBriefedStageId: candidate.masterBriefedStageId }
+      : inAct1
+        ? 'act1_submundo'
+        : 'mission_herbs',
+    completedStages,
+    seenDialogues,
+    villageFallTriggered,
+    ...(typeof candidate.masterIntroDone === 'boolean'
+      ? { masterIntroDone: candidate.masterIntroDone }
       : {}),
+    ...(prologueQuests ? { prologueQuests } : {}),
   };
 }
 

@@ -378,7 +378,7 @@ describe('ProfileManager & Permanent Progression (T-033)', () => {
     profile.campaign = {
       phase: 'act1',
       currentStageId: 'act1_submundo',
-      completedStages: ['prologue_grotto', 'prologue_mine', 'prologue_seal'],
+      completedStages: ['mission_herbs', 'mission_mine', 'mission_depths'],
       seenDialogues: ['intro_training', 'village_fall_pact'],
       villageFallTriggered: true,
     };
@@ -389,7 +389,7 @@ describe('ProfileManager & Permanent Progression (T-033)', () => {
     expect(reloaded.campaign).toEqual({
       phase: 'act1',
       currentStageId: 'act1_submundo',
-      completedStages: ['prologue_grotto', 'prologue_mine', 'prologue_seal'],
+      completedStages: ['mission_herbs', 'mission_mine', 'mission_depths'],
       seenDialogues: ['intro_training', 'village_fall_pact'],
       villageFallTriggered: true,
     });
@@ -398,7 +398,7 @@ describe('ProfileManager & Permanent Progression (T-033)', () => {
       ...createDefaultProfile(),
       campaign: {
         phase: 'prologue',
-        completedStages: ['prologue_grotto', 'invalid_stage'],
+        completedStages: ['mission_herbs', 'invalid_stage'],
       },
     };
     storage.setItem(SAVE_STORAGE_KEY, JSON.stringify(partialProfile));
@@ -406,8 +406,8 @@ describe('ProfileManager & Permanent Progression (T-033)', () => {
     const normalized = loadOrCreateProfile(storage);
     expect(normalized.campaign).toEqual({
       phase: 'prologue',
-      currentStageId: 'prologue_grotto',
-      completedStages: ['prologue_grotto'],
+      currentStageId: 'mission_herbs',
+      completedStages: ['mission_herbs'],
       seenDialogues: [],
       villageFallTriggered: false,
     });

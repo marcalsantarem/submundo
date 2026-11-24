@@ -44,6 +44,38 @@ export interface DungeonMap {
   props: MapProp[]; obstacles: MapRect[]; // obstáculos em "feet space", px de mundo
   torches: { col: number; row: number }[]; // células de face de parede norte com tocha
   heroStart: { x: number; y: number };
+  collectibles: MapCollectible[];          // objetivo menor de coleta (vazio sem a opção `collectibles`)
+  eventPoint?: MapEventPoint;              // ponto de evento no fim do mapa (só com a opção `eventPoint`)
+}
+
+/** Item coletável do objetivo menor. (x, y) é o ponto dos PÉS (px de mundo), num nó caminhável alcançável. */
+export interface MapCollectible { id: number; itemId: string; x: number; y: number; roomId: number; zoneId: number | null }
+/** Ponto de evento (ex.: "algo estranho" no fundo da Mina). (x, y) é o ponto dos PÉS (px de mundo). */
+export interface MapEventPoint { x: number; y: number; roomId: number; zoneId: number | null }
+
+/** T-143 — Opções do gerador. Todas opcionais e retrocompatíveis (sem elas o mapa é o mesmo de antes). */
+export interface DungeonMapOptions {
+  mode?: DungeonMapMode;
+  /** Ondas por sala (rooms) / zona (giant). Sem `exactCounts`, cada id vira 2..4 monstros (DEF_COUNT). */
+  waves?: string[][];
+  /** true: cada onda já é a lista exata de spawns (um id por monstro, ex.: 3x 'slime'). Lista vazia = sala sem monstros. */
+  exactCounts?: boolean;
+  /** Nº de salas de combate no modo rooms (padrão: nº de ondas). Ondas faltantes viram salas vazias. */
+  roomCount?: number;
+  /** Nº de zonas no modo giant (padrão: nº de ondas). */
+  zoneCount?: number;
+  /** Última sala/zona é a do chefe (sala maior, tipo câmara; `isBossZone`). Padrão: true. */
+  bossRoom?: boolean;
+  /** Chefe acrescentado à última onda se ainda não estiver nela (1 só, longe da entrada). */
+  bossId?: string;
+  /** Coletáveis do objetivo menor espalhados por salas/zonas diferentes. */
+  collectibles?: { itemId: string; count: number };
+  /** Gera `eventPoint` no fim do mapa. */
+  eventPoint?: boolean;
+  /** Salas de passagem (vazias) entre salas de combate no modo rooms: [mín, máx]. Padrão: [1, 2]. */
+  passageRooms?: [number, number];
+  /** Escala da sala gigante (padrão 1 = 60-70 x 40-46 tiles). Mais ilhas/notches na mesma proporção. */
+  giantScale?: number;
 }
 
 /** Distance from an actor's center to its feet (same as TestDungeon). */
@@ -529,19 +561,19 @@ interface BaseMap {
   corridors: MapCorridor[];
 }
 
-function buildRoomsBase(rng: Rng, nWaves: number, simple: boolean): BaseMap | null {
+function buildRoomsBase(rng: Rng, nWaves: number, simple: boolean, bossRoom = true, passage: [number, number] = [1, 2]): BaseMap | null {
   const plan: { role: Role; wave: number }[] = [];
   for (let w = 0; w < nWaves; w++) {
-    plan.push({ role: w === nWaves - 1 ? 'boss' : w === 0 ? 'start' : 'wave', wave: w });
+    plan.push({ role: w === nWaves - 1 && bossRoom ? 'boss' : w === 0 ? 'start' : 'wave', wave: w });
     if (w < nWaves - 1) {
-      const k = simple ? 0 : randInt(rng, 1, 2);
+      const k = simple ? 0 : randInt(rng, passage[0], passage[1]);
       for (let i = 0; i < k; i++) plan.push({ role: 'passage', wave: -1 });
     }
   }
-  const bossShape = makeShapeForRole(rng, 'boss', simple, { min: 430 });
-  if (!bossShape) return null;
+  const bossShape = bossRoom ? makeShapeForRole(rng, 'boss', simple, { min: 430 }) : null;
+  if (bossRoom && !bossShape) return null;
   const shapeFor = (p: { role: Role }) =>
-    p.role === 'boss' ? bossShape : makeShapeForRole(rng, p.role, simple, { max: bossShape.area });
+    p.role === 'boss' && bossShape ? bossShape : makeShapeForRole(rng, p.role, simple, bossShape ? { max: bossShape.area } : {});
 
   const work = new Work();
   const rooms: PlacedRoom[] = [];
@@ -620,9 +652,10 @@ function buildRoomsBase(rng: Rng, nWaves: number, simple: boolean): BaseMap | nu
 // Giant mode: one irregular room
 // ---------------------------------------------------------------------------------------------
 
-function buildGiantBase(rng: Rng, simple: boolean): BaseMap | null {
-  const W = simple ? 64 : randInt(rng, 60, 70);
-  const H = simple ? 42 : randInt(rng, 40, 46);
+function buildGiantBase(rng: Rng, simple: boolean, scale = 1): BaseMap | null {
+  const sc = (v: number) => Math.round(v * scale);
+  const W = simple ? sc(64) : randInt(rng, sc(60), sc(70));
+  const H = simple ? sc(42) : randInt(rng, sc(40), sc(46));
   const P = 12;
   const cw = W + 2 * P, chh = H + 2 * P;
   const rects: CellRect[] = [{ c: P, r: P, w: W, h: H }];
@@ -657,7 +690,7 @@ function buildGiantBase(rng: Rng, simple: boolean): BaseMap | null {
       }
     }
     // Inner void islands (walls in the middle) that make routes.
-    const nIsl = randInt(rng, 3, 6);
+    const nIsl = randInt(rng, sc(3), sc(6));
     for (let i = 0; i < nIsl; i++) {
       const w = randInt(rng, 3, 7);
       const h = randInt(rng, 4, 6);
@@ -751,6 +784,20 @@ function bfs(w: Walk, sx: number, sy: number): Int32Array {
     if (j < w.ny - 1 && w.walk[k + w.nx] && dist[k + w.nx] < 0) { dist[k + w.nx] = d; q[tail++] = k + w.nx; }
   }
   return dist;
+}
+
+/** Walk distance field (16 px grid, same walkability as the generator) from a FEET point of a generated map. */
+export interface MapDistanceField { nx: number; ny: number; dist: Int32Array }
+export function mapDistanceField(map: DungeonMap, feetX: number, feetY: number): MapDistanceField {
+  const w = buildWalk(map as unknown as BaseMap, map.obstacles);
+  return { nx: w.nx, ny: w.ny, dist: bfs(w, feetX, feetY) };
+}
+/** Walking length in px (grid steps x 16) to a FEET point, or -1 when unreachable. */
+export function mapPathLength(f: MapDistanceField, feetX: number, feetY: number): number {
+  const i = Math.round(feetX / GRID), j = Math.round(feetY / GRID);
+  if (i < 0 || j < 0 || i >= f.nx || j >= f.ny) return -1;
+  const d = f.dist[j * f.nx + i];
+  return d < 0 ? -1 : d * GRID;
 }
 
 function reached(w: Walk, dist: Int32Array, x: number, y: number): boolean {
@@ -904,23 +951,32 @@ const DEF_LABEL: Record<string, string> = {
   skeleton: 'Esqueletos',
   skeleton_archer: 'Arqueiros',
   skeleton_chief: 'Esqueleto Chefe',
+  cave_bat: 'Morcegos',
+  wolf_alpha: 'Chefe da Matilha',
+  karnak: 'Karnak',
 };
+/** Ids de chefes: 1 por onda e posicionados longe da entrada. */
+const BOSS_IDS = new Set(['skeleton_chief', 'wolf_alpha', 'karnak']);
 const DEF_COUNT: Record<string, [number, number]> = {
   slime: [3, 4],
   wolf: [2, 3],
   skeleton: [3, 4],
   skeleton_archer: [2, 2],
   skeleton_chief: [1, 1],
+  cave_bat: [3, 4],
+  wolf_alpha: [1, 1],
+  karnak: [1, 1],
 };
 
 function waveLabel(wave: string[]): string {
-  const names = wave.map((d) => DEF_LABEL[d] ?? d);
+  const names = [...new Set(wave)].map((d) => DEF_LABEL[d] ?? d);
   return names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} e ${names[names.length - 1]}`;
 }
-function spawnPlan(rng: Rng, wave: string[]): string[] {
+function spawnPlan(rng: Rng, wave: string[], cfg: GenConfig): string[] {
+  if (cfg.exactCounts) return wave.slice();
   const out: string[] = [];
   for (const d of wave) {
-    const [lo, hi] = DEF_COUNT[d] ?? [2, 3];
+    const [lo, hi] = d === cfg.bossId ? [1, 1] : DEF_COUNT[d] ?? [2, 3];
     const n = randInt(rng, lo, hi);
     for (let i = 0; i < n; i++) out.push(d);
   }
@@ -944,10 +1000,10 @@ function spawnCandidates(b: BaseMap, w: Walk, dist: Int32Array, obstacles: MapRe
   return out;
 }
 
-function placeSpawns(rng: Rng, plan: string[], cands: Node[], taken: Node[], bossPick: ((c: Node[]) => Node[]) | null): MapSpawn[] | null {
+function placeSpawns(rng: Rng, plan: string[], cands: Node[], taken: Node[], bossPick: ((c: Node[]) => Node[]) | null, bossId?: string): MapSpawn[] | null {
   const out: MapSpawn[] = [];
   for (const defId of plan) {
-    const pool = defId === 'skeleton_chief' && bossPick ? bossPick(cands) : cands;
+    const pool = (BOSS_IDS.has(defId) || defId === bossId) && bossPick ? bossPick(cands) : cands;
     let placed: Node | null = null;
     for (let t = 0; t < 200 && !placed; t++) {
       const c = pool[Math.floor(rng() * pool.length)];
@@ -966,7 +1022,8 @@ function snap(v: number): number {
   return Math.round(v / GRID) * GRID;
 }
 
-function decorateRooms(rng: Rng, seed: number, b: BaseMap, waves: string[][], simple: boolean): DungeonMap | null {
+function decorateRooms(rng: Rng, seed: number, b: BaseMap, cfg: GenConfig, simple: boolean): DungeonMap | null {
+  const waves = cfg.waves;
   // Hero start: center of the largest rect of the start room.
   const startRects = b.roomRects[0].slice().sort((p, q) => q.w * q.h - p.w * p.h);
   const sr = startRects[0];
@@ -999,7 +1056,7 @@ function decorateRooms(rng: Rng, seed: number, b: BaseMap, waves: string[][], si
   for (let wv = 0; wv < waves.length; wv++) {
     const roomId = b.roomWave.indexOf(wv);
     if (roomId < 0) return null;
-    const isBoss = wv === waves.length - 1;
+    const isBoss = cfg.bossRoom && wv === waves.length - 1;
     const entryDoors = b.doors.filter((d) => d.roomId === roomId && b.corridors[d.corridorId].toDoorId === d.id);
     const exitDoors = b.doors.filter((d) => d.roomId === roomId && b.corridors[d.corridorId].fromDoorId === d.id);
     const entries = roomId === 0 ? [heroFeet] : entryDoors.map(mapDoorPoint);
@@ -1013,15 +1070,15 @@ function decorateRooms(rng: Rng, seed: number, b: BaseMap, waves: string[][], si
       const max = Math.max(...cs.map(dOf));
       return cs.filter((c) => dOf(c) >= max * 0.6);
     };
-    const spawns = placeSpawns(rng, spawnPlan(rng, waves[wv]), cands, taken, far);
+    const spawns = placeSpawns(rng, spawnPlan(rng, waves[wv], cfg), cands, taken, far, cfg.bossId);
     if (!spawns) return null;
     const label = waveLabel(waves[wv]);
     zones.push({
       id: wv,
       wave: wv + 1,
       isBossZone: isBoss,
-      title: `Sala ${wv + 1}/${waves.length} — ${label}`,
-      banner: `Onda ${wv + 1}: ${label}!`,
+      title: label ? `Sala ${wv + 1}/${waves.length} — ${label}` : `Sala ${wv + 1}/${waves.length}`,
+      banner: label ? `Onda ${wv + 1}: ${label}!` : '',
       trigger,
       floorRoomId: roomId,
       spawns,
@@ -1031,6 +1088,8 @@ function decorateRooms(rng: Rng, seed: number, b: BaseMap, waves: string[][], si
   }
 
   const torches = b.rooms.flatMap((r) => pickTorches(rng, b, r.id));
+  const extras = placeExtras(cfg, b, walk, dist, ctx.obstacles, heroFeet, zones, null);
+  if (!extras) return null;
   return {
     seed,
     mode: 'rooms',
@@ -1046,10 +1105,12 @@ function decorateRooms(rng: Rng, seed: number, b: BaseMap, waves: string[][], si
     obstacles: ctx.obstacles,
     torches,
     heroStart: { x: heroFeet.x, y: heroFeet.y - MAP_FEET_OFFSET },
+    ...extras,
   };
 }
 
-function decorateGiant(rng: Rng, seed: number, b: BaseMap, waves: string[][], simple: boolean): DungeonMap | null {
+function decorateGiant(rng: Rng, seed: number, b: BaseMap, cfg: GenConfig, simple: boolean): DungeonMap | null {
+  const waves = cfg.waves;
   const n = waves.length;
   const walk0 = buildWalk(b, []);
   // "Clear" nodes: a 4x4-tile neighbourhood of floor around them.
@@ -1155,15 +1216,15 @@ function decorateGiant(rng: Rng, seed: number, b: BaseMap, waves: string[][], si
       const band = cs.filter((p) => distToRect(p.x, p.y, tr) <= 260);
       return band.length ? band : cs;
     };
-    const spawns = placeSpawns(rng, spawnPlan(rng, waves[wv]), cands, taken, near);
+    const spawns = placeSpawns(rng, spawnPlan(rng, waves[wv], cfg), cands, taken, near, cfg.bossId);
     if (!spawns) return null;
     const label = waveLabel(waves[wv]);
     zones.push({
       id: wv,
       wave: wv + 1,
-      isBossZone: wv === n - 1,
-      title: `Zona ${wv + 1}/${n} — ${label}`,
-      banner: `Onda ${wv + 1}: ${label}!`,
+      isBossZone: cfg.bossRoom && wv === n - 1,
+      title: label ? `Zona ${wv + 1}/${n} — ${label}` : `Zona ${wv + 1}/${n}`,
+      banner: label ? `Onda ${wv + 1}: ${label}!` : '',
       trigger: [tr],
       floorRoomId: 0,
       spawns,
@@ -1172,6 +1233,8 @@ function decorateGiant(rng: Rng, seed: number, b: BaseMap, waves: string[][], si
     });
   }
 
+  const extras = placeExtras(cfg, b, walk, dist, ctx.obstacles, heroFeet, zones, centers);
+  if (!extras) return null;
   return {
     seed,
     mode: 'giant',
@@ -1187,6 +1250,7 @@ function decorateGiant(rng: Rng, seed: number, b: BaseMap, waves: string[][], si
     obstacles: ctx.obstacles,
     torches: pickTorches(rng, b, 0),
     heroStart: { x: heroFeet.x, y: heroFeet.y - MAP_FEET_OFFSET },
+    ...extras,
   };
 }
 
@@ -1194,30 +1258,186 @@ function decorateGiant(rng: Rng, seed: number, b: BaseMap, waves: string[][], si
 // Entry point
 // ---------------------------------------------------------------------------------------------
 
-function buildOnce(seed: number, mode: DungeonMapMode, waves: string[][], attempt: number, simple: boolean): DungeonMap | null {
-  const rng = createSeededRng(subSeed(seed, attempt, mode === 'rooms' ? 0x51 : 0xa7));
-  if (mode === 'rooms') {
-    const base = buildRoomsBase(rng, waves.length, simple);
-    return base ? decorateRooms(rng, seed, base, waves, simple) : null;
+// ---------------------------------------------------------------------------------------------
+// T-143 — Collectibles (objetivo menor) and event point
+// ---------------------------------------------------------------------------------------------
+
+interface ExtraCand { x: number; y: number; roomId: number; d: number }
+interface Extras { collectibles: MapCollectible[]; eventPoint?: MapEventPoint }
+
+const COLLECT_MIN_GAP = 96;    // px entre coletáveis
+const COLLECT_HERO_GAP = 128;  // px do início do herói
+const COLLECT_DOOR_GAP = 72;   // px dos pontos de porta (não bloqueia a passagem)
+
+function shuffle<T>(rng: Rng, arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
   }
-  const base = buildGiantBase(rng, simple);
-  return base ? decorateGiant(rng, seed, base, waves, simple) : null;
+  return arr;
+}
+
+/**
+ * Places the collectibles and the event point on reachable 16 px nodes (BFS from the hero), away from
+ * obstacles, doors and the hero start. Uses `cfg.xrng`, so the main stream (layout/spawns) is unchanged.
+ *  - rooms: round-robin over the rooms (passage rooms included, one first; boss room and start room
+ *    last/excluded), each item in the room's "corners" (far from its centre and doors).
+ *  - giant: round-robin over the zones (nearest zone centre), farthest-point sampling from the hero,
+ *    the zone centres and the items already placed (lands in corners and between zones).
+ *  - event point: the reachable node of the last room (rooms) / whole map (giant) with the longest walk.
+ */
+function placeExtras(cfg: GenConfig, b: BaseMap, w: Walk, dist: Int32Array, obstacles: MapRect[], heroFeet: Node, zones: MapZone[], centers: Node[] | null): Extras | null {
+  if (!cfg.collectibles && !cfg.eventPoint) return { collectibles: [] };
+  const rng = cfg.xrng;
+  const doorPts = b.doors.map(mapDoorPoint);
+  const cands: ExtraCand[] = [];
+  for (let j = 0; j < w.ny; j++) {
+    for (let i = 0; i < w.nx; i++) {
+      const d = dist[j * w.nx + i];
+      if (d < 0) continue;
+      const x = i * GRID, y = j * GRID;
+      const roomId = roomAt(b, x, y);
+      if (roomId < 0 || !feetInRoom(b, x, y, roomId)) continue;
+      if (obstacles.some((o) => inRect(x, y, { x: o.x - 12, y: o.y - 12, w: o.w + 24, h: o.h + 24 }))) continue;
+      if (Math.hypot(x - heroFeet.x, y - heroFeet.y) < COLLECT_HERO_GAP) continue;
+      if (doorPts.some((p) => Math.hypot(x - p.x, y - p.y) < COLLECT_DOOR_GAP)) continue;
+      cands.push({ x, y, roomId, d });
+    }
+  }
+  const nearestZone = (x: number, y: number): number => {
+    if (!centers) return -1;
+    let best = 0;
+    for (let k = 1; k < centers.length; k++) {
+      if (Math.hypot(x - centers[k].x, y - centers[k].y) < Math.hypot(x - centers[best].x, y - centers[best].y)) best = k;
+    }
+    return best;
+  };
+  const zoneIdOf = (c: { x: number; y: number; roomId: number }): number | null => {
+    if (centers) return zones[nearestZone(c.x, c.y)]?.id ?? null;
+    const z = zones.find((q) => q.floorRoomId === c.roomId);
+    return z ? z.id : null;
+  };
+
+  const collectibles: MapCollectible[] = [];
+  const farFromItems = (c: ExtraCand, gap: number) => collectibles.every((p) => Math.hypot(c.x - p.x, c.y - p.y) >= gap);
+  const push = (c: ExtraCand) => collectibles.push({ id: collectibles.length, itemId: cfg.collectibles!.itemId, x: c.x, y: c.y, roomId: c.roomId, zoneId: zoneIdOf(c) });
+
+  if (cfg.collectibles) {
+    const count = cfg.collectibles.count;
+    if (!centers) {
+      // Rooms mode.
+      let order = shuffle(rng, b.rooms.map((r) => r.id).filter((id) => !(cfg.bossRoom && b.roomRole[id] === 'boss')));
+      const firstPassage = order.findIndex((id) => b.roomRole[id] === 'passage');
+      if (firstPassage > 0) order.unshift(...order.splice(firstPassage, 1));
+      const startIdx = order.indexOf(0);
+      if (startIdx >= 0 && order.length > 1) order.push(...order.splice(startIdx, 1));
+      order = order.filter((id) => cands.some((c) => c.roomId === id));
+      if (!order.length) return null;
+      for (let k = 0; k < count; k++) {
+        const roomId = order[k % order.length];
+        const pool = cands.filter((c) => c.roomId === roomId);
+        const bd = b.rooms[roomId].bounds;
+        const cx = (bd.col + bd.cols / 2) * T, cy = (bd.row + bd.rows / 2) * T;
+        const myDoors = b.doors.filter((d) => d.roomId === roomId).map(mapDoorPoint);
+        const score = (c: ExtraCand) =>
+          Math.hypot(c.x - cx, c.y - cy) + 0.5 * Math.min(1e9, ...myDoors.map((p) => Math.hypot(c.x - p.x, c.y - p.y)));
+        const ranked = pool.filter((c) => farFromItems(c, COLLECT_MIN_GAP)).sort((p, q) => score(q) - score(p));
+        let pickFrom = ranked.slice(0, Math.max(1, Math.ceil(ranked.length * 0.3)));
+        if (!pickFrom.length) pickFrom = pool.filter((c) => farFromItems(c, 48));
+        if (!pickFrom.length) return null;
+        push(pickFrom[Math.floor(rng() * pickFrom.length)]);
+      }
+    } else {
+      // Giant mode.
+      const anchors: Node[] = [heroFeet, ...centers];
+      for (let k = 0; k < count; k++) {
+        const zone = k % centers.length;
+        const pool = cands.filter((c) => nearestZone(c.x, c.y) === zone && farFromItems(c, COLLECT_MIN_GAP));
+        if (!pool.length) return null;
+        const m = (c: ExtraCand) => Math.min(
+          ...anchors.map((a) => Math.hypot(c.x - a.x, c.y - a.y)),
+          ...collectibles.map((p) => Math.hypot(c.x - p.x, c.y - p.y)),
+        );
+        const ranked = pool.map((c) => ({ c, s: m(c) })).sort((p, q) => q.s - p.s).slice(0, 6);
+        push(ranked[Math.floor(rng() * ranked.length)].c);
+      }
+    }
+  }
+
+  let eventPoint: MapEventPoint | undefined;
+  if (cfg.eventPoint) {
+    const lastRoom = centers ? null : zones[zones.length - 1]?.floorRoomId ?? null;
+    let best: ExtraCand | null = null;
+    for (const c of cands) {
+      if (lastRoom !== null && c.roomId !== lastRoom) continue;
+      if (!farFromItems(c, 64)) continue;
+      if (!best || c.d > best.d) best = c;
+    }
+    if (!best) return null;
+    eventPoint = { x: best.x, y: best.y, roomId: best.roomId, zoneId: zoneIdOf(best) };
+  }
+  return eventPoint ? { collectibles, eventPoint } : { collectibles };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------------------------
+
+interface GenConfig {
+  waves: string[][];
+  exactCounts: boolean;
+  bossRoom: boolean;
+  bossId?: string;
+  collectibles?: { itemId: string; count: number };
+  eventPoint: boolean;
+  passageRooms: [number, number];
+  giantScale: number;
+  xrng: Rng; // RNG separado para coletáveis/evento: o fluxo principal (e a testArena) não muda
+}
+
+function buildOnce(seed: number, mode: DungeonMapMode, cfg0: Omit<GenConfig, 'xrng'>, attempt: number, simple: boolean): DungeonMap | null {
+  const rng = createSeededRng(subSeed(seed, attempt, mode === 'rooms' ? 0x51 : 0xa7));
+  const cfg: GenConfig = { ...cfg0, xrng: createSeededRng(subSeed(seed, attempt, 0xc3)) };
+  if (mode === 'rooms') {
+    const base = buildRoomsBase(rng, cfg.waves.length, simple, cfg.bossRoom, cfg.passageRooms);
+    return base ? decorateRooms(rng, seed, base, cfg, simple) : null;
+  }
+  const base = buildGiantBase(rng, simple, cfg.giantScale);
+  return base ? decorateGiant(rng, seed, base, cfg, simple) : null;
 }
 
 /**
  * Generates a map deterministically from `seed`. Regenerates with sub-seeds when a guarantee fails
  * (up to 200 times), then falls back to a simple layout (rect rooms in a row / plain giant room).
  */
-export function generateDungeonMap(seed: number, options?: { mode?: DungeonMapMode; waves?: string[][] }): DungeonMap {
+export function generateDungeonMap(seed: number, options?: DungeonMapOptions): DungeonMap {
   const mode: DungeonMapMode = options?.mode ?? 'rooms';
-  const waves = options?.waves && options.waves.length ? options.waves : DEFAULT_MAP_WAVES;
+  const baseWaves = options?.waves && options.waves.length ? options.waves : DEFAULT_MAP_WAVES;
+  const n = Math.max(1, Math.floor((mode === 'rooms' ? options?.roomCount : options?.zoneCount) ?? baseWaves.length));
+  const waves = Array.from({ length: n }, (_, i) => (baseWaves[i] ?? []).slice());
+  const bossRoom = options?.bossRoom ?? true;
+  const bossId = options?.bossId;
+  if (bossId && !waves[n - 1].includes(bossId)) waves[n - 1].push(bossId);
+  const col = options?.collectibles;
+  const cfg: Omit<GenConfig, 'xrng'> = {
+    waves,
+    exactCounts: options?.exactCounts ?? false,
+    bossRoom,
+    bossId,
+    collectibles: col && col.count > 0 ? { itemId: col.itemId, count: Math.floor(col.count) } : undefined,
+    eventPoint: options?.eventPoint ?? false,
+    passageRooms: options?.passageRooms
+      ? [Math.max(0, Math.floor(Math.min(...options.passageRooms))), Math.max(0, Math.floor(Math.max(...options.passageRooms)))] as [number, number]
+      : [1, 2] as [number, number],
+    giantScale: Math.max(1, Math.min(2, options?.giantScale ?? 1)),
+  };
   const s = seed >>> 0;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const map = buildOnce(s, mode, waves, attempt, false);
+    const map = buildOnce(s, mode, cfg, attempt, false);
     if (map) return map;
   }
   for (let attempt = 0; attempt < 20; attempt++) {
-    const map = buildOnce(s, mode, waves, MAX_ATTEMPTS + attempt, true);
+    const map = buildOnce(s, mode, cfg, MAX_ATTEMPTS + attempt, true);
     if (map) return map;
   }
   throw new Error(`generateDungeonMap: could not build a ${mode} map for seed ${seed}`);

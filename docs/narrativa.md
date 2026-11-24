@@ -190,3 +190,33 @@
 - `village_lyra_idle` / `village_lyra_idle_2`: duas variações de fala de Lyra.
 - `village_gorran_idle` / `village_gorran_idle_2`: duas variações de fala de Gorran.
 - `village_gate_locked`: aviso do portão trancado ("fale com o Mestre antes de sair").
+
+---
+
+## 11. Novo Prólogo — As 3 Missões da Vila Natal (M10 — Decisões #13 e #24)
+
+> Substitui o arco das masmorras iniciais da seção 8.1. **Fora do prólogo:** A Gruta da Cachoeira (`stage_grotto`), O Selo Antigo (`stage_seal`), a queda da vila em chamas e o Arauto do Abismo (`village_fall_boss`). Os biomas ficam para as dungeons repetíveis (M12); as chaves antigas permanecem em `dialogues.json`, sem uso no prólogo.
+
+### 11.1. Arco
+1. **Os Pedidos da Vila:** o Mestre de Armas abre o prólogo dizendo que os moradores precisam de ajuda (`quest_master_intro`); enquanto os dois pedidos não forem entregues, repete `quest_master_wait`.
+2. **Missão 1 — A Plantação de Ervas (Lyra):** colher ervas medicinais para os frascos de Lyra; Slimes nos canteiros, sem boss.
+3. **Missão 2 — A Mina Iluminada (Gorran):** recuperar martelo, tenaz e cinzel de Gorran; lobos e o **Chefe da Matilha**. No fim, o herói vê **o algo estranho**: um **brilho vermelho pulsando entre as rochas** do fundo da mina, com a pedra **quente como brasa** (presença do Karnak, sem revelá-lo).
+4. **Missão 3 — O Fundo da Mina (Mestre):** após as duas entregas, o herói conta o que viu e quer explorar; o Mestre consente, preocupado. No fundo, o **Karnak** surge e o herói morre (luta invencível).
+5. **Fim do Prólogo:** sem cena de destruição; tela sóbria "Fim do Prólogo" e transição para o Ato 1 atual.
+
+As falas acontecem só antes e depois das dungeons (o Mestre não acompanha). As missões 1 e 2 podem ser feitas em qualquer ordem.
+
+### 11.2. Chaves de Diálogo (`src/data/dialogues.json`)
+- **Mestre:** `quest_master_intro`, `quest_master_wait`, `quest_master_depths_offer`, `quest_master_depths_progress`.
+- **Lyra / Gorran:** `quest_<npc>_offer` (pedido/aceitar), `quest_<npc>_progress` (em andamento), `quest_<npc>_turnin` (entrega), `quest_<npc>_done` (depois de entregue).
+- **Dungeons (falas do herói):** `mission_herbs_enter`, `mission_herbs_complete`, `mission_mine_enter`, `mission_mine_complete`, `mission_mine_strange`, `mission_depths_enter`.
+- **Karnak:** `mission_depths_karnak` (o Karnak surge na sala 5; `portraitId` `karnak`).
+- **Fim:** `prologue_end_title` e `prologue_end_text` (`speaker` Sistema).
+
+### 11.3. Termos Novos
+| Termo | Uso |
+| :--- | :--- |
+| **Plantação de Ervas** | Local da Missão 1 (pedido de Lyra). |
+| **Mina Iluminada** | Local da Missão 2 (pedido de Gorran); substitui a "Mina Abandonada" no prólogo. |
+| **Fundo da Mina** | Local da Missão 3 (Mestre); onde o Karnak surge. |
+| **Fim do Prólogo** | Tela de encerramento após a morte para o Karnak. |
