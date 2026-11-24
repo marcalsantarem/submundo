@@ -60,7 +60,7 @@ const ACT1_PROFILE_FIXTURE = {
   campaign: {
     phase: 'act1',
     currentStageId: 'act1_submundo',
-    completedStages: ['prologue_grotto', 'prologue_mine', 'prologue_seal'],
+    completedStages: ['mission_herbs', 'mission_mine', 'mission_depths'],
     villageFallTriggered: true,
     seenDialogues: [
       'prologue_welcome',
@@ -447,16 +447,18 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
     expect(existsSync(pcPrologueVillagePath)).toBe(true);
     expect(statSync(pcPrologueVillagePath).size).toBeGreaterThan(5000);
 
-    // 4. Enter Prologue Dungeon (Gruta da Cachoeira) and verify hero_living_attack & hero_living_dash
+    // 4. Enter a prologue mission (M10: Plantação de Ervas) and verify hero_living_attack & hero_living_dash
     await page.evaluate(() => {
-      window.__SUBMUNDO_HUB_DEBUG__!.enterDungeon('prologue_grotto');
+      window.__SUBMUNDO_HUB_DEBUG__!.enterDungeon('mission_herbs');
     });
 
     await page.waitForFunction(
       () =>
         typeof window.__SUBMUNDO_DEBUG__ !== 'undefined' &&
+        typeof window.__SUBMUNDO_DEBUG__.getMissionState === 'function' &&
         window.__SUBMUNDO_DEBUG__.getHero()?.isAlive === true &&
-        window.__SUBMUNDO_DEBUG__.getRunState()?.totalRooms === 3,
+        window.__SUBMUNDO_DEBUG__.getMissionState()?.missionId === 'mission_herbs' &&
+        window.__SUBMUNDO_DEBUG__.getMonsters().length > 0,
       undefined,
       { timeout: 10000 }
     );

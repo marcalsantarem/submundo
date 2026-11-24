@@ -35,6 +35,8 @@ const HERO_START = { x: 672, y: 244 };
 const HERO_GATE = { x: 831, y: 184 };
 const MASTER_APPROACH = { x: 528, y: 272 };
 const GATE_APPROACH = { x: 831, y: 174 };
+/** Em frente à Lyra (mesmo ponto do teste 3). */
+const LYRA_APPROACH = { x: 573, y: 227 };
 
 interface XY {
   x: number;
@@ -210,18 +212,20 @@ async function walkTo(page: Page, target: XY, order: 'xy' | 'yx', tol = 6): Prom
   return (await villageState(page)).hero;
 }
 
-async function gateEntries(page: Page): Promise<Array<{ stageId: string; title: string; status: string; label: string; statusText: string }>> {
+async function gateEntries(page: Page): Promise<Array<{ stageId: string; title: string; label: string; statusText: string; giver: string }>> {
   return page.evaluate(() => {
     const s = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
       gateModal: {
-        entries: Array<{ stageId: string; title: string; status: string }>;
-        rows: Array<{ title: { text: string }; status: { text: string } }>;
+        entries: Array<{ stageId: string; title: string }>;
+        rows: Array<{ title: { text: string }; status: { text: string }; giver: { text: string } }>;
       };
     };
     return s.gateModal.entries.map((e, i) => ({
-      ...e,
+      stageId: e.stageId,
+      title: e.title,
       label: s.gateModal.rows[i].title.text,
       statusText: s.gateModal.rows[i].status.text,
+      giver: s.gateModal.rows[i].giver.text,
     }));
   });
 }
@@ -268,15 +272,16 @@ async function waitDungeon(page: Page, stageId: string): Promise<void> {
       const d = window.__SUBMUNDO_DEBUG__ as unknown as
         | {
             scene?: { scene: { key: string; isActive: () => boolean } };
-            getRunState?: () => { status: string; stageId?: string } | undefined;
+            getMissionState?: () => { missionId: string; runStatus: string } | null;
             getHero?: () => { isAlive: boolean } | undefined;
           }
         | undefined;
       return (
         d?.scene?.scene.key === 'DungeonScene' &&
         d.scene.scene.isActive() &&
-        d.getRunState?.()?.status === 'in_progress' &&
-        d.getRunState?.()?.stageId === id &&
+        typeof d.getMissionState === 'function' &&
+        d.getMissionState()?.missionId === id &&
+        d.getMissionState()?.runStatus === 'in_progress' &&
         d.getHero?.()?.isAlive === true
       );
     },
@@ -285,18 +290,10 @@ async function waitDungeon(page: Page, stageId: string): Promise<void> {
   );
 }
 
-/** Vence a run pelo debug (limpa as salas até o chefe) e volta pelo `returnToHub`. */
+/** Vence a missão pelo debug (`completeMissionNow`) e volta pelo `returnToHub`. */
 async function winRunAndReturn(page: Page): Promise<void> {
-  const status = await page.evaluate(() => {
-    const dbg = window.__SUBMUNDO_DEBUG__!;
-    dbg.getHero().invulnerableUntilMs = 999999;
-    for (let i = 0; i < 12 && dbg.getRunState().status !== 'victory'; i++) {
-      dbg.forceClearRoom();
-      if (dbg.getRunState().status !== 'victory') dbg.advanceRoom();
-    }
-    return dbg.getRunState().status;
-  });
-  expect(status).toBe('victory');
+  expect(await page.evaluate(() => window.__SUBMUNDO_DEBUG__!.completeMissionNow())).toBe(true);
+  expect(await page.evaluate(() => window.__SUBMUNDO_DEBUG__!.getMissionState()?.runStatus)).toBe('victory');
   await page.evaluate(() => window.__SUBMUNDO_DEBUG__!.returnToHub?.());
   await waitVillage(page);
 }
@@ -306,33 +303,35 @@ async function loseRunAndReturn(page: Page): Promise<void> {
   await page.evaluate(() => {
     const dbg = window.__SUBMUNDO_DEBUG__!;
     const hero = dbg.getHero();
+    // Morte de verdade (pelo combate): a cena só confere a derrota no tick em que o herói morre.
     hero.invulnerableUntilMs = 0;
     hero.baseStats.defense = 0;
     hero.stats.defense = 0;
     hero.stats.hp = 1;
-    hero.basicAttackReadyAtMs = 999999;
     hero.minions = [];
     const attacker = dbg.getMonsters().find((m) => m.isAlive)!;
     attacker.hp = Math.max(attacker.hp, 500);
+    attacker.maxHp = Math.max(attacker.maxHp, 500);
     attacker.stunnedUntilMs = 0;
     attacker.bleedDps = 0;
     attacker.position = { x: hero.position.x, y: hero.position.y };
     attacker.nextAttackAtMs = 0;
   });
-  await page.waitForFunction(() => window.__SUBMUNDO_DEBUG__!.getRunState().status === 'defeat', undefined, {
-    timeout: 10000,
-  });
+  await page.waitForFunction(
+    () => window.__SUBMUNDO_DEBUG__!.getMissionState()?.runStatus === 'defeat',
+    undefined,
+    { timeout: 10000 }
+  );
   await page.evaluate(() => window.__SUBMUNDO_DEBUG__!.returnToHub?.());
   await waitVillage(page);
 }
 
-async function alertMarkerDrawn(page: Page): Promise<{ alertNpcId: string | null; commands: number }> {
-  return page.evaluate(() => {
-    const w = (window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
-      villageWorld: { alertNpcId: string | null; alertMarker: { commandBuffer: unknown[] } };
-    }).villageWorld;
-    return { alertNpcId: w.alertNpcId, commands: w.alertMarker.commandBuffer.length };
-  });
+async function questMarkersDrawn(page: Page): Promise<Record<string, string | null>> {
+  return page.evaluate(() =>
+    (window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
+      villageWorld: { getQuestMarkerKinds: () => Record<string, string | null> };
+    }).villageWorld.getQuestMarkerKinds()
+  );
 }
 
 async function trackerText(page: Page): Promise<string> {
@@ -344,7 +343,7 @@ async function trackerText(page: Page): Promise<string> {
 }
 
 test.describe('SUBMUNDO M9 — Vila Natal (hub do prólogo) E2E (PC 960x540 & Mobile Landscape 844x390)', () => {
-  test('raiz abre a Vila; "!" no Mestre; portão travado; Mestre por teclado + E libera o portão; lista do portão; Gruta; volta no portão (vitória e derrota); perfil persiste', async ({
+  test('raiz abre a Vila; "!" no Mestre; portão travado; Mestre por teclado + E; Lyra libera o portão; lista do portão; Ervas; volta no portão (vitória e derrota); perfil persiste', async ({
     page,
   }) => {
     test.setTimeout(150000);
@@ -394,10 +393,8 @@ test.describe('SUBMUNDO M9 — Vila Natal (hub do prólogo) E2E (PC 960x540 & Mo
     await closeDialogueWithKeyboard(page);
     await shot(page, 'pc');
 
-    // 2. "!" desenhado sobre o Mestre; tracker "Falar com o Mestre".
-    let marker = await alertMarkerDrawn(page);
-    expect(marker.alertNpcId).toBe('master');
-    expect(marker.commands).toBeGreaterThan(0);
+    // 2. "!" desenhado sobre o Mestre; tracker "Falar com o Mestre" (M10: marcadores de missão).
+    expect(await questMarkersDrawn(page)).toEqual({ master: '!', lyra: null, gorran: null, gate: null });
     expect(await trackerText(page)).toBe('Falar com o Mestre');
 
     // 3. Portão travado: a fala de bloqueio, sem lista.
@@ -412,7 +409,7 @@ test.describe('SUBMUNDO M9 — Vila Natal (hub do prólogo) E2E (PC 960x540 & Mo
     const atClosedGate = await holdKey(page, 'ArrowUp', 600);
     expect(atClosedGate.y).toBeGreaterThanOrEqual(154);
 
-    // 4. Andar até o Mestre com o teclado e apertar E.
+    // 4. Andar até o Mestre com o teclado e apertar E: introdução (M10) libera Lyra e Gorran.
     await placeHero(page, HERO_START);
     const nearMaster = await walkTo(page, MASTER_APPROACH, 'yx');
     expect(Math.hypot(nearMaster.x - 524, nearMaster.y - 251)).toBeLessThanOrEqual(46);
@@ -420,17 +417,28 @@ test.describe('SUBMUNDO M9 — Vila Natal (hub do prólogo) E2E (PC 960x540 & Mo
     expect(st.nearby).toBe('master');
     expect(st.gateUnlocked).toBe(false);
     await page.keyboard.press('e');
-    await expectDialogueLine(page, 'village_master_mission_grotto');
+    await expectDialogueLine(page, 'quest_master_intro');
     st = await villageState(page);
-    expect(st.gateUnlocked).toBe(true);
-    expect(st.objective).toBe('Saia pelo portão');
-    expect(st.alertNpcId).toBeNull();
+    expect(st.gateUnlocked).toBe(false); // nenhuma missão aceita ainda
+    expect(st.objective).toBe('Falar com Lyra e Gorran');
     await shot(page, 'master_dialogue_pc');
     await closeDialogueWithKeyboard(page);
-    expect(await trackerText(page)).toBe('Saia pelo portão');
-    marker = await alertMarkerDrawn(page);
-    expect(marker.alertNpcId).toBeNull();
-    expect(marker.commands).toBe(0);
+    expect(await trackerText(page)).toBe('Falar com Lyra e Gorran');
+    expect(await questMarkersDrawn(page)).toEqual({ master: null, lyra: '!', gorran: '!', gate: null });
+    // Falar de novo com o Mestre: fala de espera.
+    await page.keyboard.press('e');
+    await expectDialogueLine(page, 'quest_master_wait');
+    await closeDialogueWithKeyboard(page);
+
+    // 5. Lyra (E) dá a missão das Ervas: "?" cinza nela, "!" no portão, portão abre.
+    await placeHero(page, LYRA_APPROACH);
+    expect((await villageState(page)).nearby).toBe('lyra');
+    await page.keyboard.press('e');
+    await expectDialogueLine(page, 'quest_lyra_offer');
+    await closeDialogueWithKeyboard(page);
+    st = await villageState(page);
+    expect(st.gateUnlocked).toBe(true);
+    expect(await questMarkersDrawn(page)).toEqual({ master: null, lyra: '?gray', gorran: '!', gate: '!' });
     const gateVisual = await page.evaluate(() => {
       const w = (window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
         villageWorld: { gateRects: unknown[]; isGateOpen: () => boolean };
@@ -438,12 +446,9 @@ test.describe('SUBMUNDO M9 — Vila Natal (hub do prólogo) E2E (PC 960x540 & Mo
       return { rects: w.gateRects.length, open: w.isGateOpen() };
     });
     expect(gateVisual).toEqual({ rects: 2, open: true });
-    // Falar de novo com o Mestre: fala de espera.
-    await page.keyboard.press('e');
-    await expectDialogueLine(page, 'village_master_idle');
-    await closeDialogueWithKeyboard(page);
 
-    // 5. Andar até o portão e interagir (E): lista com Gruta liberada, Mina e Selo travadas.
+    // 6. Andar até o portão e interagir (E): lista só com a missão aceita.
+    await placeHero(page, HERO_START);
     await walkTo(page, GATE_APPROACH, 'xy');
     st = await villageState(page);
     expect(st.nearby).toBe('gate');
@@ -452,58 +457,49 @@ test.describe('SUBMUNDO M9 — Vila Natal (hub do prólogo) E2E (PC 960x540 & Mo
       timeout: 3000,
     });
     let entries = await gateEntries(page);
-    expect(entries.map((e) => e.stageId)).toEqual(PROLOGUE_STAGES.map((s) => s.id));
-    expect(entries.map((e) => e.title)).toEqual(PROLOGUE_STAGES.map((s) => s.name));
-    expect(entries.map((e) => e.status)).toEqual(['available', 'locked', 'locked']);
-    expect(entries[0].label).toContain('A Gruta da Cachoeira');
-    expect(new Set(entries.map((e) => e.statusText)).size).toBe(2); // liberada x travada
+    expect(entries.map((e) => e.stageId)).toEqual(['mission_herbs']);
+    expect(entries[0].title).toBe(PROLOGUE_STAGES.find((x) => x.id === 'mission_herbs')!.name);
+    expect(entries[0].label).toContain('A Plantação de Ervas');
+    expect(entries[0].giver).toBe('Pedido de Lyra');
     await shot(page, 'gate_modal_pc');
 
-    // Linha travada não faz nada (clique real na Mina).
-    const mineRow = await gateRowCenter(page, 1);
-    await clickLogicalCanvas(page, mineRow.x, mineRow.y);
-    await page.waitForTimeout(300);
-    st = await villageState(page);
-    expect(st.gateModalOpen).toBe(true);
+    // Clique real na linha inicia a DungeonScene das Ervas.
+    const herbsRow = await gateRowCenter(page, 0);
+    await clickLogicalCanvas(page, herbsRow.x, herbsRow.y);
+    await waitDungeon(page, 'mission_herbs');
 
-    // 6. Escolher a Gruta (clique real) inicia a DungeonScene da Gruta.
-    const grottoRow = await gateRowCenter(page, 0);
-    await clickLogicalCanvas(page, grottoRow.x, grottoRow.y);
-    await waitDungeon(page, 'prologue_grotto');
-
-    // 7. Vitória (debug) -> herói nasce no portão; Gruta concluída, portão trava até falar com o Mestre.
+    // 7. Vitória (debug) -> herói nasce no portão; "?" amarelo na Lyra; portão trava (nada aceito).
     await winRunAndReturn(page);
     st = await villageState(page);
     expect(st.hero).toEqual(HERO_GATE);
     expect(st.gateUnlocked).toBe(false);
-    expect(st.objective).toBe('Falar com o Mestre');
-    expect(st.alertNpcId).toBe('master');
-    let profile = await page.evaluate(() => {
+    expect(st.objective).toBe('Volte a Lyra');
+    expect(st.alertNpcId).toBe('lyra');
+    const profile = await page.evaluate(() => {
       const p = window.__SUBMUNDO_HUB_DEBUG__!.getProfile();
       return { completed: p.campaign?.completedStages ?? [], runsCompleted: p.stats.runsCompleted };
     });
-    expect(profile.completed).toContain('prologue_grotto');
+    expect(profile.completed).toContain('mission_herbs');
     expect(profile.runsCompleted).toBe(1);
-    await closeDialogueWithKeyboard(page); // fala de vitória da Gruta
+    await closeDialogueWithKeyboard(page);
     await shot(page, 'gate_return_pc');
+    expect(await questMarkersDrawn(page)).toEqual({ master: null, lyra: '?yellow', gorran: '!', gate: null });
 
-    // 8. Mestre (debug talkTo) dá a Mina; lista: Gruta concluída, Mina liberada, Selo travado.
-    expect(await page.evaluate(() => window.__SUBMUNDO_HUB_DEBUG__!.talkTo!('master'))).toBe(true);
-    await expectDialogueLine(page, 'village_master_mission_mine');
+    // 8. Gorran (debug talkTo) dá a Mina; a lista do portão mostra só a Mina; tecla 1 entra.
+    expect(await page.evaluate(() => window.__SUBMUNDO_HUB_DEBUG__!.talkTo!('gorran'))).toBe(true);
+    await expectDialogueLine(page, 'quest_gorran_offer');
     await closeDialogueWithKeyboard(page);
     expect(await page.evaluate(() => window.__SUBMUNDO_HUB_DEBUG__!.openGate!())).toBe(true);
     entries = await gateEntries(page);
-    expect(entries.map((e) => e.status)).toEqual(['completed', 'available', 'locked']);
-    // Tecla 2 escolhe a Mina.
-    await page.keyboard.press('Digit2');
-    await waitDungeon(page, 'prologue_mine');
+    expect(entries.map((e) => e.stageId)).toEqual(['mission_mine']);
+    await page.keyboard.press('Digit1');
+    await waitDungeon(page, 'mission_mine');
 
-    // 9. Derrota (debug) -> herói nasce no portão; a Mina segue liberada.
+    // 9. Derrota (debug) -> herói nasce no portão; a Mina segue aceita.
     await loseRunAndReturn(page);
     st = await villageState(page);
     expect(st.hero).toEqual(HERO_GATE);
     expect(st.gateUnlocked).toBe(true);
-    expect(st.objective).toBe('Saia pelo portão');
     const afterDefeat = await page.evaluate(() => {
       const p = window.__SUBMUNDO_HUB_DEBUG__!.getProfile();
       return { runsCompleted: p.stats.runsCompleted, runsFailed: p.stats.runsFailed };
@@ -511,22 +507,22 @@ test.describe('SUBMUNDO M9 — Vila Natal (hub do prólogo) E2E (PC 960x540 & Mo
     expect(afterDefeat).toEqual({ runsCompleted: 1, runsFailed: 1 });
     await closeDialogueWithKeyboard(page);
 
-    // 10. Recarregar: perfil persiste (portão liberado), herói no início, sem as boas-vindas.
+    // 10. Recarregar: perfil persiste, herói no início, sem as boas-vindas.
     await page.reload();
     await waitVillage(page);
     st = await villageState(page);
     expect(st.hero).toEqual(HERO_START);
     expect(st.gateUnlocked).toBe(true);
-    expect(st.objective).toBe('Saia pelo portão');
+    expect(st.objective).toBe('Volte a Lyra');
     expect(st.dialogueOpen).toBe(false);
     const persisted = await page.evaluate(() => {
       const c = window.__SUBMUNDO_HUB_DEBUG__!.getProfile().campaign!;
-      return { completed: c.completedStages, current: c.currentStageId };
+      return { completed: c.completedStages, quests: c.prologueQuests };
     });
-    expect(persisted.completed).toContain('prologue_grotto');
-    expect(persisted.current).toBe('prologue_mine');
+    expect(persisted.completed).toContain('mission_herbs');
+    expect(persisted.quests).toEqual({ mission_herbs: 'completed', mission_mine: 'accepted', mission_depths: 'hidden' });
     expect(await page.evaluate(() => window.__SUBMUNDO_HUB_DEBUG__!.openGate!())).toBe(true);
-    expect((await gateEntries(page)).map((e) => e.status)).toEqual(['completed', 'available', 'locked']);
+    expect((await gateEntries(page)).map((e) => e.stageId)).toEqual(['mission_mine']);
 
     expectNoErrors(errors);
   });
@@ -621,26 +617,31 @@ test.describe('SUBMUNDO M9 — Vila Natal (hub do prólogo) E2E (PC 960x540 & Mo
       await page.waitForTimeout(250);
       expect((await villageState(page)).dialogueOpen).toBe(false);
 
-      // Perto do Mestre: toque no Interagir abre a missão e libera o portão.
+      // Perto do Mestre: toque no Interagir abre a introdução; perto da Lyra, a missão libera o portão.
       await placeHero(page, MASTER_APPROACH);
       expect((await villageState(page)).nearby).toBe('master');
       await tapLogical(page, btn);
-      await expectDialogueLine(page, 'village_master_mission_grotto');
-      expect((await villageState(page)).gateUnlocked).toBe(true);
+      await expectDialogueLine(page, 'quest_master_intro');
       await shot(page, 'master_dialogue_mobile');
       await closeDialogueWithKeyboard(page);
+      await placeHero(page, LYRA_APPROACH);
+      expect((await villageState(page)).nearby).toBe('lyra');
+      await tapLogical(page, btn);
+      await expectDialogueLine(page, 'quest_lyra_offer');
+      expect((await villageState(page)).gateUnlocked).toBe(true);
+      await closeDialogueWithKeyboard(page);
 
-      // Perto do portão: toque abre a lista; toque na Gruta inicia a dungeon.
+      // Perto do portão: toque abre a lista; toque nas Ervas inicia a dungeon.
       await placeHero(page, GATE_APPROACH);
       expect((await villageState(page)).nearby).toBe('gate');
       await tapLogical(page, btn);
       await page.waitForFunction(() => window.__SUBMUNDO_HUB_DEBUG__!.getVillageState!()!.gateModalOpen, undefined, {
         timeout: 3000,
       });
-      expect((await gateEntries(page)).map((e) => e.status)).toEqual(['available', 'locked', 'locked']);
+      expect((await gateEntries(page)).map((e) => e.stageId)).toEqual(['mission_herbs']);
       await shot(page, 'gate_modal_mobile');
       await tapLogical(page, await gateRowCenter(page, 0));
-      await waitDungeon(page, 'prologue_grotto');
+      await waitDungeon(page, 'mission_herbs');
 
       await winRunAndReturn(page);
       expect((await villageState(page)).hero).toEqual(HERO_GATE);
