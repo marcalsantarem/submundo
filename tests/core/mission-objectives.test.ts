@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest';
+import monstersJson from '../../src/data/monsters.json';
+import { tickCombat } from '../../src/core/combat/CombatEngine';
+import { createHero } from '../../src/core/entities/Hero';
+import {
+  makeMonsterDormant,
+  spawnMonster,
+  updateMonsterAwareness,
+  MONSTER_AGGRO_RADIUS,
+} from '../../src/core/entities/Monster';
+import type { MonsterDef } from '../../src/core/index';
 import {
   generateDungeonMap,
   MAP_CELL_VOID,
   MAP_FEET_OFFSET,
+  MAP_PLACED_START_DIST,
   MAP_TILE,
+  mapMinimapLayout,
   type DungeonMap,
   type MapRect,
 } from '../../src/core/dungeon/DungeonMap';
@@ -15,8 +27,12 @@ import {
   findCollectibleAt,
   isAtEventPoint,
   isMissionComplete,
+  isEventUnlocked,
   isObjectiveDone,
+  killObjectiveText,
   markEventVisited,
+  monstersAlive,
+  setMonstersKilled,
   markZoneCleared,
   missionMapOptions,
   MISSION_MAP_DEFAULTS,
@@ -93,7 +109,7 @@ describe('Mapas das missões do prólogo (T-143)', () => {
       expect(m.zones.map((z, i) => countOf(m, i, 'slime'))).toEqual([3, 5, 7]);
       expect(m.zones.every((z) => z.spawns.length === countOf(m, z.id, 'slime'))).toBe(true);
       expect(m.zones.some((z) => z.isBossZone)).toBe(false);
-      checkCollectibles(m, 10);
+      checkCollectibles(m, 5);
       expect(m.collectibles.every((c) => c.itemId === 'herb')).toBe(true);
       expect(new Set(m.collectibles.map((c) => c.zoneId)).size).toBe(3);
       expect(m.eventPoint).toBeUndefined();
@@ -110,7 +126,7 @@ describe('Mapas das missões do prólogo (T-143)', () => {
       expect(m.zones.map((_, i) => countOf(m, i, 'wolf'))).toEqual([2, 2, 3, 2]);
       expect(m.zones.map((_, i) => countOf(m, i, 'wolf_alpha'))).toEqual([0, 0, 0, 1]);
       expect(m.zones.map((z) => z.isBossZone)).toEqual([false, false, false, true]);
-      checkCollectibles(m, 6);
+      checkCollectibles(m, 4);
       const bossRoom = m.zones[3].floorRoomId;
       expect(m.collectibles.some((c) => c.roomId === bossRoom)).toBe(false);
       expect(new Set(m.collectibles.map((c) => c.roomId)).size).toBeGreaterThanOrEqual(3);
@@ -154,10 +170,27 @@ describe('Mapas das missões do prólogo (T-143)', () => {
     expect(generateDungeonMap(7, missionMapOptions(M.mission_mine))).toEqual(generateDungeonMap(7, missionMapOptions(M.mission_mine)));
   });
 
-  it('regra de cumprimento: zonas limpas E objetivo E evento', () => {
+  it('regra de cumprimento: todos os monstros mortos E objetivo E evento', () => {
     const m = mine[0];
     const p = createMissionProgress(m, M.mission_mine.objective);
+    expect(p.monstersTotal).toBe(20); // 10 slimes + 9 lobos + Chefe da Matilha
+    expect(killObjectiveText(p)).toBe('Elimine todos os monstros 0/20');
     m.zones.forEach((z) => markZoneCleared(p, z.id));
+    setMonstersKilled(p, 19);
+    expect(monstersAlive(p)).toBe(1);
+    expect(isEventUnlocked(m, p)).toBe(true); // a sala do evento (chefe) está limpa
+    collectAt(p.objective!, 99);
+    p.objective!.collected = p.objective!.count;
+    markEventVisited(p);
+    expect(isMissionComplete(p)).toBe(false); // falta 1 monstro
+    const p0 = createMissionProgress(m, M.mission_mine.objective);
+    expect(isEventUnlocked(m, p0)).toBe(false);
+    setMonstersKilled(p, 99);
+    expect(killObjectiveText(p)).toBe('Elimine todos os monstros 20/20');
+    expect(isMissionComplete(p)).toBe(true);
+    // Mesma regra, passo a passo: objetivo e evento.
+    p.objective = createMissionProgress(m, M.mission_mine.objective).objective;
+    p.eventVisited = false;
     expect(isMissionComplete(p)).toBe(false); // falta objetivo e evento
     const o = p.objective!;
     const c0 = m.collectibles[0];
@@ -167,7 +200,7 @@ describe('Mapas das missões do prólogo (T-143)', () => {
     expect(findCollectibleAt(m, o, c0.x, c0.y)).toBeNull();
     m.collectibles.slice(1).forEach((c) => collectAt(o, c.id));
     expect(isObjectiveDone(o)).toBe(true);
-    expect(objectiveProgressText(o, 'Ferramentas')).toBe('Ferramentas 6/6');
+    expect(objectiveProgressText(o, 'Ferramentas')).toBe('Ferramentas 4/4');
     expect(isMissionComplete(p)).toBe(false); // falta o evento
     expect(isAtEventPoint(m, m.eventPoint!.x, m.eventPoint!.y)).toBe(true);
     markEventVisited(p);
@@ -175,21 +208,26 @@ describe('Mapas das missões do prólogo (T-143)', () => {
 
     const h = createMissionProgress(herbs[0], M.mission_herbs.objective);
     expect(h.eventRequired).toBe(false);
+    expect(h.monstersTotal).toBe(15);
     herbs[0].zones.forEach((z) => markZoneCleared(h, z.id));
+    setMonstersKilled(h, 15);
     expect(isMissionComplete(h)).toBe(false);
     herbs[0].collectibles.forEach((c) => collectAt(h.objective!, c.id));
     expect(isMissionComplete(h)).toBe(true);
 
-    const d = createMissionProgress(depths[0], null);
+    const d = createMissionProgress(depths[0], null, ['karnak']);
     expect(d.objective).toBeNull();
+    expect(d.monstersTotal).toBe(22); // o Karnak invencível não conta
     markZoneCleared(d, 0);
     expect(isMissionComplete(d)).toBe(false);
     depths[0].zones.forEach((z) => markZoneCleared(d, z.id));
+    expect(isMissionComplete(d)).toBe(false);
+    setMonstersKilled(d, 22);
     expect(isMissionComplete(d)).toBe(true);
     expect(isObjectiveDone(createObjectiveState({ kind: 'collect', itemId: 'a', count: 0 }))).toBe(true);
   });
 
-  it('calibragem: cada missão estima ~3 min (150-210 s em média)', () => {
+  it('calibragem: cada missão estima ~2-4 min (130-240 s em média; o piloto real fica abaixo, ver o topo de MissionObjectives.ts)', () => {
     const avg = (maps: DungeonMap[]) => {
       const es = maps.map(estimateMissionSeconds);
       const f = (k: 'combatS' | 'walkS' | 'totalS') => Math.round(es.reduce((a, e) => a + e[k], 0) / es.length);
@@ -198,8 +236,73 @@ describe('Mapas das missões do prólogo (T-143)', () => {
     const res = { herbs: avg(herbs), mine: avg(mine), depths: avg(depths) };
     console.log('[mission-time] s', JSON.stringify(res));
     for (const r of Object.values(res)) {
-      expect(r.total).toBeGreaterThanOrEqual(150);
-      expect(r.total).toBeLessThanOrEqual(210);
+      expect(r.total).toBeGreaterThanOrEqual(130);
+      expect(r.total).toBeLessThanOrEqual(240);
     }
+  });
+
+  it('T-151: missões sem ondas — monstros já no mapa, espalhados e longe do início do herói', () => {
+    for (const m of [...herbs, ...mine, ...depths]) {
+      expect(m.spawnMode).toBe('placed');
+      expect(m.zones.every((z) => z.banner === '')).toBe(true); // sem banner de onda
+      const at = reach(m);
+      const all = m.zones.flatMap((z) => z.spawns);
+      const start = { x: m.heroStart.x, y: m.heroStart.y + MAP_FEET_OFFSET };
+      for (const sp of all) {
+        const fx = sp.x, fy = sp.y + MAP_FEET_OFFSET;
+        expect(at(fx, fy)).toBe(true);
+        expect(m.obstacles.some((o) => inside(fx, fy, o))).toBe(false);
+        expect(Math.hypot(fx - start.x, fy - start.y)).toBeGreaterThanOrEqual(140);
+      }
+      for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+        expect(Math.hypot(all[i].x - all[j].x, all[i].y - all[j].y)).toBeGreaterThanOrEqual(36);
+      }
+    }
+    // Em média os monstros da sala/zona inicial ficam bem longe do herói (não acordam no início).
+    const firstZoneMin = herbs.map((m) => Math.min(...m.zones[0].spawns.map((sp) =>
+      Math.hypot(sp.x - m.heroStart.x, sp.y - m.heroStart.y))));
+    expect(firstZoneMin.filter((d) => d >= MAP_PLACED_START_DIST).length).toBe(herbs.length);
+    // testArena continua com ondas (spawnMode 'waves').
+    expect(generateDungeonMap(101, { mode: 'rooms' }).spawnMode).toBe('waves');
+    expect(generateDungeonMap(101, { mode: 'giant' }).zones[0].banner).toMatch(/^Onda 1/);
+  });
+
+  it('T-151: o Fundo da Mina ficou mais longo (mais salas de passagem)', () => {
+    for (const m of depths) expect(m.rooms.length).toBeGreaterThanOrEqual(5 + 4 * 3);
+  });
+
+  it('T-152: planta do minimapa cobre exatamente as células de sala e corredor', () => {
+    for (const m of [herbs[0], mine[0], depths[0]]) {
+      const lay = mapMinimapLayout(m);
+      expect(lay.worldW).toBe(m.cols * T);
+      expect(lay.worldH).toBe(m.rows * T);
+      const cover = (rects: MapRect[]) => rects.reduce((a, r) => a + (r.w / T) * (r.h / T), 0);
+      expect(cover(lay.rooms)).toBe(m.cells.filter((c) => c === 1).length);
+      expect(cover(lay.corridors)).toBe(m.cells.filter((c) => c === 2).length);
+      expect(lay.rooms.length).toBeLessThan(m.cells.filter((c) => c === 1).length / 4);
+    }
+  });
+
+  it('T-151: monstro adormecido patrulha perto de casa e acorda por proximidade, dano ou pelo grupo', () => {
+    const def = (monstersJson as MonsterDef[]).find((m) => m.id === 'slime')!;
+    const hero = createHero({ x: 0, y: 0 });
+    const a = spawnMonster(def, 'a', { x: 600, y: 0 });
+    const b = spawnMonster(def, 'b', { x: 700, y: 0 });
+    const c = spawnMonster(def, 'c', { x: 1400, y: 0 });
+    for (const m of [a, b, c]) makeMonsterDormant(m);
+    for (let t = 1; t <= 60; t++) tickCombat(hero, [a, b, c], 100, t * 100, () => 0.5);
+    expect(hero.stats.hp).toBe(hero.stats.maxHp); // ninguém atacou
+    expect(Math.hypot(a.position.x - 600, a.position.y)).toBeLessThanOrEqual(40); // só patrulha
+    expect(updateMonsterAwareness([a, b, c], hero.position)).toEqual([]);
+    hero.position = { x: 600 - MONSTER_AGGRO_RADIUS + 10, y: 0 };
+    expect(updateMonsterAwareness([a, b, c], hero.position, () => false)).toEqual([]); // outra sala
+    const woke = updateMonsterAwareness([a, b, c], hero.position);
+    expect(woke.map((m) => m.instanceId)).toEqual(['a', 'b']); // b acorda com o grupo
+    expect(c.dormant).toBe(true);
+    c.hp -= 1;
+    expect(updateMonsterAwareness([c], hero.position).map((m) => m.instanceId)).toEqual(['c']); // dano
+    const x0 = a.position.x;
+    tickCombat(hero, [a], 100, 10000, () => 0.5);
+    expect(a.position.x).toBeLessThan(x0); // acordado: persegue
   });
 });

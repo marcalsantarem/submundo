@@ -20,6 +20,12 @@ import { createSeededRng } from './DungeonGenerator';
  */
 
 export type DungeonMapMode = 'rooms' | 'giant';
+/**
+ * T-151 (Decisão #26): 'waves' = monstros nascem quando o herói entra na sala/zona (testArena);
+ * 'placed' = os mesmos `spawns` já estão no mapa desde o início, espalhados pela sala/zona e longe da
+ * entrada (missões do prólogo). O formato do mapa é o mesmo; só a distribuição dos spawns muda.
+ */
+export type DungeonSpawnMode = 'waves' | 'placed';
 export const MAP_TILE = 32;
 export const MAP_CELL_VOID = 0, MAP_CELL_ROOM = 1, MAP_CELL_CORRIDOR = 2;
 export type DoorSide = 'n' | 's' | 'e' | 'w';
@@ -38,6 +44,7 @@ export interface MapRoom { id: number; shape: 'rect' | 'L' | 'cross' | 'compound
 export interface MapProp { kind: 'floor' | 'tall'; name: string; frame?: number; x: number; y: number; roomId: number } // canto sup. esq., px de mundo
 export interface DungeonMap {
   seed: number; mode: DungeonMapMode; cols: number; rows: number;
+  spawnMode: DungeonSpawnMode;
   cells: number[];      // cols*rows, MAP_CELL_*
   roomIdAt: number[];   // cols*rows, -1 fora de sala
   rooms: MapRoom[]; doors: MapDoor[]; corridors: MapCorridor[]; zones: MapZone[];
@@ -76,6 +83,8 @@ export interface DungeonMapOptions {
   passageRooms?: [number, number];
   /** Escala da sala gigante (padrão 1 = 60-70 x 40-46 tiles). Mais ilhas/notches na mesma proporção. */
   giantScale?: number;
+  /** T-151: 'placed' espalha os monstros pela sala/zona (já no mapa desde o início). Padrão: 'waves'. */
+  spawnMode?: DungeonSpawnMode;
 }
 
 /** Distance from an actor's center to its feet (same as TestDungeon). */
@@ -83,6 +92,10 @@ export const MAP_FEET_OFFSET = 30;
 /** BFS grid step (px) used for every walkability guarantee. */
 export const MAP_GRID = 16;
 export const MAP_MIN_SPAWN_DIST = 140;
+/** T-151 ('placed'): distância mínima (px, pés) do início do herói aos monstros da sala/zona inicial. */
+export const MAP_PLACED_START_DIST = 240;
+/** T-151 ('placed'): espaço mínimo desejado entre monstros (cai para 36 px se a sala não comportar). */
+export const MAP_PLACED_GAP = 72;
 export const DEFAULT_MAP_WAVES: string[][] = [['slime', 'wolf'], ['skeleton', 'skeleton_archer'], ['skeleton_chief']];
 
 const T = MAP_TILE;
@@ -1018,6 +1031,34 @@ function placeSpawns(rng: Rng, plan: string[], cands: Node[], taken: Node[], bos
   return out;
 }
 
+/**
+ * T-151 ('placed'): como `placeSpawns`, mas espalhando: cada monstro sai do melhor de 16 sorteios
+ * (o mais longe dos monstros já postos nesta sala/zona), com espaço >= MAP_PLACED_GAP quando couber.
+ */
+function placeSpread(rng: Rng, plan: string[], cands: Node[], taken: Node[], bossPick: ((c: Node[]) => Node[]) | null, bossId?: string): MapSpawn[] | null {
+  const out: MapSpawn[] = [];
+  const mine: Node[] = [];
+  for (const defId of plan) {
+    const pool = (BOSS_IDS.has(defId) || defId === bossId) && bossPick ? bossPick(cands) : cands;
+    if (!pool.length) return null;
+    let best: Node | null = null, bestScore = -1;
+    for (const gap of [MAP_PLACED_GAP, 36]) {
+      for (let t = 0; t < 16; t++) {
+        const c = pool[Math.floor(rng() * pool.length)];
+        if (taken.some((q) => Math.hypot(q.x - c.x, q.y - c.y) < gap)) continue;
+        const score = mine.length ? Math.min(...mine.map((q) => Math.hypot(q.x - c.x, q.y - c.y))) : 1;
+        if (score > bestScore) { bestScore = score; best = c; }
+      }
+      if (best) break;
+    }
+    if (!best) return null;
+    taken.push(best);
+    mine.push(best);
+    out.push({ defId, x: best.x, y: best.y - MAP_FEET_OFFSET });
+  }
+  return out;
+}
+
 function snap(v: number): number {
   return Math.round(v / GRID) * GRID;
 }
@@ -1062,15 +1103,22 @@ function decorateRooms(rng: Rng, seed: number, b: BaseMap, cfg: GenConfig, simpl
     const entries = roomId === 0 ? [heroFeet] : entryDoors.map(mapDoorPoint);
     const trigger = b.roomRects[roomId].map((q) => ({ x: q.c * T + T, y: q.r * T + T, w: q.w * T - 2 * T, h: q.h * T - 2 * T }));
     for (const t of trigger) if (!rectReached(walk, dist, t)) return null;
-    const cands = spawnCandidates(b, walk, dist, ctx.obstacles, roomId, (x, y) =>
-      entries.every((e) => Math.hypot(x - e.x, y - e.y) >= MAP_MIN_SPAWN_DIST));
+    const minDist = (d: number) => spawnCandidates(b, walk, dist, ctx.obstacles, roomId, (x, y) =>
+      entries.every((e) => Math.hypot(x - e.x, y - e.y) >= d));
+    let cands = minDist(MAP_MIN_SPAWN_DIST);
     if (!cands.length) return null;
+    if (cfg.placed && roomId === 0) {
+      // Sala inicial: monstros longe do herói (não acordam assim que a missão começa).
+      const far0 = minDist(MAP_PLACED_START_DIST);
+      if (far0.length >= Math.max(4, waves[wv].length * 2)) cands = far0;
+    }
     const far = (cs: Node[]) => {
       const dOf = (c: Node) => Math.min(...entries.map((e) => Math.hypot(c.x - e.x, c.y - e.y)));
       const max = Math.max(...cs.map(dOf));
       return cs.filter((c) => dOf(c) >= max * 0.6);
     };
-    const spawns = placeSpawns(rng, spawnPlan(rng, waves[wv], cfg), cands, taken, far, cfg.bossId);
+    const place = cfg.placed ? placeSpread : placeSpawns;
+    const spawns = place(rng, spawnPlan(rng, waves[wv], cfg), cands, taken, far, cfg.bossId);
     if (!spawns) return null;
     const label = waveLabel(waves[wv]);
     zones.push({
@@ -1078,7 +1126,7 @@ function decorateRooms(rng: Rng, seed: number, b: BaseMap, cfg: GenConfig, simpl
       wave: wv + 1,
       isBossZone: isBoss,
       title: label ? `Sala ${wv + 1}/${waves.length} — ${label}` : `Sala ${wv + 1}/${waves.length}`,
-      banner: label ? `Onda ${wv + 1}: ${label}!` : '',
+      banner: cfg.placed || !label ? '' : `Onda ${wv + 1}: ${label}!`,
       trigger,
       floorRoomId: roomId,
       spawns,
@@ -1093,6 +1141,7 @@ function decorateRooms(rng: Rng, seed: number, b: BaseMap, cfg: GenConfig, simpl
   return {
     seed,
     mode: 'rooms',
+    spawnMode: cfg.placed ? 'placed' : 'waves',
     cols: b.cols,
     rows: b.rows,
     cells: b.cells,
@@ -1208,15 +1257,18 @@ function decorateGiant(rng: Rng, seed: number, b: BaseMap, cfg: GenConfig, simpl
   for (let wv = 0; wv < n; wv++) {
     const tr = triggers[wv];
     const c = centers[wv];
+    const heroGap = cfg.placed ? MAP_PLACED_START_DIST : MAP_MIN_SPAWN_DIST;
+    // 'placed': sem gatilho de onda, os monstros ficam espalhados pela zona (inclusive no centro dela).
     const cands = spawnCandidates(b, walk, dist, ctx.obstacles, 0, (x, y) =>
-      distToRect(x, y, tr) >= MAP_MIN_SPAWN_DIST && Math.hypot(x - c.x, y - c.y) <= 420 &&
-      Math.hypot(x - heroFeet.x, y - heroFeet.y) >= MAP_MIN_SPAWN_DIST);
+      (cfg.placed || distToRect(x, y, tr) >= MAP_MIN_SPAWN_DIST) && Math.hypot(x - c.x, y - c.y) <= 420 &&
+      Math.hypot(x - heroFeet.x, y - heroFeet.y) >= heroGap);
     if (cands.length < 8) return null;
     const near = (cs: Node[]) => {
       const band = cs.filter((p) => distToRect(p.x, p.y, tr) <= 260);
       return band.length ? band : cs;
     };
-    const spawns = placeSpawns(rng, spawnPlan(rng, waves[wv], cfg), cands, taken, near, cfg.bossId);
+    const place = cfg.placed ? placeSpread : placeSpawns;
+    const spawns = place(rng, spawnPlan(rng, waves[wv], cfg), cands, taken, near, cfg.bossId);
     if (!spawns) return null;
     const label = waveLabel(waves[wv]);
     zones.push({
@@ -1224,7 +1276,7 @@ function decorateGiant(rng: Rng, seed: number, b: BaseMap, cfg: GenConfig, simpl
       wave: wv + 1,
       isBossZone: cfg.bossRoom && wv === n - 1,
       title: label ? `Zona ${wv + 1}/${n} — ${label}` : `Zona ${wv + 1}/${n}`,
-      banner: label ? `Onda ${wv + 1}: ${label}!` : '',
+      banner: cfg.placed || !label ? '' : `Onda ${wv + 1}: ${label}!`,
       trigger: [tr],
       floorRoomId: 0,
       spawns,
@@ -1238,6 +1290,7 @@ function decorateGiant(rng: Rng, seed: number, b: BaseMap, cfg: GenConfig, simpl
   return {
     seed,
     mode: 'giant',
+    spawnMode: cfg.placed ? 'placed' : 'waves',
     cols: b.cols,
     rows: b.rows,
     cells: b.cells,
@@ -1392,6 +1445,7 @@ interface GenConfig {
   eventPoint: boolean;
   passageRooms: [number, number];
   giantScale: number;
+  placed: boolean;
   xrng: Rng; // RNG separado para coletáveis/evento: o fluxo principal (e a testArena) não muda
 }
 
@@ -1430,6 +1484,7 @@ export function generateDungeonMap(seed: number, options?: DungeonMapOptions): D
       ? [Math.max(0, Math.floor(Math.min(...options.passageRooms))), Math.max(0, Math.floor(Math.max(...options.passageRooms)))] as [number, number]
       : [1, 2] as [number, number],
     giantScale: Math.max(1, Math.min(2, options?.giantScale ?? 1)),
+    placed: options?.spawnMode === 'placed',
   };
   const s = seed >>> 0;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -1441,4 +1496,41 @@ export function generateDungeonMap(seed: number, options?: DungeonMapOptions): D
     if (map) return map;
   }
   throw new Error(`generateDungeonMap: could not build a ${mode} map for seed ${seed}`);
+}
+
+// ---------------------------------------------------------------------------------------------
+// T-151 / T-152 — Planta do mapa para o minimapa (retângulos de mundo, px)
+// ---------------------------------------------------------------------------------------------
+
+export interface MapMinimapLayout { worldW: number; worldH: number; rooms: MapRect[]; corridors: MapRect[] }
+
+/**
+ * Salas e corredores como retângulos de mundo (px): faixas horizontais de células iguais, fundidas
+ * com a faixa de baixo quando têm o mesmo início/fim. Barato o bastante para rodar uma vez por mapa.
+ */
+export function mapMinimapLayout(map: DungeonMap): MapMinimapLayout {
+  const rooms: MapRect[] = [];
+  const corridors: MapRect[] = [];
+  let open = new Map<string, MapRect>(); // "c0,c1,tipo" -> retângulo ainda crescendo para baixo
+  for (let r = 0; r <= map.rows; r++) {
+    const next = new Map<string, MapRect>();
+    if (r < map.rows) {
+      let c = 0;
+      while (c < map.cols) {
+        const kind = map.cells[r * map.cols + c];
+        if (kind === MAP_CELL_VOID) { c++; continue; }
+        const c0 = c;
+        while (c < map.cols && map.cells[r * map.cols + c] === kind) c++;
+        const key = `${c0},${c},${kind}`;
+        const prev = open.get(key);
+        if (prev) { prev.h += T; next.set(key, prev); } else next.set(key, { x: c0 * T, y: r * T, w: (c - c0) * T, h: T });
+      }
+    }
+    for (const [key, rect] of open) {
+      if (next.get(key) === rect) continue;
+      (key.endsWith(`,${MAP_CELL_CORRIDOR}`) ? corridors : rooms).push(rect);
+    }
+    open = next;
+  }
+  return { worldW: map.cols * T, worldH: map.rows * T, rooms, corridors };
 }

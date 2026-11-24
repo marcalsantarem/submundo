@@ -433,6 +433,46 @@
       "title": "Fim do Prólogo",
       "text": "O Jovem Guerreiro tombou no Fundo da Mina, e o brilho vermelho continuou a pulsar. Mas a história dele não termina aqui.",
       "shortText": "O Jovem Guerreiro tombou. A história não termina aqui."
+    },
+    "mission_return_victory": {
+      "id": "mission_return_victory",
+      "speaker": "Sistema",
+      "portraitId": "system",
+      "title": "Volta à Vila",
+      "text": "Missão cumprida: {mission}. Volte à Vila Natal e fale com {npc}.",
+      "shortText": "Missão cumprida: {mission}. Fale com {npc}."
+    },
+    "mission_return_defeat": {
+      "id": "mission_return_defeat",
+      "speaker": "Sistema",
+      "portraitId": "system",
+      "title": "Volta à Vila",
+      "text": "Você recuou ferido para a Vila Natal. {mission} ainda espera. Fale com {npc}.",
+      "shortText": "Você recuou ferido. Tente {mission} de novo."
+    },
+    "act1_arrival_1": {
+      "id": "act1_arrival_1",
+      "speaker": "Guerreiro Espectral",
+      "portraitId": "hero_wraith",
+      "title": "O Despertar",
+      "text": "O machado do Karnak... o frio da rocha... e depois nada. Que lugar é este? Meu corpo não pesa mais.",
+      "shortText": "Você desperta no Submundo. O Karnak o matou no Fundo da Mina."
+    },
+    "act1_arrival_2": {
+      "id": "act1_arrival_2",
+      "speaker": "Emissário Celestial",
+      "portraitId": "emissary",
+      "title": "O Selo Celestial",
+      "text": "Você morreu no Fundo da Mina, guerreiro. Antes que sua alma se apagasse, cravei nela o Selo Celestial. Agora você é um Guerreiro Espectral, e este é o Refúgio do Submundo.",
+      "shortText": "O Emissário Celestial cravou o Selo Celestial em sua alma."
+    },
+    "act1_arrival_3": {
+      "id": "act1_arrival_3",
+      "speaker": "Emissário Celestial",
+      "portraitId": "emissary",
+      "title": "Ato 1 — A Caçada",
+      "text": "O Karnak é a vanguarda dos Generais do Inferno. Atravesse a Fenda, cace-os um a um, começando pelo Carcereiro Infernal, e o Selo lhe devolverá a vida.",
+      "shortText": "Atravesse a Fenda e cace os Generais do Inferno."
     }
   },
   "dungeon_enter": "As correntes do Submundo rangem, Guerreiro Espectral. Expurgue as quatro câmaras e reivindique a cabeça do Carcereiro Infernal.",
@@ -488,5 +528,10 @@
   "mission_depths_enter": "Desça ao Fundo da Mina e descubra a origem do brilho.",
   "mission_depths_karnak": "Karnak: 'Ninguém sai desta mina, mortal.'",
   "prologue_end_title": "Fim do Prólogo",
-  "prologue_end_text": "O Jovem Guerreiro tombou. A história não termina aqui."
+  "prologue_end_text": "O Jovem Guerreiro tombou. A história não termina aqui.",
+  "mission_return_victory": "Missão cumprida: {mission}. Fale com {npc}.",
+  "mission_return_defeat": "Você recuou ferido. Tente {mission} de novo.",
+  "act1_arrival_1": "Você desperta no Submundo. O Karnak o matou no Fundo da Mina.",
+  "act1_arrival_2": "O Emissário Celestial cravou o Selo Celestial em sua alma.",
+  "act1_arrival_3": "Atravesse a Fenda e cace os Generais do Inferno."
 }

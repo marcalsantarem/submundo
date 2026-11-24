@@ -81,6 +81,7 @@ import {
   HERO_FEET_OFFSET,
   VILLAGE_ACTOR_SCALE,
   VILLAGE_LANDMARKS,
+  VILLAGE_MINIMAP_PLAN,
   VILLAGE_MAP_H,
   VILLAGE_MAP_W,
   VILLAGE_NPCS,
@@ -319,6 +320,9 @@ export class HubScene extends Phaser.Scene {
   public create(data?: HubTransitionData): void {
     this.enteringDungeon = false;
     this.elapsedTimeMs = 0;
+    // A cena é reaproveitada entre idas e voltas: o banner da visita anterior não vaza.
+    this.bannerText = undefined;
+    this.bannerExpiresAtMs = 0;
     this.nearbyStationId = null;
     this.emissaryDialogueIndex = 0;
     this.lastFootstepFrame = -1;
@@ -346,10 +350,10 @@ export class HubScene extends Phaser.Scene {
         applyRunOutcomeToProfile(this.profile, transitionExt.fromRun);
         persistProfile(this.profile);
       }
-      this.showTimedBanner(
-        this.formatRunEndBanner(transitionExt.fromRun),
-        9000
-      );
+      const runBanner = this.formatRunEndBanner(transitionExt.fromRun);
+      if (runBanner) {
+        this.showTimedBanner(runBanner, 9000);
+      }
     } else {
       const welcomeText =
         campaign.phase === 'prologue'
@@ -584,7 +588,10 @@ export class HubScene extends Phaser.Scene {
         applyRunOutcomeToProfile(this.profile, data.fromRun);
         persistProfile(this.profile);
       }
-      this.showTimedBanner(this.formatRunEndBanner(data.fromRun), 7000);
+      const runBanner = this.formatRunEndBanner(data.fromRun);
+      if (runBanner) {
+        this.showTimedBanner(runBanner, 7000);
+      }
     }
     this.syncSelectedStage(data?.stageId);
     this.cameras.main.setBackgroundColor('#141a12');
@@ -778,6 +785,11 @@ export class HubScene extends Phaser.Scene {
           marker: markers.npcs[n.id],
         })),
         gateAlert: gateOpen,
+        plan: {
+          ground: VILLAGE_MINIMAP_PLAN.ground.map((r) => ({ ...r })),
+          walls: VILLAGE_MINIMAP_PLAN.walls.map((w) => ({ ...w })),
+          forge: VILLAGE_MINIMAP_PLAN.forge,
+        },
       },
     });
   }
@@ -1505,9 +1517,18 @@ export class HubScene extends Phaser.Scene {
     const fromRun = transitionExt?.fromRun;
 
     if (fromRun?.triggeredVillageFall) {
-      const fallIds = ['village_fall_boss', 'village_fall_pact', 'act1_briefing'];
+      // T-153: o Ato 1 abre com a chegada ao Submundo (`act1_arrival_*`, AG06).
+      // As falas da queda antiga (`village_fall_*`, `act1_briefing`) saíram do fluxo.
+      const arrivalIds: string[] = [];
+      for (let i = 1; i <= 9; i++) {
+        const id = `act1_arrival_${i}`;
+        if (getDialogueLine(id)) arrivalIds.push(id);
+      }
+      if (arrivalIds.length === 0) {
+        return;
+      }
       let changed = false;
-      for (const id of fallIds) {
+      for (const id of arrivalIds) {
         if (markDialogueSeen(this.profile, id)) {
           changed = true;
         }
@@ -1515,7 +1536,7 @@ export class HubScene extends Phaser.Scene {
       if (changed) {
         persistProfile(this.profile);
       }
-      this.openDialogue(fallIds);
+      this.openDialogue(arrivalIds);
       return;
     }
 
@@ -1942,7 +1963,45 @@ export class HubScene extends Phaser.Scene {
     this.updateHud();
   }
 
-  private formatRunEndBanner(report: RunEndReport): string {
+  /**
+   * Banner de volta (T-153). Missões do prólogo: "Missão cumprida: <nome>. Fale
+   * com <NPC>." / derrota "tente de novo"; textos do AG06 quando existirem.
+   * Morte para o Karnak (fim do prólogo): sem banner (as falas do Ato 1 assumem).
+   */
+  private formatRunEndBanner(report: RunEndReport): string | null {
+    if (report.triggeredVillageFall) {
+      return null;
+    }
+    if (report.stageId && isPrologueMissionId(report.stageId)) {
+      const missionId = report.stageId;
+      let npcName = '';
+      try {
+        const giver = getPrologueMission(missionId).giverNpcId as VillageNpcId | undefined;
+        npcName = giver ? QUEST_GIVER_NAMES[giver] ?? '' : '';
+      } catch {
+        npcName = '';
+      }
+      const fill = (text: string): string =>
+        text.replace(/\{mission\}/g, this.missionName(missionId)).replace(/\{npc\}/g, npcName);
+      const pick = (ids: string[]): string | null => {
+        for (const id of ids) {
+          const line = getDialogueLine(id);
+          const text = (line?.shortText ?? line?.text ?? '').trim();
+          if (text.length > 0) return fill(text);
+        }
+        return null;
+      };
+      if (report.victory) {
+        return (
+          pick(['mission_return_banner_victory', 'mission_return_victory']) ??
+          fill(npcName ? 'Missão cumprida: {mission}. Fale com {npc}.' : 'Missão cumprida: {mission}.')
+        );
+      }
+      return (
+        pick(['mission_return_banner_defeat', 'mission_return_defeat']) ??
+        'Você foi derrotado. Tente de novo pelo portão.'
+      );
+    }
     if (report.victory) {
       return `Extração completa! +${report.soulsGained} Almas, +${report.essencesGained} Essências, ${report.keptItems.length} item(ns) no Baú.`;
     }

@@ -574,6 +574,47 @@ export function unequipProfileSlot(
   return true;
 }
 
+/**
+ * Guarda no perfil os itens que voltam da run, sem duplicar (ids já equipados/no Baú são ignorados).
+ * `equipEmptySlots` (missões do prólogo): o item vai direto para o slot vazio do perfil, como a
+ * dungeon faz ao pegar um item com o slot livre; o resto vai para o Baú (até `maxStashSize`).
+ */
+function storeRunItems(
+  profile: SaveProfile,
+  items: readonly ItemInstance[],
+  equipEmptySlots: boolean
+): void {
+  const knownIds = new Set<string>();
+  for (const slot of EQUIP_SLOTS) {
+    const equippedItem = profile.equipped[slot];
+    if (equippedItem !== null) {
+      knownIds.add(equippedItem.instanceId);
+    }
+  }
+  for (const stashedItem of profile.stash) {
+    knownIds.add(stashedItem.instanceId);
+  }
+
+  for (const item of items) {
+    if (knownIds.has(item.instanceId)) {
+      continue;
+    }
+    if (equipEmptySlots && profile.equipped[item.slot] === null) {
+      profile.equipped[item.slot] = item;
+    } else if (profile.stash.length < profile.maxStashSize) {
+      profile.stash.push(item);
+    } else {
+      continue;
+    }
+    knownIds.add(item.instanceId);
+  }
+}
+
+/** Missão do prólogo (Decisão #26): os itens pegos ficam com o jogador na vitória e na derrota. */
+export function isPrologueMissionReport(report: RunEndReport): boolean {
+  return report.stageId !== undefined && isPrologueMissionId(report.stageId);
+}
+
 export function applyRunOutcomeToProfile(
   profile: SaveProfile,
   report: RunEndReport
@@ -585,36 +626,24 @@ export function applyRunOutcomeToProfile(
   profile.stats.totalSoulsEarned += soulsGained;
   profile.generalEssences += essencesGained;
 
+  const prologueMission = isPrologueMissionReport(report);
+
   if (report.victory) {
     profile.stats.runsCompleted += 1;
     if (report.bossDefeated) {
       profile.stats.bossesDefeated += 1;
     }
-
-    const knownIds = new Set<string>();
-    for (const slot of EQUIP_SLOTS) {
-      const equippedItem = profile.equipped[slot];
-      if (equippedItem !== null) {
-        knownIds.add(equippedItem.instanceId);
-      }
-    }
-    for (const stashedItem of profile.stash) {
-      knownIds.add(stashedItem.instanceId);
-    }
-
-    for (const keptItem of report.keptItems) {
-      if (knownIds.has(keptItem.instanceId)) {
-        continue;
-      }
-      if (profile.stash.length >= profile.maxStashSize) {
-        break;
-      }
-      profile.stash.push(keptItem);
-      knownIds.add(keptItem.instanceId);
-    }
   } else {
     profile.stats.runsFailed += 1;
   }
+
+  if (prologueMission) {
+    // T-150: no prólogo nada se perde; a cena manda os itens da derrota em `lostItems`.
+    storeRunItems(profile, [...report.keptItems, ...report.lostItems], true);
+  } else if (report.victory) {
+    storeRunItems(profile, report.keptItems, false);
+  }
+  // Fora do prólogo, morrer descarta os itens não extraídos (regra de risco/recompensa).
 
   return profile;
 }

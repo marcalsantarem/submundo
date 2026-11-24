@@ -16,24 +16,24 @@ const stage = (id: string) => stages.find((s) => s.id === id)!;
 const SEEDS = [3, 71, 9001, 123457];
 
 describe('Missões do prólogo no mapa contínuo (T-129)', () => {
-  it('campaign.json: 10 ervas e 6 ferramentas', () => {
-    expect(stage('mission_herbs').objective?.count).toBe(10);
-    expect(stage('mission_mine').objective?.count).toBe(6);
+  it('campaign.json: 5 ervas e 4 ferramentas (T-155)', () => {
+    expect(stage('mission_herbs').objective?.count).toBe(5);
+    expect(stage('mission_mine').objective?.count).toBe(4);
   });
 
-  it('Ervas: sala gigante, 3 zonas com 3/5/7 slimes, sem chefe, 10 ervas', () => {
+  it('Ervas: sala gigante, 3 zonas com 3/5/7 slimes, sem chefe, 5 ervas', () => {
     const input = missionMapInputFromStage(stage('mission_herbs') as MissionStageLike)!;
     for (const seed of SEEDS) {
       const map = generateDungeonMap(seed, missionMapOptions(input));
       expect(map.mode).toBe('giant');
       expect(map.zones.map((z) => z.spawns.length)).toEqual([3, 5, 7]);
       expect(map.zones.some((z) => z.isBossZone)).toBe(false);
-      expect(map.collectibles.filter((c) => c.itemId === 'herb')).toHaveLength(10);
+      expect(map.collectibles.filter((c) => c.itemId === 'herb')).toHaveLength(5);
       expect(map.eventPoint).toBeUndefined();
     }
   });
 
-  it('Mina: 4 salas, Chefe da Matilha na sala 4, 6 ferramentas e o "algo estranho"', () => {
+  it('Mina: 4 salas, Chefe da Matilha na sala 4, 4 ferramentas e o "algo estranho"', () => {
     const input = missionMapInputFromStage(stage('mission_mine') as MissionStageLike)!;
     for (const seed of SEEDS) {
       const map = generateDungeonMap(seed, missionMapOptions(input));
@@ -42,7 +42,7 @@ describe('Missões do prólogo no mapa contínuo (T-129)', () => {
       const last = map.zones[3];
       expect(last.isBossZone).toBe(true);
       expect(last.spawns.filter((s) => s.defId === 'wolf_alpha')).toHaveLength(1);
-      expect(map.collectibles).toHaveLength(6);
+      expect(map.collectibles).toHaveLength(4);
       expect(map.eventPoint).toBeDefined();
     }
   });

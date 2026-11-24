@@ -5,7 +5,7 @@ import {
   moveHero,
 } from '../entities/Hero';
 import type { HeroState, SpectralMinion } from '../entities/Hero';
-import { applyDamageToMonster } from '../entities/Monster';
+import { applyDamageToMonster, stepDormantPatrol } from '../entities/Monster';
 import type { MonsterInstance } from '../entities/Monster';
 import type { LegendaryPowerId, SkillDef, SkillSlot, Vector2D } from '../index';
 
@@ -595,6 +595,13 @@ export function tickCombat(
     }
 
     if (nowMs < monster.stunnedUntilMs) {
+      continue;
+    }
+
+    // T-151: adormecido não persegue nem ataca; só patrulha perto de casa (quem acorda é o chamador,
+    // via updateMonsterAwareness, antes do tick).
+    if (monster.dormant) {
+      stepDormantPatrol(monster, deltaMs, nowMs);
       continue;
     }
 

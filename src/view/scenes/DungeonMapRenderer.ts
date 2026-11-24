@@ -24,6 +24,8 @@ export const DUNGEON_DOORS_KEY = 'dungeon_basic_doors';
 export interface MapSheetKeys {
   tilesKey: string;
   doorsKey: string;
+  /** T-151: tiles frame for the empty VOID cells (open-air biomes); undefined = left empty. */
+  voidFill?: string;
 }
 const DEFAULT_SHEETS: MapSheetKeys = { tilesKey: DUNGEON_TILES_KEY, doorsKey: DUNGEON_DOORS_KEY };
 
@@ -341,6 +343,7 @@ export class DungeonMapView {
     this.overlayLayer.setDepth(depth + 0.05);
 
     const W = layout.cols;
+    const fill: TileRef | null = sheets.voidFill ? tiles(sheets.voidFill) : null;
     const baseData: number[][] = [];
     const overData: number[][] = [];
     for (let y = 0; y < layout.rows; y++) {
@@ -348,7 +351,7 @@ export class DungeonMapView {
       const o: number[] = [];
       for (let x = 0; x < W; x++) {
         const k = y * W + x;
-        b.push(this.gid(layout.base[k]));
+        b.push(this.gid(layout.base[k] ?? fill));
         o.push(this.gid(layout.overlay[k]));
       }
       baseData.push(b);

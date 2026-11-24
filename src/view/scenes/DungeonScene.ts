@@ -15,6 +15,7 @@ import {
 } from '../../core/dungeon/DungeonRun';
 import {
   generateDungeonMap,
+  mapMinimapLayout,
   MAP_CELL_VOID,
   MAP_FEET_BOX,
   MAP_FEET_OFFSET,
@@ -22,13 +23,18 @@ import {
   type DungeonMap,
   type DungeonMapMode,
   type MapDoor,
+  type MapMinimapLayout,
   type MapZone,
 } from '../../core/dungeon/DungeonMap';
 import {
   collectAt,
   createMissionProgress,
   isAtEventPoint,
+  isEventUnlocked,
   isMissionComplete,
+  killObjectiveText,
+  monstersAlive,
+  setMonstersKilled,
   markEventVisited,
   markZoneCleared,
   missionMapInputFromStage,
@@ -53,7 +59,13 @@ import {
   type ArenaBiomeId,
 } from './BiomeTheme';
 import { moveHero, type HeroState } from '../../core/entities/Hero';
-import { spawnMonster, type MonsterInstance } from '../../core/entities/Monster';
+import {
+  makeMonsterDormant,
+  spawnMonster,
+  updateMonsterAwareness,
+  MONSTER_AGGRO_RADIUS,
+  type MonsterInstance,
+} from '../../core/entities/Monster';
 import {
   resolveViewportConfig,
   type BiomeId,
@@ -235,6 +247,11 @@ export interface MissionDebugState {
   runStatus: DungeonRunState['status'];
   autoWalking: boolean;
   elapsedMs: number;
+  /** T-151: "Elimine todos os monstros" (o Karnak invencível não conta). */
+  monstersAlive: number;
+  monstersTotal: number;
+  /** Monstros ainda adormecidos (não perceberam o herói). */
+  monstersDormant: number;
 }
 
 declare global {
@@ -278,6 +295,8 @@ const RARITY_DROP_FRAME: Record<Rarity, number> = {
   legendary: 3,
 };
 
+/** T-151: a placed boss shows its HP bar only when awake and within this range (px). */
+const BOSS_BAR_RANGE = 560;
 /** T-129: delay between "mission complete" and the victory panel (lets the last line be read). */
 const MISSION_COMPLETE_DELAY_MS = 1600;
 const MISSION_COMPLETE_AFTER_EVENT_MS = 4200;
@@ -443,6 +462,12 @@ export class DungeonScene extends Phaser.Scene {
   >();
   /** Mission collectible the hero is auto-walking to after a click/"Pegar". */
   private pickupCollectibleId?: number;
+  /** T-151: room (floor) and zone of each placed mission monster (monsters stay on their room floor). */
+  private readonly monsterRoomIds = new Map<string, number | null>();
+  private readonly monsterZoneIds = new Map<string, number>();
+  /** Instance id of the monster that killed the hero (Karnak's death ends the prologue). */
+  private heroKilledBy?: string;
+  private minimapLayout?: MapMinimapLayout;
   /** Debug autopilot (BFS over the 16 px grid, centre coords of each step). */
   private autoWalk?: { path: Vector2D[]; index: number; stuckMs: number; lastIndex?: number };
 
@@ -723,12 +748,17 @@ export class DungeonScene extends Phaser.Scene {
         this.manualAttackQueued = false;
       }
 
+      this.updateMissionMonsterAwareness();
       const events = tickCombat(
         this.hero,
         this.monsters,
         clampedDelta,
         nowMs
       );
+      const killed = events.find((e) => e.type === 'hero_killed');
+      if (killed) {
+        this.heroKilledBy = killed.sourceId;
+      }
       this.lockInvincibleBosses();
       this.constrainActorsToTestArenaRoom();
       this.processCombatEvents(events);
@@ -1125,6 +1155,9 @@ export class DungeonScene extends Phaser.Scene {
         this.hero.position = { x: map.heroStart.x, y: map.heroStart.y };
         this.lastValidFeet.clear();
         this.constrainPositionToTestArenaRoom(this.hero.position, true);
+        if (this.usesPlacedMonsters()) {
+          this.spawnPlacedMissionMonsters();
+        }
         this.enterZone(0, true);
         this.cameras.main.centerOn(this.hero.position.x, this.hero.position.y);
       }
@@ -1684,6 +1717,20 @@ export class DungeonScene extends Phaser.Scene {
     this.testArenaWave = zone.wave;
     this.testRoomClearAtMs = undefined;
     this.testArenaFinishAtMs = undefined;
+    if (this.usesPlacedMonsters()) {
+      // T-151: no waves, no sealed doors, no wave banners — only Karnak's line in room 5.
+      if (
+        zone.isBossZone &&
+        this.activeStage?.bossInvincible &&
+        !this.karnakIntroShown
+      ) {
+        this.karnakIntroShown = true;
+        const line = getDialogueLine(`${this.activeStage.id}_karnak`);
+        this.showTimedBanner(line?.text ?? line?.shortText ?? zone.title, 5200);
+        this.cameras.main.shake(260, 0.004);
+      }
+      return;
+    }
     if (!initial && zone.entryDoorIds.length > 0) {
       for (const id of zone.entryDoorIds) {
         this.setDoorSealed(id, true);
@@ -1730,6 +1777,93 @@ export class DungeonScene extends Phaser.Scene {
     });
   }
 
+  /** T-151: prologue missions place every monster of the map at once (Decision #26). */
+  private usesPlacedMonsters(): boolean {
+    return this.isMission && this.dungeonMap?.spawnMode === 'placed';
+  }
+
+  /** Mission monster def with the stage's `difficultyScale` (HP and attack), like the old rooms. */
+  private scaledMissionDef(def: MonsterDef): MonsterDef {
+    const scale = this.activeStage?.difficultyScale ?? 1;
+    if (scale === 1 || (this.activeStage?.bossInvincible && def.id === this.activeStage.bossId)) {
+      return def;
+    }
+    return {
+      ...def,
+      maxHp: Math.max(1, Math.round(def.maxHp * scale)),
+      attack: Math.max(1, Math.round(def.attack * scale)),
+    };
+  }
+
+  /** Every zone's monsters, already on the map, asleep until the hero comes near (or hits them). */
+  private spawnPlacedMissionMonsters(): void {
+    const map = this.dungeonMap;
+    this.monsters = [];
+    this.monsterRoomIds.clear();
+    this.monsterZoneIds.clear();
+    if (!map) {
+      return;
+    }
+    for (const zone of map.zones) {
+      zone.spawns.forEach((sp, i) => {
+        const base = this.monsterDefMap.get(sp.defId);
+        if (!base) {
+          return;
+        }
+        const def = this.scaledMissionDef(base);
+        const pos: Vector2D = { x: sp.x, y: sp.y };
+        this.constrainPositionToTestArenaRoom(pos, false, zone.floorRoomId);
+        const monster = spawnMonster(def, `m_z${zone.id}_${i}_${sp.defId}`, pos);
+        const isBoss = def.type === 'boss';
+        makeMonsterDormant(
+          monster,
+          isBoss ? MONSTER_AGGRO_RADIUS + 90 : MONSTER_AGGRO_RADIUS
+        );
+        this.monsterRoomIds.set(monster.instanceId, zone.floorRoomId);
+        this.monsterZoneIds.set(monster.instanceId, zone.id);
+        this.monsters.push(monster);
+        this.createMonsterVisual(monster);
+      });
+    }
+  }
+
+  /** Room id under the hero's feet (-1 in a corridor / outside). */
+  private heroRoomId(): number {
+    const map = this.dungeonMap;
+    if (!map || !this.hero) {
+      return -1;
+    }
+    const c = Math.floor(this.hero.position.x / MAP_TILE);
+    const r = Math.floor((this.hero.position.y + MAP_FEET_OFFSET) / MAP_TILE);
+    return c >= 0 && r >= 0 && c < map.cols && r < map.rows
+      ? map.roomIdAt[r * map.cols + c]
+      : -1;
+  }
+
+  /**
+   * Sleeping monsters wake when the hero comes within their aggro radius in the same room (or
+   * right at its door, from the corridor) or when they take damage; the group wakes together.
+   */
+  private updateMissionMonsterAwareness(): void {
+    if (!this.usesPlacedMonsters() || !this.hero?.isAlive) {
+      return;
+    }
+    const heroRoom = this.heroRoomId();
+    const giant = this.dungeonMap?.mode === 'giant';
+    updateMonsterAwareness(this.monsters, this.hero.position, (m) => {
+      if (giant) {
+        return true;
+      }
+      const room = this.monsterRoomIds.get(m.instanceId);
+      if (room === heroRoom) {
+        return true;
+      }
+      return (
+        heroRoom < 0 && distanceBetween(m.position, this.hero.position) <= 120
+      );
+    });
+  }
+
   // ===========================================================================
   // PROLOGUE MISSIONS on the continuous map (Decision #24, T-129 / T-146)
   // ===========================================================================
@@ -1755,6 +1889,10 @@ export class DungeonScene extends Phaser.Scene {
     this.missionCollectibleSprites.clear();
     this.pickupCollectibleId = undefined;
     this.autoWalk = undefined;
+    this.heroKilledBy = undefined;
+    this.minimapLayout = undefined;
+    this.monsterRoomIds.clear();
+    this.monsterZoneIds.clear();
     if (this.isTestArena || this.activeStage.phase !== 'prologue') {
       return;
     }
@@ -1770,12 +1908,23 @@ export class DungeonScene extends Phaser.Scene {
     this.testDoorOpenFlags = map.zones.map(() => false);
     this.testEntryClosedFlags = map.zones.map(() => false);
     this.sealedDoorIds.clear();
-    for (const zone of map.zones) {
-      for (const id of zone.exitDoorIds) {
-        this.sealedDoorIds.add(id);
+    if (map.spawnMode !== 'placed') {
+      for (const zone of map.zones) {
+        for (const id of zone.exitDoorIds) {
+          this.sealedDoorIds.add(id);
+        }
       }
     }
-    this.missionProgress = createMissionProgress(map, input.objective);
+    // Decision #26: doors never seal (no waves); Karnak (invincible) does not count as a kill.
+    this.testDoorOpenFlags = map.zones.map(() => map.spawnMode === 'placed');
+    this.minimapLayout = mapMinimapLayout(map);
+    this.missionProgress = createMissionProgress(
+      map,
+      input.objective,
+      this.activeStage.bossInvincible && this.activeStage.bossId
+        ? [this.activeStage.bossId]
+        : []
+    );
     this.cameras.main.setBackgroundColor('#000000');
   }
 
@@ -1999,12 +2148,7 @@ export class DungeonScene extends Phaser.Scene {
       }
     }
     const meta = missionObjectiveLabel(objective.itemId);
-    this.vfx.showItemPickupBanner(
-      c.x,
-      c.y - 44,
-      objectiveProgressText(objective, meta.label),
-      objective.itemId === 'herb' ? '#86efac' : '#fbbf24'
-    );
+    // T-151: the "Ervas x/N" counter lives only in the HUD (no duplicated text in the world).
     soundManager.play('loot_drop');
     if (objective.collected >= objective.count) {
       this.showTimedBanner(
@@ -2067,7 +2211,9 @@ export class DungeonScene extends Phaser.Scene {
     const idx = this.testArenaRoomIndex;
     const zone = map.zones[idx];
     if (!this.hero.isAlive) {
-      if (this.activeStage.endsPrologue && zone?.isBossZone) {
+      const killer = this.monsters.find((m) => m.instanceId === this.heroKilledBy);
+      const byKarnak = Boolean(killer && this.isInvincibleBoss(killer));
+      if (this.activeStage.endsPrologue && (byKarnak || zone?.isBossZone)) {
         this.beginPrologueEnd();
         return;
       }
@@ -2077,6 +2223,10 @@ export class DungeonScene extends Phaser.Scene {
       this.cancelPickupWalk();
       this.runState.status = 'defeat';
       this.finalizeRunOutcome(false);
+      return;
+    }
+    if (this.usesPlacedMonsters()) {
+      this.updatePlacedMissionKills(progress);
       return;
     }
     if (!zone || progress.zonesCleared[idx]) {
@@ -2116,6 +2266,54 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * T-151: "Elimine todos os monstros" — kill counter, zones cleared with their monsters and, when
+   * the last one falls, a hint pointing at what is still missing.
+   */
+  private updatePlacedMissionKills(progress: MissionProgress): void {
+    const map = this.dungeonMap;
+    if (!map) {
+      return;
+    }
+    let killed = 0;
+    const aliveByZone = map.zones.map(() => 0);
+    for (const m of this.monsters) {
+      if (this.isInvincibleBoss(m)) {
+        continue;
+      }
+      if (m.isAlive) {
+        const z = this.monsterZoneIds.get(m.instanceId);
+        if (z !== undefined) {
+          aliveByZone[z]++;
+        }
+      } else {
+        killed++;
+      }
+    }
+    const wasAllDead = monstersAlive(progress) === 0;
+    setMonstersKilled(progress, killed);
+    aliveByZone.forEach((alive, z) => {
+      if (alive === 0 && !progress.zonesCleared[z]) {
+        markZoneCleared(progress, z);
+      }
+    });
+    if (wasAllDead || monstersAlive(progress) > 0 || progress.monstersTotal === 0) {
+      return;
+    }
+    const objective = progress.objective;
+    if (objective && objective.collected < objective.count) {
+      const meta = missionObjectiveLabel(objective.itemId);
+      this.showTimedBanner(
+        `Todos os monstros eliminados — ainda faltam ${meta.label.toLowerCase()}: ${objective.collected}/${objective.count}`,
+        6000
+      );
+    } else if (progress.eventRequired && !progress.eventVisited) {
+      this.showTimedBanner('Todos os monstros eliminados — há um brilho estranho no fundo da mina…', 6000);
+    } else if (!this.activeStage.endsPrologue) {
+      this.showTimedBanner('Todos os monstros eliminados', 3000);
+    }
+  }
+
   /** "Algo estranho" point and the completion rule (`isMissionComplete`). */
   private updateMissionObjectives(nowMs: number): void {
     const map = this.dungeonMap;
@@ -2127,7 +2325,7 @@ export class DungeonScene extends Phaser.Scene {
       map.eventPoint &&
       !progress.eventVisited &&
       this.hero.isAlive &&
-      progress.zonesCleared.every(Boolean) &&
+      isEventUnlocked(map, progress) &&
       isAtEventPoint(map, this.hero.position.x, this.hero.position.y + MAP_FEET_OFFSET)
     ) {
       markEventVisited(progress);
@@ -2138,6 +2336,10 @@ export class DungeonScene extends Phaser.Scene {
       );
       this.cameras.main.flash(380, 120, 20, 20);
       this.cameras.main.shake(320, 0.003);
+    }
+    if (this.activeStage.endsPrologue) {
+      // Mission 3 never ends in victory: only the hero's death to Karnak ends it (T-146).
+      return;
     }
     if (this.missionCompleteAtMs === undefined) {
       if (isMissionComplete(progress)) {
@@ -2365,6 +2567,14 @@ export class DungeonScene extends Phaser.Scene {
     if (!this.isMission || !map || !progress || this.missionFinished) {
       return false;
     }
+    // T-151: every monster dies (Karnak, invincible, stays) and the counter fills up.
+    for (const monster of this.monsters) {
+      if (!this.isInvincibleBoss(monster)) {
+        monster.hp = 0;
+        monster.isAlive = false;
+      }
+    }
+    setMonstersKilled(progress, progress.monstersTotal);
     if (this.activeStage.endsPrologue) {
       const last = map.zones.length - 1;
       if (this.testArenaRoomIndex !== last) {
@@ -2435,6 +2645,11 @@ export class DungeonScene extends Phaser.Scene {
       runStatus: this.runState.status,
       autoWalking: Boolean(this.autoWalk),
       elapsedMs: this.elapsedTimeMs,
+      monstersAlive: this.usesPlacedMonsters()
+        ? this.monsters.filter((m) => m.isAlive && !this.isInvincibleBoss(m)).length
+        : monstersAlive(progress),
+      monstersTotal: progress.monstersTotal,
+      monstersDormant: this.monsters.filter((m) => m.isAlive && m.dormant).length,
     };
   }
 
@@ -2696,6 +2911,21 @@ export class DungeonScene extends Phaser.Scene {
       return;
     }
     const idx = this.testArenaRoomIndex;
+    if (this.usesPlacedMonsters()) {
+      // T-151: no waves — the zone index only follows where the hero is (HUD "Sala x/y", Karnak line).
+      const fx = this.hero.position.x;
+      const fy = this.hero.position.y + MAP_FEET_OFFSET;
+      const heroRoom = map.mode === 'rooms' ? this.heroRoomId() : -2;
+      const at = map.zones.findIndex((z) =>
+        map.mode === 'rooms'
+          ? z.floorRoomId === heroRoom
+          : z.trigger.some((r) => fx > r.x && fx < r.x + r.w && fy > r.y && fy < r.y + r.h)
+      );
+      if (at >= 0 && at !== idx) {
+        this.enterZone(at, false);
+      }
+      return;
+    }
     const next = map.zones[idx + 1];
     if (!next || !this.testDoorOpenFlags[idx]) {
       return;
@@ -2914,11 +3144,19 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   /** Snaps a position (actor centre) onto valid floor: hero = map, monster = zone room. */
-  private constrainPositionToTestArenaRoom(pos: Vector2D, isHero = false): void {
+  private constrainPositionToTestArenaRoom(
+    pos: Vector2D,
+    isHero = false,
+    monsterRoomId?: number | null
+  ): void {
     if (!this.dungeonMap) {
       return;
     }
-    const roomId = isHero ? null : (this.currentZone()?.floorRoomId ?? null);
+    const roomId = isHero
+      ? null
+      : monsterRoomId !== undefined
+        ? monsterRoomId
+        : (this.currentZone()?.floorRoomId ?? null);
     const fy = pos.y + MAP_FEET_OFFSET;
     if (this.isFeetValid(pos.x, fy, roomId)) {
       return;
@@ -2938,7 +3176,13 @@ export class DungeonScene extends Phaser.Scene {
     const roomId = this.currentZone()?.floorRoomId ?? null;
     for (const monster of this.monsters) {
       if (monster.isAlive) {
-        this.constrainActor(monster.instanceId, monster.position, roomId);
+        // T-151: placed monsters keep to their own room's floor.
+        const own = this.monsterRoomIds.get(monster.instanceId);
+        this.constrainActor(
+          monster.instanceId,
+          monster.position,
+          own !== undefined ? own : roomId
+        );
       }
     }
   }
@@ -3213,7 +3457,13 @@ export class DungeonScene extends Phaser.Scene {
         }
         this.lootSummaryText = parts.join(' | ');
       } else {
-        const parts = [`Itens perdidos na incursão: ${runLostDrops.length}`];
+        // Decisão #26: na missão do prólogo os itens pegos ficam com o jogador também na derrota
+        // (o core devolve `lostItems` ao perfil).
+        const parts = [
+          this.isMission
+            ? `Itens mantidos no inventário: ${runLostDrops.length}`
+            : `Itens perdidos na incursão: ${runLostDrops.length}`,
+        ];
         if (preservedHubCount > 0) {
           parts.push(`Gear do Refúgio preservado: ${preservedHubCount}`);
         }
@@ -3247,22 +3497,14 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     if (isVictory) {
-      if (this.lastRunReport?.triggeredVillageFall) {
-        const pactLine = getDialogueLine('village_fall_pact');
-        const fallBanner = pactLine?.shortText
-          ? `QUEDA DA VILA NATAL! ${pactLine.shortText} O Refúgio no Submundo (Ato 1) foi aberto.`
-          : 'QUEDA DA VILA NATAL! O Emissário Celestial selou sua alma no Refúgio do Submundo (Ato 1).';
-        this.showTimedBanner(fallBanner, 60000);
-      } else {
-        const firstVictoryId = this.activeStage.victoryDialogueIds[0];
-        const victoryLine = firstVictoryId
-          ? getDialogueLine(firstVictoryId)
-          : null;
-        this.showTimedBanner(
-          victoryLine?.text ?? dialoguesData.entries.run_victory.text,
-          60000
-        );
-      }
+      // T-151: no more "village_fall_pact" banner here (the old Arauto flow); Act 1 opens with
+      // `act1_arrival_*` in the HubScene.
+      const firstVictoryId = this.activeStage.victoryDialogueIds[0];
+      const victoryLine = firstVictoryId ? getDialogueLine(firstVictoryId) : null;
+      this.showTimedBanner(
+        victoryLine?.text ?? dialoguesData.entries.run_victory.text,
+        60000
+      );
     } else {
       this.showTimedBanner(dialoguesData.entries.run_death.text, 60000);
     }
@@ -3487,8 +3729,16 @@ export class DungeonScene extends Phaser.Scene {
 
   private updateHud(nowMs: number): void {
     const currentRoom = getCurrentRoom(this.runState);
+    // T-151: placed bosses (Chefe da Matilha, Karnak) only show their bar once awake and near.
+    const placed = this.usesPlacedMonsters();
     const livingBosses = this.monsters.filter(
-      (m) => m.isAlive && m.hp > 0 && m.type === 'boss'
+      (m) =>
+        m.isAlive &&
+        m.hp > 0 &&
+        m.type === 'boss' &&
+        (!placed ||
+          (!m.dormant &&
+            distanceBetween(this.hero.position, m.position) <= BOSS_BAR_RANGE))
     );
     let bossMonster: MonsterInstance | undefined;
     if (livingBosses.length > 0) {
@@ -3500,7 +3750,7 @@ export class DungeonScene extends Phaser.Scene {
           bossMonster = candidate;
         }
       }
-    } else if (currentRoom.isBossRoom) {
+    } else if (currentRoom.isBossRoom && !placed) {
       bossMonster =
         this.monsters.find((m) => m.type === 'boss') ??
         this.monsters.find((m) => m.defId === this.activeStage?.bossId);
@@ -3561,7 +3811,16 @@ export class DungeonScene extends Phaser.Scene {
           y: m.position.y,
           isBoss: m.type === 'boss',
         })),
+      // T-152: objective items still on the ground (world px).
+      ...(this.isMission && testMap
+        ? {
+            collectibles: testMap.collectibles
+              .filter((c) => !this.isCollectiblePicked(c.id))
+              .map((c) => ({ x: c.x, y: c.y })),
+          }
+        : {}),
     };
+    const progressForHud = this.isMission ? this.missionProgress : undefined;
 
     const nearestDrop = this.findNearestDrop();
     const nearCollectible = this.findNearestCollectible() !== undefined;
@@ -3573,6 +3832,13 @@ export class DungeonScene extends Phaser.Scene {
             objectiveText: objectiveProgressText(objectiveState, objectiveMeta.label),
             objectiveIcon: objectiveMeta.icon,
           }
+        : {}),
+      // T-151/T-152: main objective of every mission and the map plan for the minimap.
+      ...(progressForHud && progressForHud.monstersTotal > 0
+        ? { killObjectiveText: killObjectiveText(progressForHud) }
+        : {}),
+      ...(this.isMission && this.minimapLayout
+        ? { minimapLayout: this.minimapLayout }
         : {}),
       hp: this.hero.stats.hp,
       maxHp: this.hero.stats.maxHp,

@@ -20,13 +20,19 @@ const PORTRAIT_FRAME_MAP: Record<PortraitId, number> = {
   hero_wraith: 1,
   weapon_master: 2,
   village_blacksmith: 3,
-  village_healer: 2,
+  // Lyra tem retrato próprio no frame 8 (T-153); ver fallback em PORTRAIT_FRAME_FALLBACK.
+  village_healer: 8,
   emissary: 4,
   spectral_blacksmith: 5,
   infernal_warden: 6,
   // Sem retrato próprio na folha `portraits`: reaproveita o do Carcereiro.
   karnak: 6,
   system: 7,
+};
+
+/** Frame usado quando a folha `portraits` ainda não tem o frame próprio (8 frames). */
+const PORTRAIT_FRAME_FALLBACK: Partial<Record<PortraitId, number>> = {
+  village_healer: 2,
 };
 
 const PORTRAIT_THEME: Record<
@@ -388,8 +394,15 @@ export class DialogueBox {
       clear: true,
     });
 
-    const frameIndex =
+    let frameIndex =
       PORTRAIT_FRAME_MAP[portraitId] ?? PORTRAIT_FRAME_MAP.system;
+    const fallbackFrame = PORTRAIT_FRAME_FALLBACK[portraitId];
+    if (
+      fallbackFrame !== undefined &&
+      !hasUiTextureFrame(this.scene, 'portraits', frameIndex)
+    ) {
+      frameIndex = fallbackFrame;
+    }
     const hasPortraitFrame =
       this.portraitSprite !== null &&
       hasUiTextureFrame(this.scene, 'portraits', frameIndex);

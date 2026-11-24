@@ -461,7 +461,7 @@
     "portraits": {
       "key": "portraits",
       "file": "portraits.png",
-      "width": 1024,
+      "width": 1152,
       "height": 128,
       "frameWidth": 128,
       "frameHeight": 128,
@@ -473,7 +473,8 @@
         "emissary",
         "spectral_blacksmith",
         "infernal_warden",
-        "system"
+        "system",
+        "village_healer"
       ]
     },
     "village_tiles": {

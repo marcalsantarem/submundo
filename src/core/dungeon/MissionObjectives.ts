@@ -1,25 +1,27 @@
 /**
  * T-143 / BRF-156 — Objetivos menores das missões do prólogo e regra de "missão cumprida" (TS puro, sem Phaser).
  *
- * Regra (Decisão #24): missão cumprida = TODAS as zonas limpas E objetivo de coleta cumprido (se houver)
- * E ponto de evento visitado (se houver). Ex.: Ervas = 3 zonas + ervas; Mina = 4 salas + ferramentas +
- * "algo estranho"; Fundo da Mina = 5 salas (o Karnak é invencível: a missão 3 termina na morte do herói, T-146).
+ * Regra (Decisões #24 e #26): missão cumprida = TODOS os monstros mortos ("Elimine todos os monstros";
+ * as zonas ficam limpas com eles) E objetivo de coleta cumprido (se houver) E ponto de evento visitado
+ * (se houver). Sem ondas (T-151): os monstros já estão no mapa desde o início (`spawnMode: 'placed'`).
+ * Ex.: Ervas = 15 slimes + ervas; Mina = 20 monstros + ferramentas + "algo estranho"; Fundo da Mina =
+ * 22 monstros (o Karnak é invencível e não conta: a missão 3 termina na morte do herói, T-146).
  *
  * ----------------------------------------------------------------------------------------------------
  * Calibragem ~3 min (estimateMissionSeconds; os números saem de `src/data/monsters.json` e do herói base):
  *   - Herói: 140 px/s, ataque 18 a cada 650 ms. Golpes p/ matar = ceil(maxHp / max(1, 18 - defesa)).
  *     Slime 3 golpes (2,0 s), Lobo 5 (3,3 s), Morcego 2 (1,3 s), Esqueleto 7 (4,6 s), Chefe da Matilha 14 (9,1 s).
- *   - Combate de uma onda = soma(golpes x 0,65 s + 1,5 s de aproximação/esquiva por monstro) + 4 s de onda
- *     (faixa, entrada e o tempo de sala limpa). Chefe: x1,5 (esquivas). Karnak (invencível): 30 s fixos.
+ *   - Combate de uma sala/zona = soma(golpes x 0,65 s + 1,5 s de aproximação/esquiva por monstro) (+ 4 s de
+ *     onda só no modo 'waves'). Chefe: x1,5 (esquivas). Karnak (invencível): 30 s fixos.
  *   - Caminhada = rota BFS (grade de 16 px) início -> zonas em ordem, com cada coletável inserido no ponto
  *     mais barato da rota, -> ponto de evento; dividida por 140 px/s e x1,3 (desvios de monstros e props).
  *     +0,5 s por coletável (parar e pegar).
- *   - Resultado (média de 40 seeds com as opções de `MISSION_MAP_DEFAULTS`, ver o teste):
- *       Ervas (giant x1,2 = 72-84 x 48-55 tiles, 3 zonas, 15 slimes, 10 ervas): 64 s combate + 111 s caminhada = ~175 s.
- *       Mina (rooms, 4 salas, 1-2 passagens, 10 slimes + 9 lobos + alfa, 6 ferramentas, evento): 109 s + 92 s = ~201 s.
- *       Fundo da Mina (rooms, 5 salas, 1 passagem, 6 slimes + 14 morcegos + 2 esqueletos + Karnak 30 s): 122 s + 67 s = ~189 s.
- *     Faixa por seed: 158-191 s / 188-214 s / 168-199 s (log `[mission-time]` do teste
- *     `tests/core/mission-objectives.test.ts`, que exige média entre 150 e 210 s).
+ *   - Estimativa T-151 (40 seeds, `MISSION_MAP_DEFAULTS`, 5 ervas / 4 ferramentas, Fundo da Mina com 3
+ *     salas de passagem entre as de combate): Ervas ~140 s, Mina ~175 s, Fundo da Mina ~225 s (o teste
+ *     exige média entre 130 e 240 s). A estimativa não aplica `difficultyScale` e superestima o combate.
+ *   - Medida real (piloto de debug, Chromium headless, T-151, monstros já no mapa): Ervas 113 s,
+ *     Mina 121 s (Mina com escala 0,8), Fundo da Mina 164 s até a morte para o Karnak (antes: 146/231/96 s).
+ *     O piloto vai direto ao alvo mais próximo, sem esquiva/skills; um jogador real tende a levar mais.
  *   Alavancas: nº de coletáveis, `giantScale` (sala gigante) e `passageRooms` (salas de passagem).
  * ----------------------------------------------------------------------------------------------------
  */
@@ -96,15 +98,41 @@ export interface MissionProgress {
   objective: MissionObjectiveState | null;
   eventRequired: boolean;
   eventVisited: boolean;
+  /** T-151: monstros que contam para "Elimine todos os monstros" (sem os invencíveis) e mortos até agora. */
+  monstersTotal: number;
+  monstersKilled: number;
 }
 
-export function createMissionProgress(map: DungeonMap, objective?: MissionObjectiveDef | null): MissionProgress {
+/** `excludeDefIds`: monstros que não contam (ex.: o Karnak invencível). */
+export function createMissionProgress(map: DungeonMap, objective?: MissionObjectiveDef | null, excludeDefIds: readonly string[] = []): MissionProgress {
   return {
     zonesCleared: map.zones.map(() => false),
     objective: objective && objective.count > 0 ? createObjectiveState(objective) : null,
     eventRequired: !!map.eventPoint,
     eventVisited: false,
+    monstersTotal: map.zones.reduce((a, z) => a + z.spawns.filter((sp) => !excludeDefIds.includes(sp.defId)).length, 0),
+    monstersKilled: 0,
   };
+}
+
+/** Atualiza o contador de abates (nº de monstros que contam já mortos). */
+export function setMonstersKilled(p: MissionProgress, killed: number): void {
+  p.monstersKilled = Math.max(0, Math.min(p.monstersTotal, Math.floor(killed)));
+}
+
+export function monstersAlive(p: MissionProgress): number {
+  return p.monstersTotal - p.monstersKilled;
+}
+
+/** Texto do objetivo geral do HUD, ex.: "Elimine todos os monstros 12/15" (mortos/total). */
+export function killObjectiveText(p: MissionProgress): string {
+  return `Elimine todos os monstros ${p.monstersKilled}/${p.monstersTotal}`;
+}
+
+/** O ponto de evento só conta com a sala/zona dele limpa (na Mina, a sala do Chefe da Matilha). */
+export function isEventUnlocked(map: DungeonMap, p: MissionProgress): boolean {
+  const z = map.eventPoint?.zoneId;
+  return z === null || z === undefined ? p.zonesCleared.every(Boolean) : !!p.zonesCleared[z];
 }
 
 export function markZoneCleared(p: MissionProgress, zoneId: number): void {
@@ -115,9 +143,10 @@ export function markEventVisited(p: MissionProgress): void {
   p.eventVisited = true;
 }
 
-/** Missão cumprida = todas as zonas limpas E objetivo cumprido (se houver) E evento visitado (se houver). */
+/** Missão cumprida = todos os monstros mortos (e zonas limpas) E objetivo (se houver) E evento (se houver). */
 export function isMissionComplete(p: MissionProgress): boolean {
-  return p.zonesCleared.every(Boolean) && isObjectiveDone(p.objective) && (!p.eventRequired || p.eventVisited);
+  return p.monstersKilled >= p.monstersTotal && p.zonesCleared.every(Boolean) &&
+    isObjectiveDone(p.objective) && (!p.eventRequired || p.eventVisited);
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -142,6 +171,7 @@ export function missionMapOptions(m: MissionMapInput): DungeonMapOptions {
     mode: m.mapMode,
     waves: m.waves,
     exactCounts: true,
+    spawnMode: 'placed', // T-151: sem ondas, monstros já no mapa
     ...(m.mapMode === 'rooms' ? { roomCount: n } : { zoneCount: n }),
     bossRoom: !!bossId,
     ...(bossId ? { bossId } : {}),
@@ -192,17 +222,17 @@ const mix = (cols: Record<string, number[]>, n: number) =>
 
 /**
  * Referência da Decisão #24 (calibrada para ~3 min). O `campaign.json` (AG04) é a fonte de verdade;
- * isto serve para os testes e como sugestão do nº de coletáveis (8 ervas, 6 ferramentas).
+ * isto serve para os testes e como sugestão do nº de coletáveis (5 ervas, 4 ferramentas — Decisão #26).
  */
 export const MISSION_MAP_DEFAULTS: Record<'mission_herbs' | 'mission_mine' | 'mission_depths', MissionMapInput> = {
-  mission_herbs: { mapMode: 'giant', waves: mix({ slime: [3, 5, 7] }, 3), objective: { kind: 'collect', itemId: 'herb', count: 10 }, giantScale: 1.2 },
+  mission_herbs: { mapMode: 'giant', waves: mix({ slime: [3, 5, 7] }, 3), objective: { kind: 'collect', itemId: 'herb', count: 5 }, giantScale: 1.2 },
   mission_mine: {
     mapMode: 'rooms', waves: mix({ slime: [2, 3, 5, 0], wolf: [2, 2, 3, 2] }, 4), bossId: 'wolf_alpha',
-    objective: { kind: 'collect', itemId: 'gorran_tool', count: 6 }, eventPoint: true,
+    objective: { kind: 'collect', itemId: 'gorran_tool', count: 4 }, eventPoint: true,
   },
   mission_depths: {
     mapMode: 'rooms', waves: mix({ slime: [2, 2, 2, 0, 0], cave_bat: [2, 4, 4, 4, 0], skeleton: [0, 0, 0, 2, 0] }, 5), bossId: 'karnak',
-    passageRooms: [1, 1],
+    passageRooms: [3, 3], // T-151: era [1, 1] (~96 s jogando); mais salas de passagem miram ~3 min
   },
 };
 
@@ -233,7 +263,7 @@ export function estimateMissionSeconds(map: DungeonMap): MissionEstimate {
   let combatS = 0;
   for (const z of map.zones) {
     if (!z.spawns.length) continue;
-    combatS += WAVE_S + z.spawns.reduce((a, s) => a + monsterKillSeconds(s.defId), 0);
+    combatS += (map.spawnMode === 'placed' ? 0 : WAVE_S) + z.spawns.reduce((a, s) => a + monsterKillSeconds(s.defId), 0);
   }
   // Pontos da rota (pés): início, alvo de cada zona (centro do maior gatilho), coletáveis, evento.
   const start = { x: map.heroStart.x, y: map.heroStart.y + MAP_FEET_OFFSET };

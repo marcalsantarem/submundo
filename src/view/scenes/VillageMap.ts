@@ -66,8 +66,11 @@ const QUEST_MARKER_SPECS: Record<'!' | '?gray' | '?yellow', { anim: string; fram
 const QUEST_MARKER_DEPTH = 46;
 /** Altura aproximada do nome do NPC (fonte 8.5 px). */
 const NPC_LABEL_H = 11;
-/** Base do "!" do portão, acima da placa "SAÍDA". */
-const QUEST_MARKER_GATE_OFFSET_Y = -122;
+/**
+ * Base do "!" do portão: logo abaixo da placa "SAÍDA", no vão do portão (T-153).
+ * Acima da placa ficava colado na borda superior do mapa e era cortado pela câmera.
+ */
+const QUEST_MARKER_GATE_OFFSET_Y = -50;
 
 interface QuestMarkerView {
   sprite?: Phaser.GameObjects.Sprite;
@@ -122,6 +125,24 @@ export const VILLAGE_LANDMARKS = {
   topY: TOP_Y,
   bottomY: BOT_Y,
   eastX: EAST_X,
+} as const;
+
+/**
+ * Planta da clareira para o minimapa (T-152): chão de terra, trilha do portão e
+ * paliçadas (abertura do portão entre as colunas 24 e 27), em pixels de mundo.
+ */
+export const VILLAGE_MINIMAP_PLAN = {
+  ground: [
+    { x: 16, y: TOP_Y + 6, w: EAST_X - 16, h: BOT_Y - TOP_Y - 6 },
+    { x: 24 * VILLAGE_TILE + 16, y: TOP_Y - 44, w: 3 * VILLAGE_TILE - 16, h: 52 },
+  ],
+  walls: [
+    { x1: 0, y1: TOP_Y, x2: 24 * VILLAGE_TILE, y2: TOP_Y },
+    { x1: 28 * VILLAGE_TILE, y1: TOP_Y, x2: EAST_X, y2: TOP_Y },
+    { x1: EAST_X, y1: TOP_Y, x2: EAST_X, y2: BOT_Y },
+    { x1: 11 * VILLAGE_TILE, y1: BOT_Y, x2: EAST_X, y2: BOT_Y },
+  ],
+  forge: FORGE,
 } as const;
 
 const NPC_INTERACT_RADIUS = 46;
@@ -712,7 +733,7 @@ export class VillageWorld {
     }
   }
 
-  /** Base do marcador: 4 px acima do nome (topo da cabeça) ou acima da placa do portão. */
+  /** Base do marcador: 4 px acima do nome (topo da cabeça) ou abaixo da placa do portão. */
   private questMarkerAnchor(id: VillageInteractableId): Vector2D {
     if (id === 'gate') {
       return { x: VILLAGE_GATE_X, y: GATE_Y + QUEST_MARKER_GATE_OFFSET_Y };

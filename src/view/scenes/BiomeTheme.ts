@@ -70,6 +70,11 @@ export interface BiomeTheme {
   /** Props that emit light (frame name -> halo). */
   propLights: Readonly<Record<string, PropLight>>;
   lighting: BiomeLighting;
+  /**
+   * T-151: tile frame drawn on every VOID cell the autotile leaves empty (open-air biomes: the
+   * "outside" is hedge, not a black hole). Undefined = the camera background shows (dark biomes).
+   */
+  voidFill?: string;
 }
 
 type ThemeSpec = Omit<BiomeTheme, 'id' | 'textureFallback' | 'tilesKey' | 'doorsKey' | 'propsKey' | 'tallKey' | 'torchAnim'>;
@@ -99,6 +104,7 @@ const SPECS: Record<ArenaBiomeId, ThemeSpec> = {
       'flower_bush', 'seed_sack'],
     tallFrames: ['scarecrow', 'well', 'tree_apple', 'sunflowers'],
     tallMap: { pillar: ['tree_apple', 'sunflowers', 'well'], pillar_broken: ['scarecrow'] },
+    voidFill: 'wall_top', // sebe densa: o "fora" da plantação
     floorMap: {
       chest_closed: ['herb_bed_basil', 'herb_bed_lavender', 'herb_bed_sprouts'],
       barrel: ['seed_sack'], urn: ['basket_herbs'], rubble: ['rocks'],

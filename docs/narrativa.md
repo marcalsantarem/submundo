@@ -155,8 +155,8 @@
 - `prologue_welcome` / `prologue_blacksmith`: Clima de vila viva e preparação simples antes da tragédia.
 - `stage_grotto_intro` / `stage_grotto_victory`: Batismo de fogo na Cachoeira e primeiro indício de enxofre.
 - `stage_mine_intro` / `stage_mine_victory`: Escalada de tensão com mortos-vivos e runas sob a terra.
-- `stage_seal_intro` / `village_fall_boss`: Rompimento do **Selo Antigo** e ataque implacável do **Arauto do Abismo**.
-- `village_fall_pact` / `act1_briefing`: Morte heroica, imposição do **Selo Celestial** e transição direta ao **Refúgio no Submundo** para caçar os Generais do Inferno.
+- `stage_seal_intro` / `village_fall_boss` (**fora de uso** no fluxo novo; ver 11.2): Rompimento do **Selo Antigo** e ataque implacável do **Arauto do Abismo**.
+- `village_fall_pact` / `act1_briefing` (**fora de uso** no fluxo novo; substituídas por `act1_arrival_*`): Morte heroica, imposição do **Selo Celestial** e transição direta ao **Refúgio no Submundo** para caçar os Generais do Inferno.
 
 ---
 
@@ -212,6 +212,9 @@ As falas acontecem só antes e depois das dungeons (o Mestre não acompanha). As
 - **Dungeons (falas do herói):** `mission_herbs_enter`, `mission_herbs_complete`, `mission_mine_enter`, `mission_mine_complete`, `mission_mine_strange`, `mission_depths_enter`.
 - **Karnak:** `mission_depths_karnak` (o Karnak surge na sala 5; `portraitId` `karnak`).
 - **Fim:** `prologue_end_title` e `prologue_end_text` (`speaker` Sistema).
+- **Volta à Vila (banner):** `mission_return_victory` / `mission_return_defeat` (`speaker` Sistema; marcadores `{mission}` e `{npc}`).
+- **Chegada ao Ato 1:** `act1_arrival_1` (o herói desperta no Submundo após morrer para o Karnak), `act1_arrival_2` e `act1_arrival_3` (o **Emissário Celestial** explica o **Selo Celestial** e a caçada aos Generais, começando pelo Carcereiro Infernal).
+- **Fora de uso no fluxo novo (Decisão #26):** `village_fall_boss`, `village_fall_pact` e `act1_briefing` (citam o Arauto do Abismo e a vila em chamas). Ficam no JSON só por compatibilidade; use `act1_arrival_*`.
 
 ### 11.3. Termos Novos
 | Termo | Uso |

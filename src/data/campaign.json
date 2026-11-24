@@ -12,7 +12,7 @@
       "biome": "herb_field",
       "mapMode": "giant",
       "totalRooms": 3,
-      "difficultyScale": 0.7,
+      "difficultyScale": 1.0,
       "monsterPool": ["slime"],
       "waves": [
         ["slime", "slime", "slime"],
@@ -22,7 +22,7 @@
       "objective": {
         "kind": "collect",
         "itemId": "herb",
-        "count": 10
+        "count": 5
       },
       "dropPolicy": {
         "chance": 0.05,
@@ -43,7 +43,7 @@
       "biome": "village_mine",
       "mapMode": "rooms",
       "totalRooms": 4,
-      "difficultyScale": 0.85,
+      "difficultyScale": 0.8,
       "monsterPool": ["slime", "wolf"],
       "waves": [
         ["slime", "slime", "wolf", "wolf"],
@@ -55,7 +55,7 @@
       "objective": {
         "kind": "collect",
         "itemId": "mine_tool",
-        "count": 6
+        "count": 4
       },
       "finalEventId": "strange_sight",
       "dropPolicy": {

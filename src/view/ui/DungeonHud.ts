@@ -56,13 +56,41 @@ export interface HudSnapshot {
   pickupAvailable?: boolean;
   /** Raridade do item mais próximo (cor do anel do botão "Pegar"). */
   pickupRarity?: 'common' | 'magic' | 'rare' | 'legendary';
+  /**
+   * Objetivo principal de abate (T-152/T-153), ex.: "Elimine todos os monstros 12/15".
+   * Quando presente, vira a linha principal do tracker e o `objectiveText` fica abaixo.
+   */
+  killObjectiveText?: string;
+  /**
+   * Planta do mapa contínuo em coordenadas de mundo (T-152). Sem ela o minimapa
+   * usa o formato antigo (arena única: testArena / Ato 1).
+   */
+  minimapLayout?: MinimapLayout;
   minimap?: {
     heroX: number;
     heroY: number;
+    /** Largura do mapa inteiro (mundo). */
     arenaWidth: number;
+    /** Altura do mapa inteiro (mundo). */
     arenaHeight: number;
     enemies: Array<{ x: number; y: number; isBoss: boolean }>;
+    /** Coletáveis do objetivo ainda no chão (coordenadas de mundo). */
+    collectibles?: Array<{ x: number; y: number }>;
   };
+}
+
+export interface MinimapRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface MinimapLayout {
+  worldW: number;
+  worldH: number;
+  rooms: MinimapRect[];
+  corridors: MinimapRect[];
 }
 
 interface SkillButtonView {
@@ -172,6 +200,15 @@ export class DungeonHud {
   private readonly minimapDots: Phaser.GameObjects.Graphics;
   private readonly minimapFrame: Phaser.GameObjects.Graphics;
   private readonly minimapRadius = 46;
+  private readonly minimapMaskGfx: Phaser.GameObjects.Graphics | null;
+  private minimapDebug: {
+    mode: 'empty' | 'arena' | 'layout';
+    scale: number;
+    rooms: number;
+    corridors: number;
+    enemies: number;
+    collectibles: number;
+  } = { mode: 'empty', scale: 0, rooms: 0, corridors: 0, enemies: 0, collectibles: 0 };
 
   // Top-Right Utility Row (AUTO, Inventário, Áudio)
   private readonly autoBtnContainer: Phaser.GameObjects.Container;
@@ -529,6 +566,11 @@ export class DungeonHud {
     // -------------------------------------------------------------------------
     this.minimapBg = scene.add.graphics();
     this.minimapDots = scene.add.graphics();
+    this.minimapMaskGfx =
+      typeof scene.make?.graphics === 'function' ? scene.make.graphics({}, false) : null;
+    if (this.minimapMaskGfx && typeof this.minimapMaskGfx.createGeometryMask === 'function') {
+      this.minimapDots.setMask(this.minimapMaskGfx.createGeometryMask());
+    }
     this.minimapFrame = scene.add.graphics();
 
     this.minimapContainer = scene.add
@@ -1212,6 +1254,7 @@ export class DungeonHud {
       this.portraitSprite.clearMask(false);
     }
     this.portraitMaskGfx?.destroy();
+    this.minimapMaskGfx?.destroy();
 
     this.heroFrameContainer.destroy();
     this.scene.tweens.killTweensOf([
@@ -1534,7 +1577,10 @@ export class DungeonHud {
     this.objectiveTitleText.setText(title);
 
     const maxChars = 48;
-    const rawObjective = snapshot.missionObjective?.trim();
+    // T-152/T-153: "Elimine todos os monstros X/Y" é o objetivo principal quando existe.
+    const killObjective = snapshot.killObjectiveText?.trim();
+    const rawObjective =
+      killObjective && killObjective.length > 0 ? killObjective : snapshot.missionObjective?.trim();
     const fallbackRoom = snapshot.isTestArena
       ? snapshot.roomTitle || 'Arena de Combate'
       : `Sala ${snapshot.roomNumber}/${snapshot.totalRooms} · ${snapshot.roomTitle || ''}`.replace(
@@ -1547,6 +1593,12 @@ export class DungeonHud {
       line.length > maxChars ? `${line.slice(0, maxChars - 1).trimEnd()}…` : line;
 
     this.objectiveText.setText(truncated);
+    let killDone = false;
+    if (killObjective && killObjective.length > 0) {
+      const m = /(\d+)\s*\/\s*(\d+)/.exec(killObjective);
+      killDone = !!m && Number(m[2]) > 0 && Number(m[1]) >= Number(m[2]);
+    }
+    this.objectiveText.setColor(killDone ? DF_PALETTE.textSuccess : '#e2e8f0');
     this.drawObjectiveDecorations();
     this.updateObjectiveCounter(snapshot);
   }
@@ -1652,6 +1704,11 @@ export class DungeonHud {
     const mapX = w - 60;
     const mapY = 60;
     this.minimapContainer.setPosition(mapX, mapY);
+    if (this.minimapMaskGfx) {
+      this.minimapMaskGfx.clear();
+      this.minimapMaskGfx.fillStyle(0xffffff, 1);
+      this.minimapMaskGfx.fillCircle(mapX, mapY, mapR - 3);
+    }
     this.drawMinimapStaticShell(mapR);
 
     // Clean inline Souls & Essences row to the left of the minimap (y = 26, no heavy pills)
@@ -1783,54 +1840,157 @@ export class DungeonHud {
   private drawMinimapDots(snapshot: HudSnapshot): void {
     const r = this.minimapRadius;
     const usableR = r - 7;
+    const g = this.minimapDots;
 
-    this.minimapDots.clear();
+    g.clear();
 
     const map = snapshot.minimap;
     if (!map || map.arenaWidth <= 0 || map.arenaHeight <= 0) {
-      this.minimapDots.fillStyle(0x38bdf8, 0.35);
-      this.minimapDots.fillCircle(0, 0, 5);
-      this.minimapDots.fillStyle(0xffffff, 1);
-      this.minimapDots.fillCircle(0, 0, 2.5);
+      g.fillStyle(0x38bdf8, 0.35);
+      g.fillCircle(0, 0, 5);
+      g.fillStyle(0xffffff, 1);
+      g.fillCircle(0, 0, 2.5);
+      this.minimapDebug = { mode: 'empty', scale: 0, rooms: 0, corridors: 0, enemies: 0, collectibles: 0 };
       return;
     }
 
-    const projectToCircle = (
-      wx: number,
-      wy: number
-    ): { x: number; y: number } => {
-      const nx = (wx / map.arenaWidth) * 2 - 1;
-      const ny = (wy / map.arenaHeight) * 2 - 1;
-      const px = nx * usableR;
-      const py = ny * usableR;
+    const layout = snapshot.minimapLayout;
+    const hasLayout =
+      !!layout && layout.worldW > 0 && layout.worldH > 0 && layout.rooms.length + layout.corridors.length > 0;
+
+    const clampToCircle = (px: number, py: number, limit: number): { x: number; y: number } => {
       const dist = Math.hypot(px, py);
-      if (dist > usableR && dist > 0) {
-        const scale = usableR / dist;
-        return { x: px * scale, y: py * scale };
+      if (dist > limit && dist > 0) {
+        const k = limit / dist;
+        return { x: px * k, y: py * k };
       }
       return { x: px, y: py };
     };
 
+    let project: (wx: number, wy: number) => { x: number; y: number };
+    let scale: number;
+
+    if (hasLayout && layout) {
+      // Planta do mapa contínuo: se o mapa inteiro cabe no círculo (escala >= mínimo),
+      // mostra tudo centrado; senão centra no herói com escala fixa legível.
+      const worldW = layout.worldW;
+      const worldH = layout.worldH;
+      const fitScale = (usableR * 2) / Math.hypot(worldW, worldH);
+      const minReadable = usableR / 640;
+      const fits = fitScale >= minReadable;
+      scale = fits ? fitScale : minReadable;
+      const cx = fits ? worldW / 2 : map.heroX;
+      const cy = fits ? worldH / 2 : map.heroY;
+      project = (wx, wy) => ({ x: (wx - cx) * scale, y: (wy - cy) * scale });
+
+      // Máscara aproximada: recorta cada retângulo ao quadrado inscrito do círculo
+      // e descarta o que estiver totalmente fora.
+      const lim = usableR + 3;
+      const drawRect = (rect: MinimapRect, color: number, alpha: number): void => {
+        const a = project(rect.x, rect.y);
+        let x0 = a.x;
+        let y0 = a.y;
+        let x1 = a.x + rect.w * scale;
+        let y1 = a.y + rect.h * scale;
+        x0 = Math.max(x0, -lim);
+        y0 = Math.max(y0, -lim);
+        x1 = Math.min(x1, lim);
+        y1 = Math.min(y1, lim);
+        if (x1 <= x0 || y1 <= y0) return;
+        // Descarta retângulos cujo ponto mais próximo do centro já está fora do círculo.
+        const nx = Math.max(x0, Math.min(0, x1));
+        const ny = Math.max(y0, Math.min(0, y1));
+        if (Math.hypot(nx, ny) > lim) return;
+        g.fillStyle(color, alpha);
+        g.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
+      };
+      for (const c of layout.corridors) drawRect(c, 0x3b4a63, 0.9);
+      for (const room of layout.rooms) drawRect(room, 0x4b5d7a, 0.92);
+      g.lineStyle(1, 0x8aa0c0, 0.55);
+      for (const room of layout.rooms) {
+        const a = project(room.x, room.y);
+        const x0 = Math.max(a.x, -lim);
+        const y0 = Math.max(a.y, -lim);
+        const x1 = Math.min(a.x + room.w * scale, lim);
+        const y1 = Math.min(a.y + room.h * scale, lim);
+        if (x1 <= x0 || y1 <= y0) continue;
+        const nx = Math.max(x0, Math.min(0, x1));
+        const ny = Math.max(y0, Math.min(0, y1));
+        if (Math.hypot(nx, ny) > lim) continue;
+        g.strokeRect(x0, y0, x1 - x0, y1 - y0);
+      }
+    } else {
+      // Formato antigo (arena única: testArena / Ato 1): normaliza a arena no círculo.
+      scale = (usableR * 2) / Math.max(map.arenaWidth, map.arenaHeight);
+      project = (wx, wy) => {
+        const nx = (wx / map.arenaWidth) * 2 - 1;
+        const ny = (wy / map.arenaHeight) * 2 - 1;
+        return { x: nx * usableR, y: ny * usableR };
+      };
+    }
+
+    const point = (wx: number, wy: number) => {
+      const p = project(wx, wy);
+      return clampToCircle(p.x, p.y, usableR);
+    };
+    const inside = (wx: number, wy: number): boolean => {
+      const p = project(wx, wy);
+      return Math.hypot(p.x, p.y) <= usableR;
+    };
+
+    const collectibles = map.collectibles ?? [];
+    for (const c of collectibles) {
+      if (hasLayout && !inside(c.x, c.y)) continue;
+      const pt = point(c.x, c.y);
+      g.fillStyle(0x4ade80, 0.35);
+      g.fillCircle(pt.x, pt.y, 3.6);
+      g.fillStyle(0xbbf7d0, 1);
+      g.fillCircle(pt.x, pt.y, 1.8);
+    }
+
     for (const enemy of map.enemies) {
-      const pt = projectToCircle(enemy.x, enemy.y);
+      // Chefe fica preso à borda quando está longe; monstros comuns só aparecem dentro.
+      if (hasLayout && !enemy.isBoss && !inside(enemy.x, enemy.y)) continue;
+      const pt = point(enemy.x, enemy.y);
       if (enemy.isBoss) {
-        this.minimapDots.fillStyle(0xf97316, 0.35);
-        this.minimapDots.fillCircle(pt.x, pt.y, 6.5);
-        this.minimapDots.fillStyle(0xf97316, 1);
-        this.minimapDots.fillCircle(pt.x, pt.y, 4);
-        this.minimapDots.lineStyle(1, 0xfef08a, 0.95);
-        this.minimapDots.strokeCircle(pt.x, pt.y, 4);
+        g.fillStyle(0xf97316, 0.35);
+        g.fillCircle(pt.x, pt.y, 6.5);
+        g.fillStyle(0xf97316, 1);
+        g.fillCircle(pt.x, pt.y, 4);
+        g.lineStyle(1, 0xfef08a, 0.95);
+        g.strokeCircle(pt.x, pt.y, 4);
       } else {
-        this.minimapDots.fillStyle(0xef4444, 0.96);
-        this.minimapDots.fillCircle(pt.x, pt.y, 2.4);
+        g.fillStyle(0xef4444, 0.96);
+        g.fillCircle(pt.x, pt.y, 2.4);
       }
     }
 
-    const heroPt = projectToCircle(map.heroX, map.heroY);
-    this.minimapDots.fillStyle(0x38bdf8, 0.4);
-    this.minimapDots.fillCircle(heroPt.x, heroPt.y, 5.5);
-    this.minimapDots.fillStyle(0xe0f2fe, 1);
-    this.minimapDots.fillCircle(heroPt.x, heroPt.y, 2.8);
+    const heroPt = point(map.heroX, map.heroY);
+    g.fillStyle(0x38bdf8, 0.4);
+    g.fillCircle(heroPt.x, heroPt.y, 5.5);
+    g.fillStyle(0xe0f2fe, 1);
+    g.fillCircle(heroPt.x, heroPt.y, 2.8);
+
+    this.minimapDebug = {
+      mode: hasLayout ? 'layout' : 'arena',
+      scale,
+      rooms: layout?.rooms.length ?? 0,
+      corridors: layout?.corridors.length ?? 0,
+      enemies: map.enemies.length,
+      collectibles: collectibles.length,
+    };
+  }
+
+  /** Estado do minimapa (debug/E2E). */
+  public getMinimapState(): {
+    mode: 'empty' | 'arena' | 'layout';
+    scale: number;
+    rooms: number;
+    corridors: number;
+    enemies: number;
+    collectibles: number;
+  } {
+    return { ...this.minimapDebug };
   }
 
   private refreshAutoButtonState(enabled: boolean): void {
