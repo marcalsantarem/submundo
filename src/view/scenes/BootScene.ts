@@ -299,7 +299,7 @@ const ALL_SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
 ];
 
 /**
- * Entrada do jogo (T-140): a Vila (HubScene) por padrão; a testArena com `?test`,
+ * Entrada do jogo (Decisões #28/#29): o menu-hub (`MenuHub`) por padrão; a testArena com `?test`,
  * `?map=`, `?biome=` ou `?seed=` (URLs dos E2E da M6/M8).
  */
 export function shouldOpenTestArena(search: string): boolean {
@@ -357,8 +357,8 @@ export class BootScene extends Phaser.Scene {
     const wantsTestArena = shouldOpenTestArena(window.location.search);
     if (wantsTestArena && 'DungeonScene' in keys) {
       this.scene.start('DungeonScene', { testArena: true });
-    } else if ('HubScene' in keys) {
-      this.scene.start('HubScene');
+    } else if ('MenuHub' in keys) {
+      this.scene.start('MenuHub');
     } else if ('DungeonScene' in keys) {
       this.scene.start('DungeonScene', { testArena: true });
     }

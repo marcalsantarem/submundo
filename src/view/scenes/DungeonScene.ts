@@ -951,21 +951,9 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   public returnToHub(): void {
-    if ('HubScene' in this.scene.manager.keys) {
-      if (this.isTestArena) {
-        this.scene.start('HubScene', { fromRun: this.lastRunReport });
-        return;
-      }
-      // Decisão #23: o herói volta à Vila e aparece no portão.
-      const won =
-        this.lastRunReport?.victory ?? this.runState?.status === 'victory';
-      const villageOrigin: 'dungeon_victory' | 'dungeon_defeat' = won
-        ? 'dungeon_victory'
-        : 'dungeon_defeat';
-      this.scene.start('HubScene', {
-        fromRun: this.lastRunReport,
-        villageOrigin,
-      });
+    // Decisões #28/#29: todo fim de dungeon (teste, missão ou Ato 1) volta ao menu-hub.
+    if ('MenuHub' in this.scene.manager.keys) {
+      this.scene.start('MenuHub', { fromRun: this.lastRunReport });
       return;
     }
     this.startNewRun();
@@ -2417,7 +2405,7 @@ export class DungeonScene extends Phaser.Scene {
         return;
       }
       continued = true;
-      // Act 1 as it is today (the HubScene reads the campaign already in `act1`).
+      // Act 1 as it is today (volta ao menu-hub).
       this.returnToHub();
     };
     try {
@@ -3527,13 +3515,13 @@ export class DungeonScene extends Phaser.Scene {
       this.missionOutcomeModal = {
         title: isVictory ? `${missionName} — Missão cumprida` : 'Derrotado',
         body,
-        buttonLabel: 'Voltar à Vila',
+        buttonLabel: 'Voltar ao menu',
       };
     }
 
     if (isVictory) {
       // T-151: no more "village_fall_pact" banner here (the old Arauto flow); Act 1 opens with
-      // `act1_arrival_*` in the HubScene.
+      // `act1_arrival_*` (desligado do fluxo; Vila guardada).
       const firstVictoryId = this.activeStage.victoryDialogueIds[0];
       const victoryLine = firstVictoryId ? getDialogueLine(firstVictoryId) : null;
       this.showTimedBanner(

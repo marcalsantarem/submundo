@@ -80,6 +80,7 @@ export class InventoryModal {
   };
 
   private viewport: ViewportConfig;
+  private displayScale = 1;
   private opened = false;
   private bagPage = 0;
   private lastSnapshot: InventoryHudSnapshot;
@@ -740,14 +741,21 @@ export class InventoryModal {
     this.renderSnapshot();
   }
 
+  /** Reduz o modal para caber em telas menores (ex.: menu-hub mobile 844x390). */
+  public setDisplayScale(scale: number): void {
+    this.displayScale = Math.max(0.3, Math.min(1, scale));
+    this.resize(this.viewport);
+  }
+
   public resize(viewport: ViewportConfig): void {
     this.viewport = viewport;
     this.tooltipCard.resize(viewport);
 
-    const w = viewport.width;
-    const h = viewport.height;
+    const w = viewport.width / this.displayScale;
+    const h = viewport.height / this.displayScale;
 
-    this.rootContainer.setPosition(w / 2, h / 2);
+    this.rootContainer.setPosition(viewport.width / 2, viewport.height / 2);
+    this.rootContainer.setScale(this.displayScale);
 
     this.backdropGraphic.clear();
     this.backdropGraphic.fillStyle(0x04060a, 0.84);
