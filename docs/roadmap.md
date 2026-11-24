@@ -11,7 +11,7 @@
 | M7 | v0.7.0 | UI | Refatoração visual de HUD, modais, barras de vida, ícones 2D de alta qualidade e retratos 2D estilizados alinhados aos mockups de referência |
 | M8 | v0.8.0 | Mapas | Cenários 2.5D top-down com paredes/arcos rúnicos, pisos variados, props (tochas animadas, destroços, pilares, baús) e iluminação dinâmica para Vila, Gruta, Mina, Selo e Submundo |
 | M9 | v0.9.0 | Novo hub funcional | Hub do prólogo jogável e funcional (escopo a definir na rodada de definições do marco) |
-| M10 | — (sem tag) | Missões do prólogo | Criação das missões do prólogo |
+| M10 | — (sem PR nem tag) | Missões do prólogo | Criação das missões do prólogo |
 | M11 | v0.10.0 | Nova interface (menus) | Reestruturar o jogo sem hubs jogáveis: o hub vira um menu (Masmorras, Inventário, Forja, Personagem, Habilidades, Configurações). Só Masmorras e Inventário habilitados |
 | M12 | v0.10.0 | Prólogo reestruturado | Prólogo curto, só de dungeon (pode iniciar direto, fora do menu); o menu-hub já é a visão do Submundo |
 | M13 | v0.11.0 | Janela de dungeons | UI e funcionamento da janela de escolha de dungeons |
@@ -32,10 +32,10 @@
 | M28 | v0.18.0 | Status, classe e nome | Exibição de status e classe; possibilidade de alterar o nome |
 | M29 | v0.18.0 | Nome do herói | Pedir o nome do herói ao iniciar o jogo |
 | M30 | v0.19.0 | Novos mapas | Novos mapas para dungeons; verificar reaproveitamento dos antigos descontinuados |
-| M31 | v0.20.0 (a confirmar) | Configurações | Janela de configurações |
+| M31 | v0.20.0 | Configurações | Janela de configurações |
 
 **TO-DO (sem marco):** habilidades; classes (definições, gameplay e sprites por classe); dungeon infinita.
 
-> **Regra (Decisão #28):** todo marco gera um PR para merge, mas **nem todo PR gera tag**. A tag (versão) agrupa marcos semelhantes e tem título próprio, definido pelo dono. Títulos: v0.10.0 Reestruturação e prólogo · v0.11.0 Dungeons · v0.12.0 Sistema de nível · v0.13.0 Energia · v0.14.0 Dificuldade · v0.15.0 Atualização gráfica + novos monstros · v0.16.0 Dungeon diária · v0.17.0 Forja · v0.18.0 Janela de personagem · v0.19.0 Novos mapas · Configurações (versão a confirmar, o dono escreveu v0.19.0 duas vezes).
+> **Regra (Decisão #28):** todo marco gera um PR para merge, mas **nem todo PR gera tag**. A tag (versão) agrupa marcos semelhantes e tem título próprio, definido pelo dono. Títulos: v0.10.0 Reestruturação e prólogo · v0.11.0 Dungeons · v0.12.0 Sistema de nível · v0.13.0 Energia · v0.14.0 Dificuldade · v0.15.0 Atualização gráfica + novos monstros · v0.16.0 Dungeon diária · v0.17.0 Forja · v0.18.0 Janela de personagem · v0.19.0 Novos mapas · v0.20.0 Configurações (o v0.19.0 duplicado foi erro de digitação).
 >
 > **Regra (Decisão #22):** todo marco começa com uma rodada de conversas e perguntas com o dono sobre as definições dele. As definições acertadas em cada marco prevalecem sobre decisões anteriores que conflitem. Os objetivos acima são só o título do marco; o escopo sai dessa rodada.
