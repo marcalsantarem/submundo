@@ -183,8 +183,38 @@ export interface ProgressionCatalog {
   blacksmithForge: BlacksmithForgeDef[];
 }
 
+/**
+ * Menu-hub (Decisão #29). Fluxo de cenas alvo: `BootScene` -> `MenuHub` (cena a criar
+ * pelo AG02, chave 'MenuHub'); o fim de qualquer dungeon volta para `MenuHub`.
+ */
+export type MenuHubItemId =
+  | 'masmorras'
+  | 'inventario'
+  | 'forja'
+  | 'personagem'
+  | 'habilidades'
+  | 'configuracoes';
+
+export interface MenuHubItemDef {
+  id: MenuHubItemId;
+  label: string;
+  unlockedByDefault: boolean;
+}
+
+/** Botões do menu-hub, na ordem de exibição. */
+export const MENU_HUB_ITEMS: readonly MenuHubItemDef[] = [
+  { id: 'masmorras', label: 'Masmorras', unlockedByDefault: true },
+  { id: 'inventario', label: 'Inventário', unlockedByDefault: true },
+  { id: 'forja', label: 'Forja', unlockedByDefault: false },
+  { id: 'personagem', label: 'Personagem', unlockedByDefault: false },
+  { id: 'habilidades', label: 'Habilidades', unlockedByDefault: false },
+  { id: 'configuracoes', label: 'Configurações', unlockedByDefault: false },
+];
+
 export interface SaveProfile {
   version: number;
+  /** Itens do menu-hub liberados (sempre inclui os `unlockedByDefault`). */
+  menuUnlocks: MenuHubItemId[];
   souls: number;
   generalEssences: number;
   altarLevels: Record<AltarUpgradeId, number>;

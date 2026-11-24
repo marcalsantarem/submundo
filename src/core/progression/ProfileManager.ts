@@ -11,6 +11,7 @@ import type {
   PrologueMissionId,
   PrologueQuestState,
   HeroStats,
+  MenuHubItemId,
   ItemInstance,
   ProgressionCatalog,
   RunEndReport,
@@ -18,6 +19,7 @@ import type {
   StatBonus,
   Vector2D,
 } from '../index';
+import { MENU_HUB_ITEMS } from '../index';
 import { isPrologueMissionId, isPrologueQuestState } from './PrologueQuests';
 import {
   applyGearToHero,
@@ -213,9 +215,45 @@ export function getProgressionCatalog(): ProgressionCatalog {
   return progressionJson as ProgressionCatalog;
 }
 
+function defaultMenuUnlocks(): MenuHubItemId[] {
+  return MENU_HUB_ITEMS.filter((i) => i.unlockedByDefault).map((i) => i.id);
+}
+
+function normalizeMenuUnlocks(raw: unknown): MenuHubItemId[] {
+  const valid = new Set<MenuHubItemId>(MENU_HUB_ITEMS.map((i) => i.id));
+  const result = defaultMenuUnlocks();
+  if (Array.isArray(raw)) {
+    for (const id of raw) {
+      if (valid.has(id as MenuHubItemId) && !result.includes(id as MenuHubItemId)) {
+        result.push(id as MenuHubItemId);
+      }
+    }
+  }
+  return result;
+}
+
+export function isMenuItemUnlocked(
+  profile: SaveProfile,
+  id: MenuHubItemId
+): boolean {
+  return profile.menuUnlocks.includes(id);
+}
+
+/** Libera um item do menu-hub (idempotente, sem duplicar). Muta e devolve o perfil. */
+export function unlockMenuItem(
+  profile: SaveProfile,
+  id: MenuHubItemId
+): SaveProfile {
+  if (!profile.menuUnlocks.includes(id)) {
+    profile.menuUnlocks.push(id);
+  }
+  return profile;
+}
+
 export function createDefaultProfile(): SaveProfile {
   return {
     version: DEFAULT_PROFILE_VERSION,
+    menuUnlocks: defaultMenuUnlocks(),
     souls: 0,
     generalEssences: 0,
     altarLevels: {
@@ -274,6 +312,7 @@ export function loadOrCreateProfile(storage?: StorageLike): SaveProfile {
       typeof loaded.version === 'number' && Number.isFinite(loaded.version)
         ? loaded.version
         : DEFAULT_PROFILE_VERSION,
+    menuUnlocks: normalizeMenuUnlocks(loaded.menuUnlocks),
     souls:
       typeof loaded.souls === 'number' && Number.isFinite(loaded.souls)
         ? Math.max(0, loaded.souls)
