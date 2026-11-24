@@ -262,6 +262,7 @@ export type PortraitId =
   | 'emissary'
   | 'spectral_blacksmith'
   | 'infernal_warden'
+  | 'karnak'
   | 'system';
 
 export type BiomeId =

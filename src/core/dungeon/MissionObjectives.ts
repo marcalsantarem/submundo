@@ -152,6 +152,40 @@ export function missionMapOptions(m: MissionMapInput): DungeonMapOptions {
   };
 }
 
+/** Campos da missão do `campaign.json` usados para montar o mapa (subconjunto de `CampaignStageDef`). */
+export interface MissionStageLike {
+  id: string;
+  mapMode?: DungeonMapMode;
+  waves?: string[][];
+  bossId?: string | null;
+  objective?: MissionObjectiveDef | null;
+  finalEventId?: string;
+}
+
+/**
+ * T-129: entrada do mapa a partir da missão do `campaign.json` (modo, ondas, chefe, coleta, evento).
+ * As alavancas de layout da calibragem (`giantScale`, `passageRooms`) vêm de `MISSION_MAP_DEFAULTS`.
+ * Retorna null quando a fase não é uma missão no mapa contínuo (ex.: Ato 1).
+ */
+export function missionMapInputFromStage(stage: MissionStageLike): MissionMapInput | null {
+  if (!stage.mapMode || !stage.waves || stage.waves.length === 0) return null;
+  const ref = (MISSION_MAP_DEFAULTS as Record<string, MissionMapInput | undefined>)[stage.id];
+  return {
+    mapMode: stage.mapMode,
+    waves: stage.waves.map((w) => [...w]),
+    bossId: stage.bossId || null,
+    objective: stage.objective && stage.objective.count > 0 ? { ...stage.objective } : null,
+    eventPoint: !!stage.finalEventId,
+    ...(ref?.passageRooms ? { passageRooms: ref.passageRooms } : {}),
+    ...(ref?.giantScale ? { giantScale: ref.giantScale } : {}),
+  };
+}
+
+/** Rótulo e ícone do contador do HUD por item do objetivo (ex.: "Ervas 3/10"). */
+export function missionObjectiveLabel(itemId: string): { label: string; icon: 'herb' | 'tools' } {
+  return itemId === 'herb' ? { label: 'Ervas', icon: 'herb' } : { label: 'Ferramentas', icon: 'tools' };
+}
+
 const rep = (id: string, n: number) => Array.from({ length: n }, () => id);
 const mix = (cols: Record<string, number[]>, n: number) =>
   Array.from({ length: n }, (_, i) => Object.entries(cols).flatMap(([id, c]) => rep(id, c[i] ?? 0)));

@@ -11,6 +11,21 @@ import {
 } from './DarkFantasyUiBuilder';
 import { VirtualJoystick } from './VirtualJoystick';
 
+/**
+ * Tela só de toque (celular/tablet): sem mouse com hover. Usado para esconder o
+ * selo da tecla "E" (ressalva da validação do M9).
+ */
+export function isTouchOnlyScreen(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+  try {
+    return window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+  } catch {
+    return false;
+  }
+}
+
 /** Estado da HUD da Vila Natal (T-139). */
 export interface VillageHudSnapshot {
   heroName: string;
@@ -31,7 +46,15 @@ export interface VillageHudSnapshot {
     gate: Vector2D;
     house: Vector2D;
     campfire: Vector2D;
-    npcs: Array<{ id: string; pos: Vector2D; alert: boolean }>;
+    npcs: Array<{
+      id: string;
+      pos: Vector2D;
+      alert: boolean;
+      /** Marcador de missão do NPC (T-147); colore o ponto no minimapa. */
+      marker?: '!' | '?gray' | '?yellow' | null;
+    }>;
+    /** Portão com "!" (missão aceita para sair). */
+    gateAlert?: boolean;
   };
 }
 
@@ -657,13 +680,21 @@ export class VillageHud {
     g.fillStyle(0xf97316, 1);
     g.fillCircle(fire.x, fire.y, 1.8);
 
+    if (m.gateAlert) {
+      g.fillStyle(0xfacc15, 1);
+      g.fillCircle(gate.x, gate.y - 11, 1.8);
+    }
+
     let alertPos: { x: number; y: number } | null = null;
     for (const npc of m.npcs) {
       const p = map(npc.pos);
       if (npc.alert) {
         g.fillStyle(0xfacc15, 1);
         g.fillCircle(p.x, p.y, 2.6);
-        alertPos = p;
+        alertPos ??= p;
+      } else if (npc.marker === '?gray') {
+        g.fillStyle(0xcbd5e1, 1);
+        g.fillCircle(p.x, p.y, 2.2);
       } else {
         g.fillStyle(0x86efac, 0.95);
         g.fillCircle(p.x, p.y, 1.8);
@@ -722,14 +753,17 @@ export class VillageHud {
       g.fillCircle(cx + k * 7, cy - 2.5, 2.2);
     }
 
-    // Selo da tecla E.
-    g.fillStyle(DF_PALETTE.obsidianBg, 0.95);
-    g.fillCircle(r - 6, -r + 8, 9);
-    g.lineStyle(1.3, DF_PALETTE.agedGold, 0.9);
-    g.strokeCircle(r - 6, -r + 8, 9);
+    // Selo da tecla E (só com teclado; some em telas de toque).
+    const showKey = !isTouchOnlyScreen();
+    if (showKey) {
+      g.fillStyle(DF_PALETTE.obsidianBg, 0.95);
+      g.fillCircle(r - 6, -r + 8, 9);
+      g.lineStyle(1.3, DF_PALETTE.agedGold, 0.9);
+      g.strokeCircle(r - 6, -r + 8, 9);
+    }
 
     this.interactLabel.setAlpha(active ? 1 : 0.6);
-    this.interactKeyText.setAlpha(active ? 1 : 0.6);
+    this.interactKeyText.setVisible(showKey).setAlpha(active ? 1 : 0.6);
     this.interactContainer.setScale(pressed ? 0.95 : 1);
   }
 

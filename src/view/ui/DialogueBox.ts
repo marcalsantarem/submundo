@@ -24,6 +24,8 @@ const PORTRAIT_FRAME_MAP: Record<PortraitId, number> = {
   emissary: 4,
   spectral_blacksmith: 5,
   infernal_warden: 6,
+  // Sem retrato próprio na folha `portraits`: reaproveita o do Carcereiro.
+  karnak: 6,
   system: 7,
 };
 
@@ -39,6 +41,7 @@ const PORTRAIT_THEME: Record<
   emissary: { color: 0x38bdf8, hex: '#90e0ef', badge: 'EC' },
   spectral_blacksmith: { color: 0x60a5fa, hex: '#93c5fd', badge: 'FE' },
   infernal_warden: { color: 0xef4444, hex: '#fca5a5', badge: 'CI' },
+  karnak: { color: 0x7f1d1d, hex: '#f87171', badge: 'KR' },
   system: { color: 0xfacc15, hex: '#fde047', badge: 'SY' },
 };
 

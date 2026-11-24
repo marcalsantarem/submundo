@@ -48,6 +48,10 @@ export interface HudSnapshot {
   autoAttackEnabled?: boolean;
   isTestArena?: boolean;
   missionObjective?: string;
+  /** Contador do objetivo da missão (T-147), ex.: "Ervas 3/10". */
+  objectiveText?: string;
+  /** Ícone do contador do objetivo (`mission_icons`). */
+  objectiveIcon?: 'herb' | 'tools';
   /** Há item no chão dentro do raio de busca do botão "Pegar" (T-132). */
   pickupAvailable?: boolean;
   /** Raridade do item mais próximo (cor do anel do botão "Pegar"). */
@@ -143,6 +147,13 @@ export class DungeonHud {
   private readonly objectiveBg: Phaser.GameObjects.Graphics;
   private readonly objectiveTitleText: Phaser.GameObjects.Text;
   private readonly objectiveText: Phaser.GameObjects.Text;
+  // Contador do objetivo da missão (T-147): ícone + "Ervas 3/10".
+  private readonly objectiveCounter: Phaser.GameObjects.Container;
+  private readonly objectiveCounterIcon: Phaser.GameObjects.Image;
+  private readonly objectiveCounterFallback: Phaser.GameObjects.Graphics;
+  private readonly objectiveCounterText: Phaser.GameObjects.Text;
+  private objectiveCounterValue: string | null = null;
+  private objectiveCounterIconKey: 'herb' | 'tools' | null = null;
 
   // Top-Right: Resources (Souls & Essences)
   private readonly resourcesContainer: Phaser.GameObjects.Container;
@@ -407,11 +418,37 @@ export class DungeonHud {
       })
       .setOrigin(0, 0);
 
+    this.objectiveCounterIcon = scene.add
+      .image(8, 0, '__DEFAULT')
+      .setOrigin(0.5)
+      .setVisible(false);
+    this.objectiveCounterFallback = scene.add.graphics();
+    this.objectiveCounterText = scene.add
+      .text(20, 0, '', {
+        fontFamily: DF_FONTS.BODY,
+        resolution: 2,
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: DF_PALETTE.textParchment,
+        stroke: '#07090e',
+        strokeThickness: 2.5,
+      })
+      .setOrigin(0, 0.5);
+    this.objectiveCounter = scene.add
+      .container(0, 0, [
+        this.objectiveCounterFallback,
+        this.objectiveCounterIcon,
+        this.objectiveCounterText,
+      ])
+      .setVisible(false);
+    this.objectiveCounter.setName('hud_objective_counter');
+
     this.objectiveContainer = scene.add
       .container(0, 0, [
         this.objectiveBg,
         this.objectiveTitleText,
         this.objectiveText,
+        this.objectiveCounter,
       ])
       .setScrollFactor(0)
       .setDepth(1010);
@@ -1177,6 +1214,11 @@ export class DungeonHud {
     this.portraitMaskGfx?.destroy();
 
     this.heroFrameContainer.destroy();
+    this.scene.tweens.killTweensOf([
+      this.objectiveCounterText,
+      this.objectiveCounterIcon,
+      this.objectiveCounterFallback,
+    ]);
     this.objectiveContainer.destroy();
     this.resourcesContainer.destroy();
     this.minimapContainer.destroy();
@@ -1506,6 +1548,99 @@ export class DungeonHud {
 
     this.objectiveText.setText(truncated);
     this.drawObjectiveDecorations();
+    this.updateObjectiveCounter(snapshot);
+  }
+
+  /** Estado do contador do objetivo (debug/E2E). */
+  public getObjectiveCounterState(): { visible: boolean; text: string; complete: boolean } {
+    return {
+      visible: this.objectiveCounter.visible,
+      text: this.objectiveCounterText.text,
+      complete: this.objectiveCounterText.style.color === DF_PALETTE.textSuccess,
+    };
+  }
+
+  /**
+   * Contador discreto abaixo do tracker (T-147): ícone + texto. Pisca quando o
+   * valor sobe e fica verde quando "X/Y" chega em Y.
+   */
+  private updateObjectiveCounter(snapshot: HudSnapshot): void {
+    const text = snapshot.objectiveText?.trim() ?? '';
+    if (text.length === 0) {
+      this.objectiveCounter.setVisible(false);
+      this.objectiveCounterValue = null;
+      return;
+    }
+    const bodyHeight = Math.max(14, Math.ceil(this.objectiveText.height || 14));
+    const dividerY = 23 + bodyHeight + 7;
+    this.objectiveCounter.setPosition(2, dividerY + 13).setVisible(true);
+
+    const iconKey = snapshot.objectiveIcon ?? null;
+    if (iconKey !== this.objectiveCounterIconKey) {
+      this.objectiveCounterIconKey = iconKey;
+      this.drawObjectiveCounterIcon(iconKey);
+    }
+
+    const match = /(\d+)\s*\/\s*(\d+)/.exec(text);
+    const current = match ? Number(match[1]) : NaN;
+    const total = match ? Number(match[2]) : NaN;
+    const complete = Number.isFinite(current) && Number.isFinite(total) && total > 0 && current >= total;
+    const previous = this.objectiveCounterValue;
+    if (previous !== text) {
+      this.objectiveCounterText.setText(text);
+      this.objectiveCounterText.setColor(complete ? DF_PALETTE.textSuccess : DF_PALETTE.textParchment);
+      const prevMatch = previous ? /(\d+)\s*\/\s*(\d+)/.exec(previous) : null;
+      const increased = prevMatch !== null && Number.isFinite(current) && current > Number(prevMatch[1]);
+      if (increased) {
+        this.flashObjectiveCounter(complete);
+      }
+      this.objectiveCounterValue = text;
+    }
+  }
+
+  private drawObjectiveCounterIcon(icon: 'herb' | 'tools' | null): void {
+    const g = this.objectiveCounterFallback;
+    g.clear();
+    const frame = icon === 'herb' ? 0 : icon === 'tools' ? 1 : -1;
+    if (frame >= 0 && hasUiTextureFrame(this.scene, 'mission_icons', frame)) {
+      this.objectiveCounterIcon.setTexture('mission_icons', frame).setVisible(true);
+      return;
+    }
+    this.objectiveCounterIcon.setVisible(false);
+    if (icon === 'herb') {
+      g.fillStyle(0x4ade80, 1);
+      g.fillEllipse(5, 0, 5, 9);
+      g.fillEllipse(11, 0, 5, 9);
+    } else if (icon === 'tools') {
+      g.fillStyle(0x94a3b8, 1);
+      g.fillRect(3, -5, 10, 4);
+      g.fillStyle(0x92400e, 1);
+      g.fillRect(7, -1, 2, 7);
+    } else {
+      g.fillStyle(DF_PALETTE.agedGold, 1);
+      g.fillCircle(8, 0, 3);
+    }
+  }
+
+  private flashObjectiveCounter(complete: boolean): void {
+    const targets = [this.objectiveCounterText, this.objectiveCounterIcon, this.objectiveCounterFallback];
+    this.scene.tweens.killTweensOf(targets);
+    for (const t of targets) {
+      t.setScale(1);
+      t.setAlpha(1);
+    }
+    this.objectiveCounterText.setColor(complete ? DF_PALETTE.textSuccess : '#fde68a');
+    this.scene.tweens.add({
+      targets,
+      scale: 1.25,
+      duration: 110,
+      yoyo: true,
+      repeat: 1,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        this.objectiveCounterText.setColor(complete ? DF_PALETTE.textSuccess : DF_PALETTE.textParchment);
+      },
+    });
   }
 
   // ===========================================================================

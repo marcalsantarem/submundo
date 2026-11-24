@@ -2773,6 +2773,177 @@
         "dx": -28.7,
         "dy": -17.3
       }
+    },
+    "quest_markers": {
+      "key": "quest_markers",
+      "file": "quest_markers.png",
+      "width": 192,
+      "height": 24,
+      "frameWidth": 16,
+      "frameHeight": 24,
+      "frames": [
+        "avail0",
+        "avail1",
+        "avail2",
+        "avail3",
+        "progress0",
+        "progress1",
+        "progress2",
+        "progress3",
+        "ready0",
+        "ready1",
+        "ready2",
+        "ready3"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 1.0
+      },
+      "animations": {
+        "avail": {
+          "frames": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "frameRate": 6,
+          "repeat": -1
+        },
+        "progress": {
+          "frames": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "frameRate": 4,
+          "repeat": -1
+        },
+        "ready": {
+          "frames": [
+            8,
+            9,
+            10,
+            11
+          ],
+          "frameRate": 6,
+          "repeat": -1
+        }
+      },
+      "headOffsetY": -4
+    },
+    "mission_herb": {
+      "key": "mission_herb",
+      "file": "mission_herb.png",
+      "width": 160,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "glow0",
+        "glow1",
+        "glow2",
+        "glow3",
+        "picked"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.875
+      },
+      "animations": {
+        "glow": {
+          "frames": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "frameRate": 6,
+          "repeat": -1
+        }
+      }
+    },
+    "mission_tools": {
+      "key": "mission_tools",
+      "file": "mission_tools.png",
+      "width": 160,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "glow0",
+        "glow1",
+        "glow2",
+        "glow3",
+        "empty"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.875
+      },
+      "animations": {
+        "glow": {
+          "frames": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "frameRate": 6,
+          "repeat": -1
+        }
+      }
+    },
+    "mission_strange": {
+      "key": "mission_strange",
+      "file": "mission_strange.png",
+      "width": 288,
+      "height": 48,
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "frames": [
+        "pulse0",
+        "pulse1",
+        "pulse2",
+        "pulse3",
+        "pulse4",
+        "pulse5"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.7916666666666666
+      },
+      "animations": {
+        "pulse": {
+          "frames": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "frameRate": 6,
+          "repeat": -1
+        }
+      }
+    },
+    "mission_icons": {
+      "key": "mission_icons",
+      "file": "mission_icons.png",
+      "width": 32,
+      "height": 16,
+      "frameWidth": 16,
+      "frameHeight": 16,
+      "frames": [
+        "icon_herb",
+        "icon_tools"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.5
+      }
     }
   }
 }

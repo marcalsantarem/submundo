@@ -52,6 +52,30 @@ const TORCHES: readonly Vector2D[] = [
 
 export type VillageInteractableId = VillageNpcId | 'gate';
 
+/** Marcador de missão (T-147): "!" amarelo, "?" cinza (em andamento), "?" amarelo (entregar). */
+export type VillageQuestMarkerKind = '!' | '?gray' | '?yellow' | null;
+
+/** Folha `quest_markers` (AG07, T-148): 16x24, origem (0.5, 1.0). */
+const QUEST_MARKER_TEXTURE = 'quest_markers';
+const QUEST_MARKER_SPECS: Record<'!' | '?gray' | '?yellow', { anim: string; frame: number }> = {
+  '!': { anim: 'quest_marker_avail', frame: 0 },
+  '?gray': { anim: 'quest_marker_progress', frame: 4 },
+  '?yellow': { anim: 'quest_marker_ready', frame: 8 },
+};
+/** Acima da luz quente (MULTIPLY em 44.5) para manter o amarelo da prancha. */
+const QUEST_MARKER_DEPTH = 46;
+/** Altura aproximada do nome do NPC (fonte 8.5 px). */
+const NPC_LABEL_H = 11;
+/** Base do "!" do portão, acima da placa "SAÍDA". */
+const QUEST_MARKER_GATE_OFFSET_Y = -122;
+
+interface QuestMarkerView {
+  sprite?: Phaser.GameObjects.Sprite;
+  fallback: Phaser.GameObjects.Text;
+  kind: VillageQuestMarkerKind;
+  anchor: Vector2D;
+}
+
 interface VillageNpcConfig {
   id: VillageNpcId;
   label: string;
@@ -307,8 +331,7 @@ export class VillageWorld {
   private gateOpen = false;
   private readonly lights: VillageLight[] = [];
   private readonly npcs: VillageNpcView[] = [];
-  private readonly alertMarker: Phaser.GameObjects.Graphics;
-  private alertNpcId: VillageNpcId | null = null;
+  private readonly questMarkers = new Map<VillageInteractableId, QuestMarkerView>();
   private readonly sparkGfx: Phaser.GameObjects.Graphics;
   private sparkStartMs = -1;
   private readonly heroShadow: Phaser.GameObjects.Ellipse;
@@ -327,8 +350,7 @@ export class VillageWorld {
       .setDepth(2);
     this.objects.push(this.heroShadow);
 
-    this.alertMarker = scene.add.graphics().setDepth(44);
-    this.objects.push(this.alertMarker);
+    this.buildQuestMarkers();
     this.sparkGfx = scene.add.graphics().setDepth(41).setBlendMode(Phaser.BlendModes.ADD);
     this.objects.push(this.sparkGfx);
   }
@@ -363,8 +385,27 @@ export class VillageWorld {
     }
   }
 
-  public setAlertNpc(id: VillageNpcId | null): void {
-    this.alertNpcId = id;
+  /**
+   * Marcadores de missão (T-147, Decisão #24): "!" amarelo, "?" cinza e "?"
+   * amarelo sobre os NPCs; "!" sobre o arco do portão.
+   */
+  public setQuestMarkers(
+    npcs: Partial<Record<VillageNpcId, VillageQuestMarkerKind>>,
+    gate: VillageQuestMarkerKind
+  ): void {
+    for (const cfg of VILLAGE_NPCS) {
+      this.applyQuestMarker(cfg.id, npcs[cfg.id] ?? null);
+    }
+    this.applyQuestMarker('gate', gate);
+  }
+
+  /** Estado atual dos marcadores (debug/E2E). */
+  public getQuestMarkerKinds(): Record<VillageInteractableId, VillageQuestMarkerKind> {
+    const out = {} as Record<VillageInteractableId, VillageQuestMarkerKind>;
+    for (const [id, view] of this.questMarkers) {
+      out[id] = view.kind;
+    }
+    return out;
   }
 
   /** Move os pés de `from` para `to` deslizando nas colisões (eixo a eixo). */
@@ -438,7 +479,7 @@ export class VillageWorld {
       npc.label.setScale(near ? 1.06 : 1);
     }
 
-    this.drawAlertMarker(timeMs);
+    this.updateQuestMarkers(timeMs);
     this.drawSparks(timeMs);
   }
 
@@ -629,40 +670,93 @@ export class VillageWorld {
     }
   }
 
-  private drawAlertMarker(timeMs: number): void {
-    const g = this.alertMarker;
-    g.clear();
-    if (!this.alertNpcId) {
+  private hasQuestMarkerSheet(): boolean {
+    const key = QUEST_MARKER_TEXTURE;
+    if (!this.scene.textures.exists(key)) {
+      return false;
+    }
+    const tex = this.scene.textures.get(key);
+    return tex.has('0') && tex.has('4') && tex.has('8');
+  }
+
+  private buildQuestMarkers(): void {
+    const ids: VillageInteractableId[] = [...VILLAGE_NPCS.map((n) => n.id), 'gate'];
+    const useSheet = this.hasQuestMarkerSheet();
+    for (const id of ids) {
+      const anchor = this.questMarkerAnchor(id);
+      let sprite: Phaser.GameObjects.Sprite | undefined;
+      if (useSheet) {
+        sprite = this.scene.add
+          .sprite(anchor.x, anchor.y, QUEST_MARKER_TEXTURE, 0)
+          .setOrigin(0.5, 1)
+          .setDepth(QUEST_MARKER_DEPTH)
+          .setVisible(false);
+        sprite.setName(`quest_marker_${id}`);
+        this.objects.push(sprite);
+      }
+      const fallback = this.scene.add
+        .text(anchor.x, anchor.y, '!', {
+          fontFamily: DF_FONTS.TITLE,
+          fontSize: '20px',
+          fontStyle: 'bold',
+          color: '#facc15',
+          stroke: '#28160a',
+          strokeThickness: 4,
+          resolution: 3,
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(QUEST_MARKER_DEPTH)
+        .setVisible(false);
+      this.objects.push(fallback);
+      this.questMarkers.set(id, { sprite, fallback, kind: null, anchor });
+    }
+  }
+
+  /** Base do marcador: 4 px acima do nome (topo da cabeça) ou acima da placa do portão. */
+  private questMarkerAnchor(id: VillageInteractableId): Vector2D {
+    if (id === 'gate') {
+      return { x: VILLAGE_GATE_X, y: GATE_Y + QUEST_MARKER_GATE_OFFSET_Y };
+    }
+    const cfg = VILLAGE_NPCS.find((n) => n.id === id)!;
+    return { x: cfg.pos.x, y: cfg.pos.y - cfg.headHeight - NPC_LABEL_H - 4 };
+  }
+
+  private applyQuestMarker(id: VillageInteractableId, kind: VillageQuestMarkerKind): void {
+    const view = this.questMarkers.get(id);
+    if (!view || view.kind === kind) {
       return;
     }
-    const npc = this.npcs.find((n) => n.config.id === this.alertNpcId);
-    if (!npc) {
+    view.kind = kind;
+    if (!kind) {
+      view.sprite?.stop().setVisible(false);
+      view.fallback.setVisible(false);
       return;
     }
-    const pulse = 0.5 + Math.sin(timeMs * 0.006) * 0.5;
-    const s = 0.62 + pulse * 0.08;
-    const ex = npc.config.pos.x;
-    const ey = npc.config.pos.y - npc.config.headHeight - 22 - pulse * 2;
-    g.fillStyle(0xfacc15, 0.1 + pulse * 0.1);
-    g.fillCircle(ex, ey - 4 * s, 15 * s);
-    for (const [grow, color] of [
-      [2.2, 0x28160a],
-      [0, 0xfacc15],
-    ] as const) {
-      g.fillStyle(color, 1);
-      g.fillPoints(
-        [
-          { x: ex - (5 + grow) * s, y: ey - (20 + grow) * s },
-          { x: ex + (5 + grow) * s, y: ey - (20 + grow) * s },
-          { x: ex + (2.4 + grow) * s, y: ey + (4 + grow) * s },
-          { x: ex - (2.4 + grow) * s, y: ey + (4 + grow) * s },
-        ],
-        true
-      );
-      g.fillCircle(ex, ey + 11 * s, (3.6 + grow) * s);
+    const spec = QUEST_MARKER_SPECS[kind];
+    if (view.sprite) {
+      view.sprite.setVisible(true);
+      if (this.scene.anims.exists(spec.anim)) {
+        view.sprite.play(spec.anim);
+      } else {
+        view.sprite.stop().setFrame(spec.frame);
+      }
+      view.fallback.setVisible(false);
+    } else {
+      view.fallback
+        .setText(kind === '!' ? '!' : '?')
+        .setColor(kind === '?gray' ? '#cbd5e1' : '#facc15')
+        .setVisible(true);
     }
-    g.fillStyle(0xfff1a0, 0.9);
-    g.fillRect(ex - 3.5 * s, ey - 18.5 * s, 2 * s, 19 * s);
+  }
+
+  private updateQuestMarkers(timeMs: number): void {
+    for (const view of this.questMarkers.values()) {
+      if (!view.kind) continue;
+      // Sem a folha, um leve balanço no texto de reserva.
+      if (!view.sprite) {
+        view.fallback.setY(view.anchor.y - Math.round(Math.sin(timeMs * 0.006) + 1));
+      }
+    }
   }
 
   private drawSparks(timeMs: number): void {

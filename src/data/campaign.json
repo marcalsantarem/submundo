@@ -22,7 +22,7 @@
       "objective": {
         "kind": "collect",
         "itemId": "herb",
-        "count": 6
+        "count": 10
       },
       "dropPolicy": {
         "chance": 0.05,
@@ -55,7 +55,7 @@
       "objective": {
         "kind": "collect",
         "itemId": "mine_tool",
-        "count": 4
+        "count": 6
       },
       "finalEventId": "strange_sight",
       "dropPolicy": {
