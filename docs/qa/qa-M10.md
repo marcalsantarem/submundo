@@ -6,7 +6,8 @@
 - **Commit validado:** `871f8da` (código do M10) + `0d94ac4` (só docs, Decisão #25), branch `dev`, com os specs desta validação (não commitados)
 - **Escopo (Decisão #24):** o prólogo em 3 missões com marcadores ("!" amarelo, "?" cinza, "?" amarelo): Mestre → Lyra (Plantação de Ervas, sala gigante, 10 ervas) e Gorran (Mina Iluminada, 4 salas, 6 ferramentas, Chefe da Matilha, "algo estranho") em qualquer ordem → entrega → missão 3 do Mestre (Fundo da Mina, Karnak invencível) → morte → "Fim do Prólogo" → Ato 1. Sem teleporte entre salas; derrota sem custo.
 - **Rodadas:** **1 rodada completa** (Decisão #25, comunicada pelo AG00 durante a validação: a suíte roda 1 vez e só os arquivos que falharem são repetidos). Antes dela houve a rodada 0 (diagnóstico, antes dos ajustes).
-- **Veredito:** **PASSA COM RESSALVAS** — *0 bloqueantes, 0 graves, 8 menores* (ver Seção 3). A rodada oficial passou inteira (Vitest 141/141, build OK e todos os E2E, 30 testes), tirando a `m4` com o erro de ambiente já conhecido; nenhum arquivo precisou ser repetido. O prólogo inteiro roda nas duas ordens, com o Karnak invencível e a passagem ao Ato 1. Nenhuma quebra de comportamento em `src/`; as ressalvas são visuais, de narrativa e de duração/dificuldade.
+- **Revalidação (T-156, BRF-168, commits `54c0bf4` + `94d63af`):** **PASSA COM RESSALVAS** — ver Seção 7.
+- **Veredito (validação original):** **PASSA COM RESSALVAS** — *0 bloqueantes, 0 graves, 8 menores* (ver Seção 3). A rodada oficial passou inteira (Vitest 141/141, build OK e todos os E2E, 30 testes), tirando a `m4` com o erro de ambiente já conhecido; nenhum arquivo precisou ser repetido. O prólogo inteiro roda nas duas ordens, com o Karnak invencível e a passagem ao Ato 1. Nenhuma quebra de comportamento em `src/`; as ressalvas são visuais, de narrativa e de duração/dificuldade.
 
 ---
 
@@ -141,3 +142,77 @@ Para começar do zero: **Config. → Resetar progresso** na Vila (ou limpar os d
 2. Faça a Mina e veja se o "algo estranho" e o Chefe da Matilha aparecem sem cortes.
 3. Toque em **Continuar** na tela "Fim do Prólogo".
 4. Anote quanto tempo levou cada missão (meta da Decisão #24: ~3 min).
+
+---
+
+## 7. Revalidação (T-156, BRF-168)
+
+- **Data:** 2026-11-24 · **Responsável:** AG03 · **Commits:** `54c0bf4` (T-150 a T-155, Decisão #26) e `94d63af` (T-157, Decisão #27, entrou durante a revalidação a pedido do AG00), branch `dev`, com os specs abaixo (não commitados).
+- **Veredito:** **PASSA COM RESSALVAS** — *0 bloqueantes, 0 graves, 3 menores pendentes*. As ressalvas 1 a 5 da validação original foram resolvidas; a 6 melhorou (tempos perto de ~3 min).
+
+### 7.1. O que mudou no jogo e foi verificado
+
+| Mudança | Como o E2E confere (`m10-prologue`) |
+| :--- | :--- |
+| Sem ondas: monstros já no mapa, adormecidos | `monstersAlive === monstersTotal` (Ervas 15, Mina 20, Fundo 22; Karnak fora), todos vivos no início, `monstersDormant > 0`; Chefe da Matilha já no mapa ao entrar na Mina |
+| "Elimine todos os monstros X/Y" no tracker | texto do tracker `0/Y` no início e `Y/Y` depois de matar todos; Ervas não fecha só com os monstros (faltam ervas) |
+| Portas não selam | `doorsOpen` todo `true` e `getSealedDoorIds() = []` |
+| 5 ervas / 4 ferramentas | objetivo, coletáveis e contador do HUD (`0/5`→`1/5`, `0/4`→`1/4`) |
+| Itens pegos ficam no perfil (vitória e derrota) | item de teste pego no chão da missão → está no Baú/equipado do perfil após a vitória (Ervas) e após a derrota (Ervas e Mina) |
+| Minimapa | dungeon: `hud.getMinimapState()` em modo `layout` com salas (> 0), corredores na Mina/Fundo, inimigos e coletáveis restantes; Vila: `villageHud.getMinimapState()` com planta (`planRects > 0`), 3 NPCs e portão |
+| Banner de volta | "Missão cumprida: <missão>. Fale com Lyra/Gorran." na vitória; na derrota, "recuou ferido"; nunca "Extração"/"Almas"/"Baú" |
+| Ato 1 | fila de falas = `act1_arrival_1..3` (Guerreiro Espectral / Emissário); sem `village_fall_*`, `act1_briefing` nem o Arauto; sem banner "Extração" no Refúgio |
+| Retrato da Lyra | `portraitId = village_healer`, sprite visível no **frame 8** |
+| **T-157 / Decisão #27 — prólogo sem Almas** | modal de fim: título "<MISSÃO> — MISSÃO CUMPRIDA" ou "DERROTADO", botão "Voltar à Vila", linhas de Almas e de itens escondidas; contador de Almas/Essências do HUD escondido; `hero.souls = 0`; perfil com `souls = 0`, `generalEssences = 0` e `totalSoulsEarned = 0` após cada missão (vitória e derrota) e depois do "Fim do Prólogo" (antes do T-157 o Refúgio abria com **Almas: 8**) |
+
+### 7.2. Specs alterados
+
+- `tests/e2e/m10-prologue.spec.ts`: tudo da tabela acima (helpers `expectPlacedMissionStart`, `pickTestItem`/`expectItemKept`, `expectVillageMinimap`, `dungeonMinimap`, `trackerText`, `outcomeModal`, `expectNoPrologueSouls`, `dialoguePortrait`/`dialogueQueue`); `killZone`/`goToZone` aceitam poupar um monstro (o Chefe, para a captura).
+- `tests/e2e/m10-timing.spec.ts`: comentário do novo modelo e contador de abates no log.
+- `tests/e2e/m7-ui-landscape.spec.ts`: `portraits.png` agora tem **9 frames (1152×128)** — o frame 8 é a Lyra (T-153). Mudança de asset esperada.
+- `tests/e2e/m5-hero.spec.ts:713`: espera da animação de ataque no Ato 1 mobile de 3 s → 8 s. O herói ataca (o slime perde HP), mas a animação `hit` corta a de ataque e o golpe seguinte vem em ~2 s; a janela de 3 s ficou curta. Não é defeito de jogo.
+
+### 7.3. Resultados
+
+| Rodada | Vitest | Build | m1 | m10-prologue | m2 | m3 | m4 | m5 | m6 | m7 | m8-biomes | m8-dungeon-basic | m8-ground-pickup | m9 | m10-timing |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 (`54c0bf4`) | 150/150 | OK | 1/1 | 3/3 (8,5 min) | 1/1 | 1/1 | ⚠️ ambiente | ❌ 0/1 | 1/1 | ❌ 1/3 | 11/11 | 3/3 | 1/1 | 4/4 | pulado |
+| Repetição só dos que falharam | — | — | — | — | — | — | — | ❌ (mesmo ponto) → ajuste do spec | — | ✅ 3/3 (após ajuste) | — | — | — | — | — |
+| Após `94d63af` (T-157): build + E2E do prólogo/modal/Almas | 158/158 | OK | 1/1 | **3/3** (7,0 min) | — | 1/1 | — | **1/1** | — | — | — | — | — | 4/4 | — |
+
+- **m4:** mesmo erro de ambiente conhecido (`campaign.json` precisa de import attribute → "No tests found").
+- **Build:** `dist/` **3,5 MB**; `index-*.js` **1.937 kB** (gzip **470 kB**). Aviso de chunk > 500 kB (só aviso).
+- **Karnak:** na rodada 1 o herói não morreu sozinho em 60 s (o spec usa o atalho de debug nesse caso); após `94d63af` a morte foi natural nas duas ordens (PC e mobile). HP do Karnak sempre 9999/9999.
+
+### 7.4. Tempo das missões (`m10-timing`, piloto, 1 rodada, após `94d63af`)
+
+| Missão | Tempo de jogo | Curas de emergência | FPS médio | Resultado | Antes (validação original) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Plantação de Ervas | **149 s** (2:29) | 1 | 24 | vitória | 146 s, 2 curas |
+| Mina Iluminada | **217 s** (3:37) | 2 | 20 | vitória | 231 s, 6 curas |
+| Fundo da Mina | **149 s** (2:29) | 1 | 19 | Fim do Prólogo | 96 s, 2 curas |
+
+Total ~8,6 min. O piloto caça o monstro mais próximo (acordando também os de outras salas) e não usa esquiva/skills/poções.
+
+### 7.5. Ressalvas
+
+- **Resolvidas:** 1 (retrato da Lyra), 2 (bloco preto e "Ervas x/10" duplicado não aparecem nas capturas das Ervas), 3 ("!" do portão abaixo da placa SAÍDA, ver `m10_return_banner_pc.png`), 4 (Ato 1 sem o Arauto), 5 (banner sem "Extração"); e Almas no prólogo (Decisão #27).
+- **Pendentes (menores):**
+  1. **Duração/dificuldade (ex-6):** Mina ~3:37 com 2 curas (herói Nv. 1); as outras ~2:30. Perto da meta de ~3 min; só medida de piloto.
+  2. **Debug: morte "por fora" não vira derrota (ex-7)**, `src/view/scenes/DungeonScene.ts` (derrota só conferida no tick de combate). Não afeta o jogo.
+  3. **E2E `m4-campaign` (ex-8):** não carrega no Playwright local e tem conteúdo do prólogo antigo.
+- **Observação (sem defeito):** no Ato 1 a animação `hit` interrompe a de ataque do herói (motivo do ajuste da `m5`).
+
+### 7.6. Capturas novas (`docs/qa/screenshots/`, `_pc` e `_mobile`)
+
+`m10_minimap_village_*`, `m10_minimap_dungeon_*` (Ervas, `0/15` e `0/5`), `m10_monster_counter_*` (Mina, `0/20` e `0/4`), `m10_mine_boss_*`, `m10_mission_end_pc` (modal "Missão cumprida" sem Almas), `m10_mission_defeat_pc` (modal "Derrotado"), `m10_return_banner_*`, `m10_lyra_*`, `m10_act1_*` (Ato 1 com "O Despertar" e Almas: 0); as demais `m10_*` foram regravadas. Nenhuma captura de outro marco foi apagada (as rodadas regravam as próprias `m1`–`m9`).
+
+### 7.7. Roteiro manual atualizado (dono)
+
+1. **Config. → Resetar progresso.** Vila com "!" só no Mestre; o minimapa mostra a clareira, NPCs e portão.
+2. Fale com Mestre, Lyra (retrato **dela**) e Gorran; o "!" do portão fica logo **abaixo** da placa SAÍDA.
+3. **Ervas:** os slimes já estão nos canteiros (parados até você chegar perto); tracker "Elimine todos os monstros 0/15" e "Ervas 0/5"; minimapa com a planta, você, monstros e ervas. Pegue um item que cair.
+4. Ao terminar: modal "**A PLANTAÇÃO DE ERVAS — MISSÃO CUMPRIDA**", botão **Voltar à Vila**, sem Almas/itens; topo do HUD sem Almas/Essências o tempo todo. Na Vila: banner "Missão cumprida…" e o item no Inventário.
+5. **Mina:** 20 monstros, 4 ferramentas, portas sempre abertas, Chefe da Matilha na sala 4, "algo estranho" no fim. Morra uma vez de propósito: modal "**DERROTADO**", o item pego continua no Inventário e a missão continua aceita.
+6. **Fundo da Mina:** Karnak invencível → "Fim do Prólogo" → Continuar → falas "O Despertar" (sem o Arauto) e **Almas: 0** no Refúgio.
+7. Anote o tempo de cada missão (piloto: ~2:30 / ~3:40 / ~2:30).

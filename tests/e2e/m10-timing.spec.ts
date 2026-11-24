@@ -5,7 +5,8 @@ import { expect, test, type Page } from '@playwright/test';
 /**
  * M10 (T-149): tempo real de cada missão do prólogo jogada pelo piloto de debug (`autoWalkTo`).
  * O herói só anda (piloto) e colhe com a tecla `E`; o combate é o auto-ataque normal.
- * Sem atalhos de vitória: as salas só abrem quando os monstros morrem de verdade.
+ * Sem atalhos de vitória. Decisão #26 (T-151): sem ondas — os monstros já estão no mapa e o piloto
+ * caça o mais próximo; a missão fecha com "Elimine todos os monstros" + coleta (+ evento).
  * Cura de emergência (HP < 25%) é contada e registrada, para a medida não parar numa derrota.
  * Demorado (~10 min): só roda com `M10_TIMING=1`. Resultado em `test-results/m10-timing.json`.
  */
@@ -29,6 +30,8 @@ interface MissionState {
   runStatus: string;
   autoWalking: boolean;
   elapsedMs: number;
+  monstersAlive: number;
+  monstersTotal: number;
 }
 
 interface Timing {
@@ -137,7 +140,7 @@ async function pilot(page: Page, limitMs: number): Promise<Timing> {
       heals++;
     }
     const idx = s.zoneIndex;
-    const sig = `${idx}:${s.zonesCleared.filter(Boolean).length}:${s.objective?.collected ?? 0}:${s.eventPoint?.visited ?? ''}`;
+    const sig = `${idx}:k${s.monstersTotal - s.monstersAlive}/${s.monstersTotal}:${s.zonesCleared.filter(Boolean).length}:${s.objective?.collected ?? 0}:${s.eventPoint?.visited ?? ''}`;
     if (sig !== lastSig) {
       lastSig = sig;
       lastProgressAt = Date.now();

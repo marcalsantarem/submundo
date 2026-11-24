@@ -37,7 +37,7 @@ function readPngDimensions(filePath: string): { width: number; height: number } 
 
 test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (960x540 / 844x390)', () => {
   test('validates 2D UI spritesheets, sprites manifest, PWA landscape orientation, #rotate-overlay, Cinzel font, and clean UI sources', () => {
-    // 1. Validate ui_icons.png (1152x64, 18 frames 64x64) & portraits.png (1024x128, 8 frames 128x128)
+    // 1. Validate ui_icons.png (1152x64, 18 frames 64x64) & portraits.png (1152x128, 9 frames 128x128; frame 8 = Lyra, T-153)
     const uiIconsPath = resolve(ROOT_DIR, 'public/assets/sprites/ui_icons.png');
     const portraitsPath = resolve(ROOT_DIR, 'public/assets/sprites/portraits.png');
     const spritesManifestPath = resolve(ROOT_DIR, 'public/assets/sprites/manifest.json');
@@ -47,7 +47,7 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
     expect(existsSync(spritesManifestPath)).toBe(true);
 
     expect(readPngDimensions(uiIconsPath)).toEqual({ width: 1152, height: 64 });
-    expect(readPngDimensions(portraitsPath)).toEqual({ width: 1024, height: 128 });
+    expect(readPngDimensions(portraitsPath)).toEqual({ width: 1152, height: 128 });
 
     const spritesManifest = JSON.parse(
       readFileSync(spritesManifestPath, 'utf-8')
@@ -78,11 +78,11 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
 
     const portraitsSpec = spritesManifest.sprites.portraits;
     expect(portraitsSpec).toBeDefined();
-    expect(portraitsSpec.width).toBe(1024);
+    expect(portraitsSpec.width).toBe(1152);
     expect(portraitsSpec.height).toBe(128);
     expect(portraitsSpec.frameWidth).toBe(128);
     expect(portraitsSpec.frameHeight).toBe(128);
-    expect(portraitsSpec.frames).toHaveLength(8);
+    expect(portraitsSpec.frames).toHaveLength(9);
 
     // 2. Validate public/manifest.webmanifest ("orientation": "landscape") & index.html (#rotate-overlay + Cinzel)
     const webManifestPath = resolve(ROOT_DIR, 'public/manifest.webmanifest');
@@ -205,9 +205,9 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
     expect(runtimeCheck.uiIconsWidth).toBe(1152);
     expect(runtimeCheck.uiIconsHeight).toBe(64);
     expect(runtimeCheck.uiIconsFrames).toBe(18);
-    expect(runtimeCheck.portraitsWidth).toBe(1024);
+    expect(runtimeCheck.portraitsWidth).toBe(1152);
     expect(runtimeCheck.portraitsHeight).toBe(128);
-    expect(runtimeCheck.portraitsFrames).toBe(8);
+    expect(runtimeCheck.portraitsFrames).toBe(9);
     expect(runtimeCheck.sceneKey).toBe('HubScene');
 
     // Open InventoryModal with a real mouse click on the Vila HUD "Mochila" button

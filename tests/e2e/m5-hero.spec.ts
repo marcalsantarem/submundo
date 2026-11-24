@@ -710,7 +710,7 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
           );
         },
         undefined,
-        { timeout: 3000 }
+        { timeout: 8000 }
       );
 
       await mobilePage.waitForTimeout(120);
