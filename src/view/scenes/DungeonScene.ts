@@ -953,7 +953,11 @@ export class DungeonScene extends Phaser.Scene {
   public returnToHub(): void {
     // Decisões #28/#29: todo fim de dungeon (teste, missão ou Ato 1) volta ao menu-hub.
     if ('MenuHub' in this.scene.manager.keys) {
-      this.scene.start('MenuHub', { fromRun: this.lastRunReport });
+      // O relatório já foi aplicado ao perfil e persistido aqui (`applied: true`): o menu só o exibe.
+      this.scene.start('MenuHub', {
+        fromRun: this.lastRunReport,
+        applied: this.lastRunReport ? true : undefined,
+      });
       return;
     }
     this.startNewRun();
@@ -1621,6 +1625,16 @@ export class DungeonScene extends Phaser.Scene {
           if (this.isTestArena) {
             this.hero.stats.hp = this.hero.stats.maxHp;
             this.hero.isAlive = true;
+            // Masmorra teste aberta pelo menu: a morte encerra a run e volta ao menu.
+            if (this.openedFromMenu() && !this.runLootResolved && !this.testArenaFinished) {
+              this.testArenaFinished = true;
+              this.heroIsMoving = false;
+              this.manualAttackQueued = false;
+              this.time.delayedCall(700, () => {
+                this.endTestArenaRun(false);
+                this.returnToHub();
+              });
+            }
             return;
           }
           // Hero died mid-swing: show pending hits now, at last known points.
@@ -3247,6 +3261,40 @@ export class DungeonScene extends Phaser.Scene {
     });
   }
 
+  /** True when the test arena was entered from the menu-hub (not by `?test` boot). */
+  private openedFromMenu(): boolean {
+    const menu = this.scene.manager.getScene('MenuHub');
+    // Phaser scene status: 0 = PENDING (never started); > 0 = the menu already ran.
+    return Boolean(menu) && menu.scene.settings.status > 0;
+  }
+
+  /** Builds, applies and persists the test-arena run report (once). No campaign progress. */
+  private endTestArenaRun(victory: boolean): void {
+    if (this.runLootResolved) {
+      return;
+    }
+    this.runLootResolved = true;
+    this.flushHeroImpacts();
+    if (victory) {
+      this.collectRemainingDropsOnVictory();
+    } else {
+      this.clearGroundDrops();
+    }
+    const { kept, lost } = resolveRunEndLoot(this.inventory, victory);
+    const report: RunEndReport = {
+      victory,
+      soulsGained: this.runState.soulsCollected,
+      essencesGained: this.essencesCollected,
+      monstersKilled: this.runState.monstersKilled,
+      bossDefeated: this.bossDefeated,
+      keptItems: kept.filter((item) => !this.startingHubItemIds.has(item.instanceId)),
+      lostItems: lost.filter((item) => !this.startingHubItemIds.has(item.instanceId)),
+    };
+    this.lastRunReport = report;
+    applyRunOutcomeToProfile(this.activeProfile, report);
+    persistProfile(this.activeProfile);
+  }
+
   private finishTestArena(): void {
     if (this.testArenaFinished) {
       return;
@@ -3276,7 +3324,7 @@ export class DungeonScene extends Phaser.Scene {
       .rectangle(0, 0, w, h, 0x05060a, 0.86)
       .setOrigin(0, 0)
       .setInteractive();
-    backdrop.on('pointerdown', () => this.restartTestArena());
+    backdrop.on('pointerdown', () => this.leaveTestArena());
 
     const ornament = this.add.graphics();
     ornament.lineStyle(1.5, 0xd4a95a, 0.85);
@@ -3302,7 +3350,7 @@ export class DungeonScene extends Phaser.Scene {
       .setShadow(0, 3, '#000000', 8, true, true);
 
     const hint = this.add
-      .text(w / 2, h / 2 + 58, 'Toque ou pressione Enter para reiniciar', {
+      .text(w / 2, h / 2 + 58, 'Toque ou pressione Enter para voltar ao menu', {
         fontFamily: DF_FONTS.BODY,
         fontSize: '16px',
         color: '#cbd5e1',
@@ -3312,8 +3360,24 @@ export class DungeonScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    const btnBg = this.add
+      .rectangle(w / 2, h / 2 + 108, 220, 44, 0x2a1f0e, 0.95)
+      .setStrokeStyle(2, 0xd4a95a, 0.95)
+      .setInteractive({ useHandCursor: true });
+    btnBg.on('pointerdown', () => this.leaveTestArena());
+    const btnLabel = this.add
+      .text(w / 2, h / 2 + 108, 'Voltar ao menu', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '18px',
+        fontStyle: 'bold',
+        color: '#f1d28a',
+        resolution: 2,
+      })
+      .setOrigin(0.5);
+    const button = this.add.container(0, 0, [btnBg, btnLabel]);
+
     const overlay = this.add
-      .container(0, 0, [backdrop, ornament, title, hint])
+      .container(0, 0, [backdrop, ornament, title, hint, button])
       .setDepth(3000);
     this.testArenaFinishOverlay = overlay;
 
@@ -3330,7 +3394,7 @@ export class DungeonScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     });
 
-    const onEnter = () => this.restartTestArena();
+    const onEnter = () => this.leaveTestArena();
     this.testArenaRestartKeyHandler = onEnter;
     this.input.keyboard?.on('keydown-ENTER', onEnter);
     this.cameraRig?.syncLayers();
@@ -3351,13 +3415,14 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
-  private restartTestArena(): void {
+  private leaveTestArena(): void {
     if (!this.isTestArena || !this.testArenaFinished) {
       return;
     }
     soundManager.play('ui_click');
     this.destroyTestArenaFinishOverlay();
-    this.scene.restart({ testArena: true });
+    this.endTestArenaRun(true);
+    this.returnToHub();
   }
 
   private checkAndUpdateRoomState(nowMs: number): void {
@@ -3813,8 +3878,8 @@ export class DungeonScene extends Phaser.Scene {
       ? `${this.testArenaRoomIndex + 1}/${zoneCount} — ${testZone?.title ?? this.activeStage.name}`
       : this.isTestArena
         ? this.testArenaFinished
-          ? `Arena de Teste — ${TEST_ARENA_FINISHED_TEXT}`
-          : (testZone?.title ?? 'Arena de Teste')
+          ? `Masmorra teste — ${TEST_ARENA_FINISHED_TEXT}`
+          : (testZone?.title ?? 'Masmorra teste')
         : `${currentRoom.roomNumber}/${this.runState.totalRooms} — ${currentRoom.title}`;
     const objectiveState = this.isMission ? this.missionProgress?.objective : null;
     const objectiveMeta = objectiveState
@@ -3859,7 +3924,11 @@ export class DungeonScene extends Phaser.Scene {
       // T-151/T-152: main objective of every mission and the map plan for the minimap.
       ...(progressForHud && progressForHud.monstersTotal > 0
         ? { killObjectiveText: killObjectiveText(progressForHud) }
-        : {}),
+        : this.isTestArena && this.monsters.length > 0
+          ? {
+              killObjectiveText: `Elimine todos os monstros ${this.monsters.filter((m) => !m.isAlive).length}/${this.monsters.length}`,
+            }
+          : {}),
       ...(this.isMission && this.minimapLayout
         ? { minimapLayout: this.minimapLayout }
         : {}),
@@ -3883,7 +3952,7 @@ export class DungeonScene extends Phaser.Scene {
         livingBosses.length > 0 ||
         Boolean(testZone?.isBossZone),
       roomTitle: testZone?.title ?? currentRoom.title,
-      stageName: this.activeStage?.name,
+      stageName: this.isTestArena ? 'Masmorra teste' : this.activeStage?.name,
       bossHp: bossMonster?.hp,
       bossMaxHp: bossMonster?.maxHp,
       bossName: bossMonster?.name,

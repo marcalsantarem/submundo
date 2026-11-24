@@ -1,0 +1,9 @@
+# BRF-176 — AG02 — T-165 (parte do menu) Correções do M11
+**Leia:** `docs/agentes/AG02_UI.md`, as decisões #28 e #29, `docs/qa/qa-M11.md` (graves G1 e G3 e menores), e `src/view/scenes/MenuHubScene.ts` (~163 aplica o relatório; ~196 decide o layout mobile; ~502 botão Voltar do painel). **Regra:** respostas curtas; sem commit/push/branches (checkout na `dev`; não troque). O AG01 corrige `DungeonScene.ts` em paralelo (BRF-175): não edite esse arquivo nem `BootScene.ts`.
+**Fazer (só `MenuHubScene.ts`, `src/view/ui/menu/` e `InventoryModal.ts` se preciso):**
+(1) **G1 Almas em dobro:** o AG01 passa a entregar `init({ fromRun, applied: true })` com o relatório **já aplicado e persistido** pela dungeon. O menu **não** aplica de novo (`applyRunOutcomeToProfile`/`persistProfile`): só recarrega o perfil (`loadOrCreateProfile`) e mostra o aviso de resultado. Se `applied` não vier, não aplique mesmo assim (evite dobrar).
+(2) **G3 Botão Masmorras morto depois de "Voltar":** clique e toque em Masmorras devem reabrir o painel direito sempre, sem precisar passar pelo Inventário.
+(3) **Menores:** o layout mobile `844×390` nunca ativa: corrija a detecção (o canvas é sempre `960×540`; use a razão/tamanho da janela do navegador ou o `scale.parentSize`) e valide nos dois; **Baú cheio** descarta o item da run em silêncio: mostre aviso visível no aviso de resultado ("Baú cheio: N item(ns) não couberam") comparando o relatório com o perfil, e deixe o aviso "Baú cheio" do Inventário mais visível (cor e tamanho).
+**Permitido:** `src/view/scenes/MenuHubScene.ts`, `src/view/ui/menu/`, `src/view/ui/InventoryModal.ts`. **Proibido:** `DungeonScene.ts`, `BootScene.ts`, `main.ts`, `src/core/`, assets, `tests/`, Git.
+**Pronto quando:** `npm test` e `npm run build` passam e, no navegador (porta 5196, encerre depois), Masmorras reabre após Voltar e o layout mobile entra em `844×390` (resize_window).
+**Entrega:** até 5 linhas.

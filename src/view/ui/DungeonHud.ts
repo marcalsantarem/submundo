@@ -1211,7 +1211,7 @@ export class DungeonHud {
       this.modalBodyText.setText(custom?.body || snapshot.bannerText || entry.text);
       this.modalSoulsText.setText(`Almas preservadas: ${snapshot.souls}`);
       this.modalSoulsText.setVisible(!custom);
-      this.restartBtnText.setText(custom?.buttonLabel ?? 'Nova Incursão');
+      this.restartBtnText.setText(custom?.buttonLabel ?? 'Voltar ao menu');
 
       if (custom) {
         // T-157: prólogo — sem Almas e sem itens; só título, texto e "Voltar à Vila".

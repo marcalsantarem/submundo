@@ -29,6 +29,8 @@ import { ItemTooltipCard, calculateItemPower } from './ItemTooltipCard';
 export interface InventoryHudSnapshot {
   equipped: EquippedGear;
   bag: ItemInstance[];
+  /** Capacidade do baú (opcional): habilita o aviso "Baú cheio". */
+  bagCapacity?: number;
   heroStats: HeroStats;
   lifeSteal: number;
   cooldownReduction: number;
@@ -1036,7 +1038,14 @@ export class InventoryModal {
 
   private renderBagGrid(): void {
     const totalItems = this.lastSnapshot.bag.length;
-    this.bagHeaderText.setText(`MOCHILA (${totalItems})`);
+    const cap = this.lastSnapshot.bagCapacity;
+    if (cap !== undefined && totalItems >= cap) {
+      this.bagHeaderText.setText(`MOCHILA (${totalItems}/${cap}) · BAÚ CHEIO`);
+      this.bagHeaderText.setColor('#ff6b5a').setFontSize(16);
+    } else {
+      this.bagHeaderText.setText(`MOCHILA (${totalItems})`);
+      this.bagHeaderText.setColor(DF_PALETTE.textGold).setFontSize(13);
+    }
 
     const totalPages = this.getTotalPages();
     const startIdx = this.bagPage * BAG_PAGE_SIZE;

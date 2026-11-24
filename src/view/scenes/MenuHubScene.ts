@@ -8,7 +8,6 @@ import {
   type SaveProfile,
 } from '../../core/index';
 import {
-  applyRunOutcomeToProfile,
   buildHeroFromProfile,
   equipStashItem,
   isMenuItemUnlocked,
@@ -60,6 +59,8 @@ const TEST_ENTRY_SUBTITLE = 'Dungeon de teste';
 
 export interface MenuHubCreateData {
   fromRun?: RunEndReport;
+  /** O relatório já foi aplicado e persistido pela dungeon: o menu só recarrega o perfil. */
+  applied?: boolean;
 }
 
 interface MenuDebugState {
@@ -160,9 +161,11 @@ export class MenuHubScene extends Phaser.Scene {
     this.profile = loadOrCreateProfile();
     let notice: string | null = null;
     if (this.fromRun) {
-      applyRunOutcomeToProfile(this.profile, this.fromRun);
-      persistProfile(this.profile);
+      // Sem `applied` não reaplica (evita Almas em dobro); só mostra o resultado.
       notice = this.formatRunNotice(this.fromRun);
+      const over = this.countOverflow(this.fromRun);
+      if (over > 0) notice += `
+Baú cheio: ${over} item(ns) não couberam.`;
     }
     this.soulsText = String(this.profile.souls);
     this.essenceText = String(this.profile.generalEssences);
@@ -178,7 +181,7 @@ export class MenuHubScene extends Phaser.Scene {
     this.openRightPanel();
 
     if (notice) {
-      this.showToast(notice, 4200);
+      this.showToast(notice, 6000);
     }
 
     this.installDebug();
@@ -193,7 +196,10 @@ export class MenuHubScene extends Phaser.Scene {
   private computeLayout(): Layout {
     const w = this.scale.width || 960;
     const h = this.scale.height || 540;
-    const mobile = h <= 420 || w / h > 2;
+    const ps = this.scale.parentSize;
+    const pw = ps?.width || (typeof window !== 'undefined' ? window.innerWidth : 0) || w;
+    const ph = ps?.height || (typeof window !== 'undefined' ? window.innerHeight : 0) || h;
+    const mobile = h <= 420 || w / h > 2 || ph <= 420 || pw / ph > 2;
     if (mobile) {
       const leftW = 236;
       const rightW = Math.min(380, w - leftW - 16 - 16 - 20);
@@ -314,6 +320,7 @@ export class MenuHubScene extends Phaser.Scene {
     const item = MENU_HUB_ITEMS[index];
     view.container.removeAll(true);
     view.container.removeInteractive();
+    view.container.removeAllListeners();
 
     const isSel = this.isHighlighted(item.id) && view.unlocked;
     let key = 'menu_btn_normal';
@@ -424,6 +431,7 @@ export class MenuHubScene extends Phaser.Scene {
     return {
       equipped: { ...this.profile.equipped },
       bag: [...this.profile.stash],
+      bagCapacity: this.profile.maxStashSize,
       heroStats: { ...hero.stats },
       lifeSteal: hero.lifeSteal,
       cooldownReduction: hero.cooldownReduction,
@@ -602,6 +610,17 @@ export class MenuHubScene extends Phaser.Scene {
       return `Vitória! +${report.soulsGained} Almas, +${report.essencesGained} Essências, ${kept} item(ns) obtido(s).`;
     }
     return `Derrota. +${report.soulsGained} Almas salvas, ${report.lostItems.length} item(ns) perdido(s).`;
+  }
+
+  /** Itens da run que não couberam no baú (relatório x perfil). */
+  private countOverflow(report: RunEndReport): number {
+    const ids = new Set(this.profile.stash.map((i) => i.instanceId));
+    const equipped = new Set(
+      Object.values(this.profile.equipped)
+        .filter(Boolean)
+        .map((i) => (i as { instanceId: string }).instanceId)
+    );
+    return report.keptItems.filter((i) => !ids.has(i.instanceId) && !equipped.has(i.instanceId)).length;
   }
 
   private showToast(message: string, durationMs: number): void {
