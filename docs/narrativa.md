@@ -145,7 +145,8 @@
 | :--- | :--- | :--- |
 | `hero_living` | **Jovem Guerreiro** | Forma mortal do protagonista durante o treinamento e as incursões na Vila Natal. |
 | `weapon_master` | **Mestre de Armas** | Mentor marcial da Vila Natal que guia o guerreiro pela Gruta, Mina e ruptura do Selo. |
-| `village_blacksmith` | **Ferreiro da Vila** | Artesão mortal da Vila Natal que tempera aço comum antes de sua alma ser arrastada ao Refúgio. |
+| `village_blacksmith` | **Gorran** (Ferreiro da Vila) | Artesão mortal da Vila Natal que tempera aço comum; nome canônico definido no M9 (Decisão #23). |
+| `village_healer` | **Lyra** (Curandeira da Vila) | Curandeira e vendedora de poções da Vila Natal; nome canônico definido no M9 (Decisão #23). |
 | `cave_bat` | **Morcego da Gruta** | Criatura veloz das cavernas que infesta *A Gruta da Cachoeira* ao lado dos limos. |
 | `ancient_seal` | **Selo Antigo** | Porta ancestral sob a Mina Abandonada cuja ruptura desencadeia a invasão demoníaca. |
 | `abyss_herald` | **Arauto do Abismo** | Comandante infernal que emerge do Selo Antigo, incendeia a Vila Natal e abate o guerreiro vivo. |
@@ -172,4 +173,20 @@
 | `karnak` | **Karnak** (`boss`) | Demônio escuro e vermelho empunhando um machado duplo. | Boss invencível (Missão 3); golpes pesados e implacáveis. | Vanguarda infernal que emerge no fundo da mina (Missão 3) e retorna como miniboss/boss no Ato 1. |
 | `skeleton_chief` | **Esqueleto Chefe** (`boss`) | Guerreiro esquelético veterano de elmo de ferro, escudo e espada dentada. | Boss melee resistente e agressivo; comanda os mortos-vivos. | Antigo capitão da guarda reanimado pelas runas profanas, liderando os esqueletos nas galerias. |
 
+---
 
+## 10. Vila Natal como Hub do Prólogo (M9 — Decisão #23)
+
+### 10.1. NPCs da Vila
+| ID Oficial | Nome Canônico (pt-BR) | Papel na Vila |
+| :--- | :--- | :--- |
+| `weapon_master` | **Mestre de Armas** | Aponta a próxima missão (marcador "!") e libera o portão depois da conversa. |
+| `village_healer` | **Lyra** | Curandeira e vendedora de poções na casa de palha ao fundo; no M9 só tem falas (sem loja). |
+| `village_blacksmith` | **Gorran** | Ferreiro da bigorna à direita; no M9 só tem falas (sem forja funcional). |
+
+### 10.2. Diretrizes de Diálogos da Vila (provisórias — definitivas no M10)
+- `village_master_mission_grotto` / `village_master_mission_mine` / `village_master_mission_seal`: o Mestre aponta a missão atual e manda sair pelo portão.
+- `village_master_idle`: fala do Mestre depois que a missão já foi dada.
+- `village_lyra_idle` / `village_lyra_idle_2`: duas variações de fala de Lyra.
+- `village_gorran_idle` / `village_gorran_idle_2`: duas variações de fala de Gorran.
+- `village_gate_locked`: aviso do portão trancado ("fale com o Mestre antes de sair").

@@ -56,6 +56,9 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
         essences: profile.generalEssences,
         hasSavedInStorage: Boolean(rawSaved),
         savedVersion: parsedSaved?.version ?? null,
+        village: hub.getVillageState?.() ?? null,
+        hasOldStations:
+          ((hub.scene as unknown as { stations?: unknown[] }).stations ?? []).length > 0,
       };
     }, SAVE_STORAGE_KEY);
 
@@ -66,12 +69,31 @@ test.describe('SUBMUNDO M3 — Hub Sanctuary, Altar, Blacksmith, Stash & Meta-Pr
     expect(bootCheck.essences).toBe(0);
     expect(bootCheck.hasSavedInStorage).toBe(true);
     expect(bootCheck.savedVersion).toBe(1);
+    // M9 (Decisão #23): the prologue hub is the Vila Natal (no old stations / HubHud).
+    expect(bootCheck.village).not.toBeNull();
+    expect(bootCheck.village!.gateUnlocked).toBe(false);
+    expect(bootCheck.village!.objective).toBe('Falar com o Mestre');
+    expect(bootCheck.hasOldStations).toBe(false);
 
     await page.evaluate(() => {
       const hub = window.__SUBMUNDO_HUB_DEBUG__!;
       hub.getDialogueBox().close();
       hub.setCampaignPhase('act1', 'act1_submundo');
     });
+    // Leaving the Vila recreates the HubScene (Refúgio scenario): wait for the new scene.
+    await page.waitForFunction(
+      () => {
+        const hub = window.__SUBMUNDO_HUB_DEBUG__;
+        return (
+          Boolean(hub) &&
+          hub!.getProfile().campaign?.phase === 'act1' &&
+          (hub!.getVillageState?.() ?? null) === null &&
+          Boolean((hub!.scene as unknown as { hud?: unknown }).hud)
+        );
+      },
+      undefined,
+      { timeout: 10000 }
+    );
 
     // 2. Grant test resources (500 Souls, 3 General Essences) & purchase Altar upgrades (level 0 -> 1)
     await page.evaluate(() => {

@@ -128,7 +128,7 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
     }
   });
 
-  test('renders initial scene in Desktop Landscape (960x540), opens InventoryModal via KeyI and Mochila button cleanly, and saves m7-desktop-landscape.png', async ({
+  test('renders the Vila Natal (root URL) in Desktop Landscape (960x540), opens InventoryModal via the Vila Mochila button cleanly, and saves m7-desktop-landscape.png', async ({
     page,
   }) => {
     mkdirSync(SCREENSHOT_DIR, { recursive: true });
@@ -156,10 +156,9 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
 
     await expect(page).toHaveTitle(`SUBMUNDO v${GAME_VERSION}`);
 
+    // M9 (Decisão #23): the root URL opens the Vila Natal (HubScene, prologue).
     await page.waitForFunction(
-      () =>
-        typeof window.__SUBMUNDO_DEBUG__ !== 'undefined' ||
-        typeof window.__SUBMUNDO_HUB_DEBUG__ !== 'undefined',
+      () => Boolean(window.__SUBMUNDO_HUB_DEBUG__?.getVillageState?.()),
       undefined,
       { timeout: 10000 }
     );
@@ -171,8 +170,7 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
       const overlayDisplay = overlay
         ? window.getComputedStyle(overlay).display
         : null;
-      const activeScene = (window.__SUBMUNDO_DEBUG__?.scene ??
-        window.__SUBMUNDO_HUB_DEBUG__?.scene) as unknown as {
+      const activeScene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
         textures: {
           exists: (k: string) => boolean;
           get: (k: string) => {
@@ -198,7 +196,7 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
         portraitsWidth: portraits?.source[0]?.width ?? 0,
         portraitsHeight: portraits?.source[0]?.height ?? 0,
         portraitsFrames: portraits?.getFrameNames().length ?? 0,
-        inDungeon: typeof window.__SUBMUNDO_DEBUG__ !== 'undefined',
+        sceneKey: (window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as { scene: { key: string } }).scene.key,
       };
     });
 
@@ -210,22 +208,22 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
     expect(runtimeCheck.portraitsWidth).toBe(1024);
     expect(runtimeCheck.portraitsHeight).toBe(128);
     expect(runtimeCheck.portraitsFrames).toBe(8);
+    expect(runtimeCheck.sceneKey).toBe('HubScene');
 
-    // Open InventoryModal via KeyI (in DungeonScene) or openStash (if HubScene)
-    if (runtimeCheck.inDungeon) {
-      await dispatchWindowKey(page, 'i', 'KeyI', 73);
-    } else {
-      await page.evaluate(() => {
-        const hub = window.__SUBMUNDO_HUB_DEBUG__!;
-        hub.getDialogueBox().close();
-        hub.openStash();
-      });
-    }
+    // Open InventoryModal with a real mouse click on the Vila HUD "Mochila" button
+    const bagBtn = await page.evaluate(() => {
+      const hub = window.__SUBMUNDO_HUB_DEBUG__!;
+      hub.getDialogueBox().close();
+      const scene = hub.scene as unknown as {
+        villageHud: { bagBtn: { container: { x: number; y: number } } };
+      };
+      return { x: scene.villageHud.bagBtn.container.x, y: scene.villageHud.bagBtn.container.y };
+    });
+    await clickLogicalCanvas(page, bagBtn.x, bagBtn.y);
 
     await page.waitForFunction(
       () => {
-        const scene = (window.__SUBMUNDO_DEBUG__?.scene ??
-          window.__SUBMUNDO_HUB_DEBUG__?.scene) as unknown as {
+        const scene = (window.__SUBMUNDO_HUB_DEBUG__?.scene) as unknown as {
           inventoryModal?: { isOpen: () => boolean };
         };
         return scene?.inventoryModal?.isOpen() === true;
@@ -235,8 +233,7 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
     );
 
     const slotCount = await page.evaluate(() => {
-      const scene = (window.__SUBMUNDO_DEBUG__?.scene ??
-        window.__SUBMUNDO_HUB_DEBUG__?.scene) as unknown as {
+      const scene = (window.__SUBMUNDO_HUB_DEBUG__?.scene) as unknown as {
         inventoryModal: { slotCards: Array<{ slot: string }> };
       };
       return scene.inventoryModal.slotCards.map((c) => c.slot);
@@ -258,8 +255,7 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
     await dispatchWindowKey(page, 'Escape', 'Escape', 27);
     await page.waitForFunction(
       () => {
-        const scene = (window.__SUBMUNDO_DEBUG__?.scene ??
-          window.__SUBMUNDO_HUB_DEBUG__?.scene) as unknown as {
+        const scene = (window.__SUBMUNDO_HUB_DEBUG__?.scene) as unknown as {
           inventoryModal?: { isOpen: () => boolean };
         };
         return scene?.inventoryModal?.isOpen() === false;
@@ -273,7 +269,7 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
     expect(notFoundUrls).toEqual([]);
   });
 
-  test('renders initial scene in Mobile Landscape (844x390, hasTouch: true), opens InventoryModal via Mochila button cleanly, and saves m7-mobile-landscape.png', async ({
+  test('renders the Vila Natal (root URL) in Mobile Landscape (844x390, hasTouch: true), opens InventoryModal via the Vila Mochila button cleanly, and saves m7-mobile-landscape.png', async ({
     browser,
     baseURL,
   }) => {
@@ -296,9 +292,7 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
       await expect(mobilePage).toHaveTitle(`SUBMUNDO v${GAME_VERSION}`);
 
       await mobilePage.waitForFunction(
-        () =>
-          typeof window.__SUBMUNDO_DEBUG__ !== 'undefined' ||
-          typeof window.__SUBMUNDO_HUB_DEBUG__ !== 'undefined',
+        () => Boolean(window.__SUBMUNDO_HUB_DEBUG__?.getVillageState?.()),
         undefined,
         { timeout: 10000 }
       );
@@ -310,28 +304,15 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
         const overlayDisplay = overlay
           ? window.getComputedStyle(overlay).display
           : null;
-        const inDungeon = typeof window.__SUBMUNDO_DEBUG__ !== 'undefined';
-
-        let bagBtn: { x: number; y: number } | null = null;
-        if (inDungeon) {
-          const scene = window.__SUBMUNDO_DEBUG__!.scene as unknown as {
-            hud: { bagBtnContainer: { x: number; y: number } };
-          };
-          bagBtn = {
-            x: scene.hud.bagBtnContainer.x,
-            y: scene.hud.bagBtnContainer.y,
-          };
-        } else {
-          const hub = window.__SUBMUNDO_HUB_DEBUG__!;
-          hub.getDialogueBox().close();
-          const scene = hub.scene as unknown as {
-            hud: { stashBtn: { container: { x: number; y: number } } };
-          };
-          bagBtn = {
-            x: scene.hud.stashBtn.container.x,
-            y: scene.hud.stashBtn.container.y,
-          };
-        }
+        const hub = window.__SUBMUNDO_HUB_DEBUG__!;
+        hub.getDialogueBox().close();
+        const scene = hub.scene as unknown as {
+          villageHud: { bagBtn: { container: { x: number; y: number } } };
+        };
+        const bagBtn = {
+          x: scene.villageHud.bagBtn.container.x,
+          y: scene.villageHud.bagBtn.container.y,
+        };
 
         return {
           maxTouchPoints: navigator.maxTouchPoints,
@@ -353,8 +334,7 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
 
       await mobilePage.waitForFunction(
         () => {
-          const scene = (window.__SUBMUNDO_DEBUG__?.scene ??
-            window.__SUBMUNDO_HUB_DEBUG__?.scene) as unknown as {
+          const scene = (window.__SUBMUNDO_HUB_DEBUG__?.scene) as unknown as {
             inventoryModal?: { isOpen: () => boolean };
           };
           return scene?.inventoryModal?.isOpen() === true;
@@ -375,8 +355,7 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
       await dispatchWindowKey(mobilePage, 'Escape', 'Escape', 27);
       await mobilePage.waitForFunction(
         () => {
-          const scene = (window.__SUBMUNDO_DEBUG__?.scene ??
-            window.__SUBMUNDO_HUB_DEBUG__?.scene) as unknown as {
+          const scene = (window.__SUBMUNDO_HUB_DEBUG__?.scene) as unknown as {
             inventoryModal?: { isOpen: () => boolean };
           };
           return scene?.inventoryModal?.isOpen() === false;

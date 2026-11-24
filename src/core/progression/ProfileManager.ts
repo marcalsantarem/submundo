@@ -94,6 +94,9 @@ function normalizeCampaign(raw: unknown): CampaignProgress | undefined {
       typeof candidate.villageFallTriggered === 'boolean'
         ? candidate.villageFallTriggered
         : false,
+    ...(isCampaignStageId(candidate.masterBriefedStageId)
+      ? { masterBriefedStageId: candidate.masterBriefedStageId }
+      : {}),
   };
 }
 

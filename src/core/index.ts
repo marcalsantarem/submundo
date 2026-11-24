@@ -231,6 +231,7 @@ export type PortraitId =
   | 'hero_wraith'
   | 'weapon_master'
   | 'village_blacksmith'
+  | 'village_healer'
   | 'emissary'
   | 'spectral_blacksmith'
   | 'infernal_warden'
@@ -280,6 +281,8 @@ export interface CampaignProgress {
   completedStages: CampaignStageId[];
   seenDialogues: string[];
   villageFallTriggered: boolean;
+  /** Missão sobre a qual o Mestre de Armas já falou (libera o portão da vila). Opcional para saves antigos. */
+  masterBriefedStageId?: CampaignStageId;
 }
 
-
+export * from './progression/VillageHub';

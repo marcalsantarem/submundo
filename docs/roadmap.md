@@ -17,13 +17,13 @@
 | M13 | v0.10.1 | Refino do prólogo | Refino de todo o ciclo do prólogo |
 | M14 | v0.11.0 | Hub do Submundo | Hub do Submundo |
 | M15 | v0.11.1 | Dungeon repetível do Submundo | Implementação do sistema de dungeon repetível do Submundo |
-| M17 | v0.12.0 | Lore | Definições mais precisas sobre a lore do jogo |
-| M18 | v0.12.1 | Primeiras missões do Ato 1 | Definir e implementar as 2 primeiras missões do Ato 1 |
-| M19 | v0.13.0 | Sistema de itens | Ampliação do sistema de itens |
-| M20 | v0.14.0 | Energia | Definição de um sistema de energia no jogo |
-| M21 | v0.15.0 | Polimento do combate | Polimento do combate |
-| M22 | v1.0.0 | Balanceamento geral | Balanceamento geral de tudo que foi feito até aqui |
-| M23 | v1.1.0 | Dungeon infinita | Dungeon infinita |
-| M24 | v1.2.0 | Dungeon diária | Dungeon diária |
+| M16 | v0.12.0 | Lore | Definições mais precisas sobre a lore do jogo |
+| M17 | v0.12.1 | Primeiras missões do Ato 1 | Definir e implementar as 2 primeiras missões do Ato 1 |
+| M18 | v0.13.0 | Sistema de itens | Ampliação do sistema de itens |
+| M19 | v0.14.0 | Energia | Definição de um sistema de energia no jogo |
+| M20 | v0.15.0 | Polimento do combate | Polimento do combate |
+| M21 | v1.0.0 | Balanceamento geral | Balanceamento geral de tudo que foi feito até aqui |
+| M22 | v1.1.0 | Dungeon infinita | Dungeon infinita |
+| M23 | v1.2.0 | Dungeon diária | Dungeon diária |
 
 > **Regra (Decisão #22):** todo marco começa com uma rodada de conversas e perguntas com o dono sobre as definições dele. As definições acertadas em cada marco prevalecem sobre decisões anteriores que conflitem. Os objetivos acima são só o título do marco; o escopo sai dessa rodada.
