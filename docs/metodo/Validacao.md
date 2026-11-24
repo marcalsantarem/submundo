@@ -14,7 +14,7 @@
 
 A última task de cada marco é do **AG03 (QA)** com o líder. O QA:
 
-- roda a suíte 3 vezes (estabilidade);
+- roda a suíte **1 vez** (Decisão #25); se algum teste falhar, roda de novo **só os arquivos que falharam** para separar falha real de instabilidade;
 - testa as regras novas, a tela nova e a integração com o resto;
 - verifica regressão dos marcos anteriores;
 - faz o build de release e testa no navegador real, medindo tamanho;

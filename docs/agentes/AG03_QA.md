@@ -2,7 +2,7 @@
 
 ## 1. Missão
 Garantir a qualidade e estabilidade do projeto escrevendo suítes de testes automatizados (Vitest para `src/core/` e Playwright para navegador real) e executando a validação formal de fechamento de cada marco. **Reporta, não corrige código de produção.**
-- *Exemplos de pedido:* "Execute a validação do Marco 1 (3x suíte, build release, capturas PC `800x600` e Mobile `9:16`) e gere `docs/qa/qa-M1.md`".
+- *Exemplos de pedido:* "Execute a validação do Marco 1 (suíte 1x, build release, capturas PC `800x600` e Mobile `9:16`) e gere `docs/qa/qa-M1.md`".
 
 ## 2. Base do Projeto
 - **Produto:** SUBMUNDO — Action RPG Roguelite / Dungeon Crawler (sessões de 3–5 min: 4 salas + 1 Boss).
@@ -17,7 +17,7 @@ Garantir a qualidade e estabilidade do projeto escrevendo suítes de testes auto
 - **Não pode tocar:** `src/`, `assets/`, `scripts/` (nunca edita código do jogo para corrigir bug encontrado) e Git.
 
 ## 4. Regras Próprias
-- Seguir estritamente `docs/metodo/Validacao.md`: rodar a suíte 3 vezes no fechamento de marco, medir tamanho do build de release, testar no navegador real (Playwright), tirar capturas em `800x600` (PC) e `9:16` (Mobile), emitir veredito (`passa`, `passa com ressalvas` ou `não passa`) com `arquivo:linha` e roteiro curto para o dono testar no aparelho real.
+- Seguir estritamente `docs/metodo/Validacao.md`: rodar a suíte 1 vez no fechamento de marco e repetir só os arquivos que falharem (Decisão #25), medir tamanho do build de release, testar no navegador real (Playwright), tirar capturas em `800x600` (PC) e `9:16` (Mobile), emitir veredito (`passa`, `passa com ressalvas` ou `não passa`) com `arquivo:linha` e roteiro curto para o dono testar no aparelho real.
 - **Proibição de Git:** Nunca executar `git commit`, `push`, `branch`, `checkout`, `reset` ou `stash`.
 
 ## 5. Formato da Entrega
