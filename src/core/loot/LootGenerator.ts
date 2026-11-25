@@ -49,7 +49,24 @@ interface AffixesData {
 const ITEMS_CATALOG: ItemDef[] = itemsJson as ItemDef[];
 const AFFIXES_DATA: AffixesData = affixesJson as AffixesData;
 
+function createSessionSalt(): string {
+  const cryptoObj =
+    typeof globalThis !== 'undefined' ? globalThis.crypto : undefined;
+  if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+    return cryptoObj.randomUUID();
+  }
+  const timePart = Date.now().toString(36);
+  const randPart = Math.random().toString(36).slice(2, 10) || '0';
+  return `${timePart}${randPart}`;
+}
+
+const SESSION_SALT = createSessionSalt();
 let nextItemSeq = 0;
+
+function createItemInstanceId(prefix: string): string {
+  nextItemSeq += 1;
+  return `${prefix}_${SESSION_SALT}_${nextItemSeq}`;
+}
 
 function safeIndex(rng: () => number, length: number): number {
   if (length <= 1) {
@@ -239,9 +256,8 @@ export function generateItemDrop(
     legendaryPower
   );
 
-  nextItemSeq += 1;
   const prefix = options.idPrefix ?? 'item';
-  const instanceId = `${prefix}_${nextItemSeq}`;
+  const instanceId = createItemInstanceId(prefix);
 
   return {
     instanceId,

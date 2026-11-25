@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createSeededRng } from '../../src/core/dungeon/DungeonGenerator';
 import { createHero, DEFAULT_HERO_STATS } from '../../src/core/entities/Hero';
 import type { ItemInstance } from '../../src/core';
@@ -359,5 +359,79 @@ describe('LootGenerator & Run Inventory (T-017)', () => {
     const nextStats = applyGearToHero(hero, baseStats, inv.equipped);
     expect(nextStats.defense).toBeGreaterThan(baseStats.defense);
     expect(nextStats.moveSpeed).toBeGreaterThan(baseStats.moveSpeed);
+  });
+
+  it('preserves prefix, generates distinct instanceIds in consecutive drops and avoids legacy prefix_1 format (G4)', () => {
+    const defaultDrops = Array.from({ length: 5 }, () =>
+      generateItemDrop({ rng: createSeededRng(101), forcedSlot: 'weapon' })
+    );
+    const defaultIds = defaultDrops.map((item) => item.instanceId);
+    expect(new Set(defaultIds).size).toBe(5);
+    for (const id of defaultIds) {
+      expect(id.startsWith('item_')).toBe(true);
+      expect(id).not.toBe('item_1');
+      expect(id).not.toMatch(/^item_\d+$/);
+    }
+
+    const customDrops = Array.from({ length: 5 }, () =>
+      generateItemDrop({
+        rng: createSeededRng(101),
+        forcedSlot: 'ring',
+        idPrefix: 'test',
+      })
+    );
+    const customIds = customDrops.map((item) => item.instanceId);
+    expect(new Set(customIds).size).toBe(5);
+    for (const id of customIds) {
+      expect(id.startsWith('test_')).toBe(true);
+      expect(id).not.toBe('test_1');
+      expect(id).not.toMatch(/^test_\d+$/);
+    }
+  });
+
+  it('generates distinct instanceIds across simulated reloads with and without crypto.randomUUID (G4)', async () => {
+    try {
+      vi.resetModules();
+      const modA = await import('../../src/core/loot/LootGenerator');
+      const idA = modA.generateItemDrop({
+        rng: createSeededRng(55),
+        idPrefix: 'test',
+      }).instanceId;
+
+      vi.resetModules();
+      const modB = await import('../../src/core/loot/LootGenerator');
+      const idB = modB.generateItemDrop({
+        rng: createSeededRng(55),
+        idPrefix: 'test',
+      }).instanceId;
+
+      expect(idA.startsWith('test_')).toBe(true);
+      expect(idB.startsWith('test_')).toBe(true);
+      expect(idA).not.toBe('test_1');
+      expect(idB).not.toBe('test_1');
+      expect(idA).not.toBe(idB);
+
+      vi.stubGlobal('crypto', undefined);
+      vi.resetModules();
+      const fallbackA = await import('../../src/core/loot/LootGenerator');
+      const fallbackIdA = fallbackA.generateItemDrop({
+        rng: createSeededRng(55),
+      }).instanceId;
+
+      vi.resetModules();
+      const fallbackB = await import('../../src/core/loot/LootGenerator');
+      const fallbackIdB = fallbackB.generateItemDrop({
+        rng: createSeededRng(55),
+      }).instanceId;
+
+      expect(fallbackIdA.startsWith('item_')).toBe(true);
+      expect(fallbackIdB.startsWith('item_')).toBe(true);
+      expect(fallbackIdA).not.toMatch(/^item_\d+$/);
+      expect(fallbackIdB).not.toMatch(/^item_\d+$/);
+      expect(fallbackIdA).not.toBe(fallbackIdB);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
   });
 });

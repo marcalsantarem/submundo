@@ -307,7 +307,10 @@ Baú cheio: ${over} item(ns) não couberam.`;
       const y = L.btnTop + index * (L.btnH + L.btnGap) + L.btnH / 2;
       const unlocked = isMenuItemUnlocked(this.profile, item.id);
       const container = this.add.container(cx, y);
-      container.setSize(L.btnW + 12, L.btnH);
+      // Configura área interativa e listener uma única vez: recriar no mesmo pointerdown
+      // faz o InputPlugin do Phaser remover o objeto da lista no preUpdate seguinte.
+      this.makeHit(container, L.btnW + 12, Math.max(L.btnH, 44));
+      container.on('pointerdown', () => this.onButtonPressed(item.id));
       this.buttons.push({ id: item.id, container, unlocked });
       this.paintButton(index);
     });
@@ -319,8 +322,6 @@ Baú cheio: ${over} item(ns) não couberam.`;
     const view = this.buttons[index];
     const item = MENU_HUB_ITEMS[index];
     view.container.removeAll(true);
-    view.container.removeInteractive();
-    view.container.removeAllListeners();
 
     const isSel = this.isHighlighted(item.id) && view.unlocked;
     let key = 'menu_btn_normal';
@@ -350,8 +351,6 @@ Baú cheio: ${over} item(ns) não couberam.`;
       lock.setScale(Math.min(22, L.btnH - 18) / lock.height);
       view.container.add(lock);
     }
-    this.makeHit(view.container, L.btnW + 12, Math.max(L.btnH, 44));
-    view.container.on('pointerdown', () => this.onButtonPressed(item.id));
   }
 
   private isHighlighted(id: MenuHubItemId): boolean {
