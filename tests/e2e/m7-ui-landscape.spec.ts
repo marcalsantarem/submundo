@@ -229,7 +229,7 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
       expect(mobileState.maxTouchPoints).toBeGreaterThan(0);
       expect(mobileState.overlayDisplay).toBe('none');
 
-      const btn = menuButtonPoint('inventario', false);
+      const btn = menuButtonPoint('inventario', true);
       await clickLogicalCanvas(mobilePage, btn.x, btn.y);
       await mobilePage.waitForFunction(
         () => window.__SUBMUNDO_MENU_DEBUG__?.getState().inventoryOpen === true,

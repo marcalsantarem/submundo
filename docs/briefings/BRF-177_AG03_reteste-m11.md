@@ -1,0 +1,10 @@
+# BRF-177 — AG03 — T-166 Reteste do M11 (menu-hub)
+**Leia:** `docs/agentes/AG03_QA.md`, `docs/metodo/Validacao.md` (**suíte 1×**, Decisão #25), `docs/qa/qa-M11.md`, `docs/briefings/BRF-175_AG01_correcoes-m11-dungeon.md`, `docs/briefings/BRF-176_AG02_correcoes-m11-menu.md` e `tests/e2e/m11-menu.spec.ts`. **Regra:** respostas curtas; sem `git commit`/`push`/`branch`/`checkout`/`reset`/`stash`.
+**Fazer:**
+(1) Em `tests/e2e/m11-menu.spec.ts`, remova os 3 `test.fail(...)` (G1 Almas/runs contadas uma vez, G2 "Masmorra teste" volta ao menu, G3 botão "Masmorras" reabre após "Voltar"), ajustando o fluxo do teste apenas se necessário para refletir a correção da `T-165` (ex.: botão "Voltar ao menu" na Masmorra teste). Confira se os 5 menores da `T-165` (layout mobile `844×390`, botão "Voltar ao menu" no Ato 1, aviso de Baú cheio ao voltar da run, objetivo "Elimine todos os monstros" na Masmorra teste e visibilidade do aviso "Baú cheio" no Inventário) estão cobertos e verificados.
+(2) Rode **1×**: `npm test`, `npm run build`, `npx playwright test tests/e2e/m11-menu.spec.ts --workers=1` e regressão nos E2E tocados pelas correções (`m1-dungeon`, `m2-loot`, `m6-monsters`, `m7-ui-landscape`, com `--workers=1`); se algum arquivo falhar, repita só o arquivo que falhou (Decisão #25).
+(3) Atualize as capturas em `docs/qa/screenshots/m11_*` que mudaram (volta da dungeon, fim da Masmorra teste, menu mobile, aviso de Baú cheio) sem apagar capturas de outros marcos.
+(4) Atualize `docs/qa/qa-M11.md` acrescentando a seção **Reteste (T-166, commit `9caa6f6`)**, atualizando o veredito, o status dos 3 graves e 5 menores, as medidas do build e o roteiro curto para o dono (sem mais referências a G2/G3 se corrigidos).
+**Permitido:** `tests/`, `docs/qa/`. **Proibido:** `src/`, assets, configs de build, Git. Erros em `src/` só relatados.
+**Pronto quando:** `npm test`, `npm run build` e os E2E passam sem `test.fail` no `m11-menu` e `docs/qa/qa-M11.md` está atualizado.
+**Entrega:** até 8 linhas com veredito, contagem de testes, tamanho do build, capturas atualizadas e pendências.

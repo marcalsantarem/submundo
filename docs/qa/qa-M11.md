@@ -6,7 +6,7 @@
 - **Commit validado:** `24bd676` (branch `dev`) + specs desta validação (não commitados)
 - **Escopo (Decisões #28/#29):** o jogo abre no `MenuHubScene`; a Vila saiu do fluxo; Forja, Personagem, Habilidades e Configurações bloqueados ("Em breve"); painel "Escolher dungeon" com a "Masmorra teste" (testArena); Inventário dentro do menu; todo fim de dungeon volta ao menu (`returnToHub`); `?test`/`?map`/`?biome`/`?seed` abrem a testArena direto; `SaveProfile.menuUnlocks`.
 - **Rodadas:** **1 rodada completa** (Decisão #25); só o `m2-loot` foi repetido (falha de ambiente: "Timed out waiting 15000ms from config.webServer" na subida do preview) e passou.
-- **Veredito:** **PASSA COM RESSALVAS** — *0 bloqueantes, 3 graves, 5 menores*. A suíte passa, mas 3 defeitos reais de `src/` estão provados por testes marcados como falha esperada (`test.fail`, ver Seção 3). Os graves não travam o jogo; o mais sério é **Almas e runs contadas em dobro na volta ao menu**. Recomendo uma task de ressalvas (T-165) antes da tag.
+- **Veredito (T-164, histórico):** PASSA COM RESSALVAS (ver **Seção 9 — Reteste T-166**, commit `9caa6f6`, abaixo: veredito atual **NÃO PASSA** — 0 bloqueantes, 2 graves ativos: G3 não corrigido + G4 colisão de `instanceId` entre sessões).
 
 ---
 
@@ -125,3 +125,53 @@ Pendências antigas sem mudança: chunk > 500 kB; `m4` aposentada.
 ## 8. Próximo passo
 
 Task de ressalvas T-165 (G1 AG04/AG02, G2 AG01, G3 AG02, M1-M5 ao gosto do líder), seguida de reteste só de `m11-menu` (remover os 3 `test.fail`), antes de versão/commit/PR/tag.
+
+---
+
+## 9. Reteste (T-166, commit `9caa6f6`)
+
+- **Data:** 2026-11-25
+- **Briefing:** `BRF-177_AG03_reteste-m11.md` (`T-166`)
+- **Commit validado:** `9caa6f6` (branch `dev`) + alterações em `tests/` (não commitadas)
+- **Veredito atual:** **NÃO PASSA** — *0 bloqueantes, 2 graves ativos (G3 não corrigido + G4 novo de colisão de `instanceId` no loot), 0 menores pendentes graves (4 menores corrigidos, M3 bloqueado entre sessões por G4)*. G1 e G2 foram **corrigidos** e passam sem `test.fail`.
+- **Rodadas (Decisão #25):** 1 rodada de `npm test`, `npm run build` e regressão E2E (`m1`, `m2`, `m6`, `m7`); `m11-menu` rodado 1× e repetido 1× após ajuste na asserção do teste #14 — as 4 falhas em `m11-menu` persistiram idênticas.
+
+### Resultados do reteste
+
+| Item | Resultado |
+| :--- | :--- |
+| `npm test` (Vitest) | **163/163** (23 arquivos) |
+| `npm run build` (`tsc --noEmit` + `vite build`) | OK; `dist/` **4,22 MB** (`4.220.407` bytes / `4,02 MiB`); `dist/assets/index-DiDQOZ6u.js` **1.823,82 kB** (gzip **441,90 kB**). Só aviso de chunk > 500 kB |
+| E2E `m11-menu` (sem `test.fail`, 14 testes) | **10/14 passam, 4 falham** (2,3 min): falham #1 (G3), #2 PC (`runMenuFlow` passo 3, G3), #3 Mobile (`runMenuFlow` passo 3, G3) e #14 (Baú cheio na volta da run, G4) |
+| E2E regressão (`m1-dungeon`, `m2-loot`, `m6-monsters`, `m7-ui-landscape`) | **6/6 passam** (`m1` 1/1, `m2` 1/1, `m6` 1/1, `m7` 3/3 com clique real mobile no layout `844×390`) |
+
+### Status dos graves e menores após `9caa6f6`
+
+| Item | Status | Detalhe / arquivo:linha |
+| :--- | :--- | :--- |
+| **G1** — Almas/runs contadas 2× | ✅ **Corrigido** | `DungeonScene.ts:956-960` passa `{ fromRun, applied: true }`; `MenuHubScene.ts:163-169` não reaplica. Testes #6 (`100 + 309 = 409`) e #7 passam. |
+| **G2** — Masmorra teste não voltava ao menu | ✅ **Corrigido** | `DungeonScene.ts:3363-3425` mostra botão **"Voltar ao menu"** e `leaveTestArena()` volta ao menu com relatório; morte na testArena via menu (`:1628-1638`) volta com "Derrota.". Testes #10 e #11 passam. |
+| **G3** — Botão "Masmorras" morto após "Voltar" | ❌ **Não corrigido** | `MenuHubScene.ts:510-515` chama `closeRightPanel(); repaintButtons();` dentro do `pointerdown` de "Voltar"; `paintButton` (`:321-355`) chama `removeInteractive()` + `setInteractive()` no mesmo quadro/evento, deixando "Masmorras" sem reação a clique (PC) e toque (Mobile). Falha nos testes #1, #2 e #3. |
+| **G4 (novo)** — Colisão de `instanceId` entre sessões | ❌ **Novo grave** | `src/core/loot/LootGenerator.ts:242-244` gera `instanceId = "${prefix}_${nextItemSeq}"` com `nextItemSeq` reiniciando em `0` a cada reload. Em nova sessão, drops novos repetem IDs (`item_1`, `test_1`...) de itens já salvos no Baú: `ProfileManager.ts:638` (`storeRunItems`) descarta o item novo por colisão de `knownIds` mesmo com espaço livre, e `MenuHubScene.ts:616-624` (`countOverflow`) acha que o item já está no perfil (`over = 0`) e omite o aviso `"Baú cheio: N item(ns) não couberam."`. Provado pelo teste #14 e por `m11_volta_bau_cheio.png`. |
+| **M1** — Layout mobile `844×390` | ✅ **Corrigido** | `MenuHubScene.ts:199-202` detecta `ph <= 420 || pw / ph > 2`; validado visualmente em `m11_menu_mobile.png`, `m11_em_breve_mobile.png` e `m7-mobile-landscape.png` (botão Inventário tocado na coordenada mobile). |
+| **M2** — Rótulo "Nova Incursão" no Ato 1 | ✅ **Corrigido** | `DungeonHud.ts:1214` agora exibe **"Voltar ao menu"** (`m11_fim_dungeon_vitoria.png`, teste #6). |
+| **M3** — Baú cheio descartava item em silêncio | ⚠️ **Parcial (bloqueado por G4)** | `MenuHubScene.ts:166-168` formata `\nBaú cheio: N item(ns) não couberam.`, mas em runs reais entre sessões `countOverflow` retorna `0` sempre que houver colisão de `instanceId` (G4). |
+| **M4** — Masmorra teste mostrava "Plantação de Ervas" | ✅ **Corrigido** | `DungeonScene.ts:3940-3955` exibe `"MASMORRA TESTE"` e `"Elimine todos os monstros X/Y"` (`m11_teste_finalizado.png`). |
+| **M5** — Visibilidade do "Baú cheio" no Inventário | ✅ **Corrigido** | `InventoryModal.ts:1041-1048` exibe `MOCHILA (30/30) · BAÚ CHEIO` em `#ff6b5a` (`16px`) + toast de 6 s (`m11_inventario_cheio.png`, `m11_bau_cheio_aviso.png`). Observação estética menor: o cabeçalho fica bem próximo de `"Inferno 0 · Submundo 0 · Empíreo 1"` à direita. |
+
+### Capturas atualizadas em `docs/qa/screenshots/`
+
+- **Atualizadas nesta rodada:** `m11_menu_pc`, `m11_menu_mobile` (novo layout `844×390`), `m11_em_breve_pc`, `m11_em_breve_mobile`, `m11_fim_dungeon_vitoria` (botão "Voltar ao menu"), `m11_volta_dungeon_aviso` (Almas 409 = 100 + 309, sem dobrar), `m11_fim_missao_voltar_ao_menu`, `m11_teste_finalizado` ("Voltar ao menu" + "Elimine todos os monstros 1/1"), `m11_inventario_equipar`, `m11_inventario_cheio` (`MOCHILA (30/30) · BAÚ CHEIO`), `m11_bau_cheio_aviso`, `m11_volta_bau_cheio` (prova G4: 1 linha sem aviso de Baú cheio), além de `m1-*`, `m2-*`, `m6-*` e `m7-*`.
+- **Não regeradas nesta rodada:** `m11_painel_masmorras_pc/mobile`, `m11_inventario_pc/mobile` e `m11_dungeon_teste_pc/mobile` permanecem da rodada anterior porque os testes #2 e #3 pararam antes na falha do botão "Masmorras" após "Voltar" (G3).
+
+### Roteiro curto atualizado para o dono (aparelho real)
+
+1. Abra o jogo em paisagem no celular (`~844×390`): o menu esquerdo deve aparecer com layout mais compacto e legível.
+2. Toque em **Voltar** no painel "Escolher dungeon" e depois toque em **Masmorras**: confira se **Masmorras** continua sem reabrir o painel (**G3 ativo**; tocar em Inventário e fechar destrava).
+3. Toque em **Masmorra teste → Entrar**: confirme que o objetivo no topo esquerdo diz **"MASMORRA TESTE / Elimine todos os monstros"**, jogue até o fim e clique em **"Voltar ao menu"** (e teste também morrer na arena para confirmar volta ao menu).
+4. Com 30 itens no Baú, abra o **Inventário**: confira o cabeçalho vermelho **`MOCHILA (30/30) · BAÚ CHEIO`** e tente desequipar um item para conferir a legibilidade do aviso.
+5. Em nova sessão com itens já salvos no Baú (especialmente 30/30), confira após vencer uma run se os itens novos entram e se o aviso de Baú cheio aparece (afetado por **G4** até a correção de `LootGenerator.ts`).
+
+### Próximo passo após T-166
+
+Corrigir **G3** (`MenuHubScene.ts`: não chamar `removeInteractive()` + `setInteractive()` dentro do mesmo `pointerdown`, ou apenas atualizar texturas/estilos dos filhos sem remover a área interativa / agendar para depois) e **G4** (`LootGenerator.ts:244`: gerar `instanceId` único persistente entre sessões, ex. `crypto.randomUUID()` ou prefixo com timestamp/contador único), seguido de novo reteste de `m11-menu` antes do fechamento do marco.

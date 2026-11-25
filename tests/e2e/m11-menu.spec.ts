@@ -23,16 +23,25 @@ import { pickUpAllDropsViaDebug, waitForTestArena } from './helpers/testDungeon'
 
 const SCREENSHOT_DIR = resolve(process.cwd(), 'docs/qa/screenshots');
 
-// Layout lógico (960x540) do `MenuHubScene`. O jogo é sempre 960x540 lógico: o layout "mobile"
-// do menu (h<=420) nunca ativa, então PC e celular usam as mesmas coordenadas.
-const ENTRY_POINT = { x: 736, y: 158 }; // cartão "Masmorra teste"
-const ENTER_BTN = { x: 818.5, y: 458 };
-const BACK_BTN = { x: 653.5, y: 458 };
+// Layout lógico (960x540) do `MenuHubScene`: o layout mobile ativa em viewports como `844x390` (`ph <= 420`).
+const PANEL_COORDS = {
+  pc: {
+    entry: { x: 736, y: 158 },
+    enterBtn: { x: 818.5, y: 458 },
+    backBtn: { x: 653.5, y: 458 },
+  },
+  mobile: {
+    entry: { x: 754, y: 120 },
+    enterBtn: { x: 840.5, y: 494 },
+    backBtn: { x: 667.5, y: 494 },
+  },
+} as const;
 // Inventário (modal): primeira célula da Mochila, "Equipar"/"Desequipar" do tooltip, slot Elmo, fechar.
 const BAG_CELL_0 = { x: 490, y: 150 };
 const TOOLTIP_PRIMARY = { x: 392, y: 383 };
 const SLOT_HELM = { x: 153, y: 145 };
 const INV_CLOSE = { x: 894, y: 52 };
+const TEST_ARENA_BACK_TO_MENU_BTN = { x: 480, y: 378 };
 
 const LOCKED_IDS = ['forja', 'personagem', 'habilidades', 'configuracoes'] as const;
 
@@ -194,8 +203,10 @@ async function expectInTestArena(page: Page): Promise<void> {
   expect(info).toEqual({ isTestArena: true, heroAlive: true, menuGone: true });
 }
 
-/** Fluxo comum do menu, PC e celular (só muda o viewport e os nomes das capturas). */
+/** Fluxo comum do menu, PC e celular (cada tag usa seu layout do MenuHubScene). */
 async function runMenuFlow(page: Page, tag: 'pc' | 'mobile', viewport: { width: number; height: number }): Promise<void> {
+  const mobile = tag === 'mobile';
+  const panel = PANEL_COORDS[tag];
   await seedSave(page, { stash: 3 });
   await installTextSpy(page);
   await openMenu(page);
@@ -217,7 +228,7 @@ async function runMenuFlow(page: Page, tag: 'pc' | 'mobile', viewport: { width: 
   // 2. Os 4 bloqueados: "Em breve", nada abre, seleção e painel intactos.
   for (const id of LOCKED_IDS) {
     await clearTexts(page);
-    const p = menuButtonPoint(id, false);
+    const p = menuButtonPoint(id, mobile);
     await tap(page, p);
     await seenText(page, /^Em breve$/);
     expect(await menuState(page), id).toMatchObject({
@@ -231,16 +242,15 @@ async function runMenuFlow(page: Page, tag: 'pc' | 'mobile', viewport: { width: 
   await page.evaluate(() => window.__SUBMUNDO_MENU_DEBUG__!.select('configuracoes' as never));
   expect(await menuState(page)).toMatchObject({ selected: 'masmorras', inventoryOpen: false });
 
-  // 3. Painel "Escolher dungeon": Voltar fecha. (Reabrir pelo clique em Masmorras falha: ver o teste
-  // "Voltar e Masmorras" abaixo; aqui reabrimos pela API de debug para seguir o fluxo.)
-  await tap(page, BACK_BTN);
+  // 3. Painel "Escolher dungeon": Voltar fecha; clique/toque real em Masmorras reabre (G3 corrigido).
+  await tap(page, panel.backBtn);
   expect((await menuState(page)).rightPanelOpen).toBe(false);
-  await page.evaluate(() => window.__SUBMUNDO_MENU_DEBUG__!.select('masmorras'));
+  await tap(page, menuButtonPoint('masmorras', mobile));
   expect((await menuState(page)).rightPanelOpen).toBe(true);
   await shot(page, `m11_painel_masmorras_${tag}.png`);
 
   // 4. Inventário: abre, tem os 6 slots, fecha pelo X e reabre; Escape também fecha.
-  const inv = menuButtonPoint('inventario', false);
+  const inv = menuButtonPoint('inventario', mobile);
   await tap(page, inv);
   expect(await menuState(page)).toMatchObject({ selected: 'inventario', inventoryOpen: true });
   await seenText(page, /MOCHILA/i);
@@ -256,28 +266,34 @@ async function runMenuFlow(page: Page, tag: 'pc' | 'mobile', viewport: { width: 
     timeout: 3000,
   });
 
-  // 5. "Masmorra teste" + Entrar (clique real): abre a DungeonScene (testArena).
-  await tap(page, ENTRY_POINT);
-  await tap(page, ENTER_BTN);
+  // 5. "Masmorra teste" + Entrar (clique real): abre a DungeonScene (testArena) com objetivo certo.
+  await clearTexts(page);
+  await tap(page, panel.entry);
+  await tap(page, panel.enterBtn);
   await expectInTestArena(page);
+  await seenText(page, /^Masmorra teste/);
+  await seenText(page, /Elimine todos os monstros \d+\/\d+/);
+  expect(
+    await page.evaluate(() => (window as unknown as { __texts: string[] }).__texts.some((t) => /Planta..o/.test(t)))
+  ).toBe(false);
   await shot(page, `m11_dungeon_teste_${tag}.png`);
 }
 
 test.describe('SUBMUNDO M11 — menu-hub (Decisões #28/#29)', () => {
   test.setTimeout(90000);
 
-  // GRAVE: depois de "Voltar" (painel fechado, Masmorras ainda selecionada) o botão Masmorras não
-  // reage ao clique/toque real; só `select('masmorras')` (debug) ou passar pelo Inventário reabre.
-  // Falha esperada até o AG02 corrigir (provável: `repaintButtons()` dentro do pointerdown do
-  // "Voltar", MenuHubScene.ts:~291-296 e ~397).
-  test('Voltar e depois clicar em Masmorras reabre o painel "Escolher dungeon"', async ({ page }) => {
-    test.fail(true, 'MenuHubScene: botão Masmorras morto após "Voltar" (clique real não reabre o painel)');
+  test('Voltar e depois clicar em Masmorras reabre o painel "Escolher dungeon" (G3 corrigido)', async ({ page }) => {
+    const errors = trackErrors(page);
+    await page.setViewportSize(DESKTOP_VIEWPORT);
     await openMenu(page);
-    await tap(page, BACK_BTN);
-    expect((await menuState(page)).rightPanelOpen).toBe(false);
-    await tap(page, menuButtonPoint('masmorras', false));
-    await page.waitForTimeout(300);
-    expect((await menuState(page)).rightPanelOpen).toBe(true);
+    for (let i = 0; i < 2; i++) {
+      await tap(page, PANEL_COORDS.pc.backBtn);
+      expect((await menuState(page)).rightPanelOpen).toBe(false);
+      await tap(page, menuButtonPoint('masmorras', false));
+      await page.waitForTimeout(250);
+      expect((await menuState(page)).rightPanelOpen).toBe(true);
+    }
+    expectClean(errors);
   });
 
   test('PC 960×540: abre no menu, bloqueados "Em breve", painel, Inventário e Masmorra teste', async ({ page }) => {
@@ -399,6 +415,7 @@ test.describe('SUBMUNDO M11 — volta da dungeon ao menu', () => {
       return d.spawnTestDrop('rare');
     });
     await pickUpAllDropsViaDebug(page);
+    await clearTexts(page);
     const run = await page.evaluate(() => {
       const d = window.__SUBMUNDO_DEBUG__!;
       for (let i = 0; i < 4; i++) {
@@ -411,11 +428,15 @@ test.describe('SUBMUNDO M11 — volta da dungeon ao menu', () => {
     });
     expect(run.status).toBe('victory');
     expect(run.souls).toBeGreaterThanOrEqual(250);
+    await seenText(page, /^Voltar ao menu$/);
+    expect(
+      await page.evaluate(() => (window as unknown as { __texts: string[] }).__texts.some((t) => /Nova Incurs/i.test(t)))
+    ).toBe(false);
 
     const savedByRun = await readSave(page); // a DungeonScene já persiste ao fechar a run
     await shot(page, 'm11_fim_dungeon_vitoria.png');
     await clearTexts(page);
-    await dispatchWindowKey(page, 'Enter', 'Enter', 13); // "Voltar" do painel de fim de run
+    await dispatchWindowKey(page, 'Enter', 'Enter', 13); // "Voltar ao menu" do painel de fim de run
     await waitMenuAgain(page);
 
     // Aviso na volta + estado do menu.
@@ -426,22 +447,18 @@ test.describe('SUBMUNDO M11 — volta da dungeon ao menu', () => {
     await shot(page, 'm11_volta_dungeon_aviso.png');
     expect(state).toMatchObject({ selected: 'masmorras', rightPanelOpen: true });
 
-    // Regra: Almas e runs entram UMA vez (a DungeonScene aplica; o menu não pode reaplicar).
+    // Regra: Almas e runs entram UMA vez (a DungeonScene aplica; o menu não reaplica).
     expect(savedByRun.souls, 'save após a run (antes do menu)').toBe(100 + run.souls);
-    expect(save.souls).toBeGreaterThanOrEqual(100 + run.souls); // o valor EXATO está no teste "uma vez" abaixo
+    expect(save.souls).toBe(100 + run.souls);
     expect(state.soulsText).toBe(String(save.souls));
-    expect(save.stats.runsCompleted).toBeGreaterThanOrEqual(1);
-    expect(save.stats.bossesDefeated).toBeGreaterThanOrEqual(1);
+    expect(save.stats.runsCompleted).toBe(1);
+    expect(save.stats.bossesDefeated).toBe(1);
     expect(stashIds(save).filter((id) => id === drop.instanceId)).toHaveLength(1);
     expectClean(errors);
   });
 
-  // GRAVE: as Almas/runs da run entram DUAS vezes no perfil. A DungeonScene já aplica o relatório
-  // ao perfil e persiste (DungeonScene.ts:3491-3492), e o MenuHubScene aplica o mesmo `fromRun` de
-  // novo ao abrir (MenuHubScene.ts:158-160). Falha esperada até o AG04/AG02 corrigir (os itens não
-  // duplicam porque `storeRunItems` ignora ids já guardados).
-  test('Almas e runs da vitória entram no perfil uma vez só (Almas = antes + coletadas)', async ({ page }) => {
-    test.fail(true, 'MenuHubScene.ts:158 reaplica applyRunOutcomeToProfile sobre um perfil que a DungeonScene já atualizou (Almas x2)');
+  test('Almas e runs da vitória entram no perfil uma vez só (Almas = antes + coletadas, G1 corrigido)', async ({ page }) => {
+    const errors = trackErrors(page);
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await seedSave(page, { souls: 100 });
     await enterRunFromMenu(page, 'act1_submundo');
@@ -460,7 +477,9 @@ test.describe('SUBMUNDO M11 — volta da dungeon ao menu', () => {
     const save = await readSave(page);
     expect(save.souls).toBe(100 + run);
     expect(save.stats.runsCompleted).toBe(1);
+    expect(save.stats.bossesDefeated).toBe(1);
     expect((await menuState(page)).soulsText).toBe(String(100 + run));
+    expectClean(errors);
   });
 
   test('derrota do Ato 1: Almas salvas, item da run perdido, menu mostra "Derrota"', async ({ page }) => {
@@ -531,13 +550,11 @@ test.describe('SUBMUNDO M11 — volta da dungeon ao menu', () => {
     expectClean(errors);
   });
 
-  // GRAVE: na testArena (a "Masmorra teste" do menu) não existe caminho de volta ao menu.
-  // O fim é "Teste finalizado" -> Enter/toque reinicia a arena; a morte é desligada (herói imortal)
-  // e nenhum RunEndReport é gerado. Este teste descreve o comportamento ESPERADO pelo BRF-174
-  // ("todo fim de dungeon volta ao menu"); está marcado como falha esperada até o AG01 corrigir.
-  test('Masmorra teste: ao terminar volta ao menu', async ({ page }) => {
-    test.fail(true, 'src/view/scenes/DungeonScene.ts:3333 (restartTestArena): "Teste finalizado" reinicia a arena em vez de voltar ao menu');
+  test('Masmorra teste: ao terminar mostra "Voltar ao menu" e clique volta ao menu (G2 corrigido)', async ({ page }) => {
+    const errors = trackErrors(page);
+    await installTextSpy(page);
     await page.setViewportSize(DESKTOP_VIEWPORT);
+    await seedSave(page, { souls: 25 });
     await openMenu(page);
     await page.evaluate(() => window.__SUBMUNDO_MENU_DEBUG__!.enter());
     await waitForTestArena(page);
@@ -564,6 +581,7 @@ test.describe('SUBMUNDO M11 — volta da dungeon ao menu', () => {
         { timeout: 10000 }
       );
     }
+    await clearTexts(page);
     await page.evaluate(() => {
       for (const m of window.__SUBMUNDO_DEBUG__!.getMonsters()) {
         m.hp = 0;
@@ -575,10 +593,53 @@ test.describe('SUBMUNDO M11 — volta da dungeon ao menu', () => {
       undefined,
       { timeout: 8000 }
     );
-    await page.waitForTimeout(500);
+    await seenText(page, /^Voltar ao menu$/);
+    await seenText(page, /Toque ou pressione Enter para voltar ao menu/);
+    await page.waitForTimeout(300);
     await shot(page, 'm11_teste_finalizado.png');
-    await dispatchWindowKey(page, 'Enter', 'Enter', 13);
-    await page.waitForFunction(() => !!window.__SUBMUNDO_MENU_DEBUG__, undefined, { timeout: 4000 });
+
+    await clearTexts(page);
+    await tap(page, TEST_ARENA_BACK_TO_MENU_BTN);
+    await waitMenuAgain(page);
+    await seenText(page, /^Vit.ria!/);
+    const save = await readSave(page);
+    expect(save.stats.runsCompleted).toBe(1);
+    expect(save.souls).toBeGreaterThanOrEqual(25);
+    expect((await menuState(page)).soulsText).toBe(String(save.souls));
+    expectClean(errors);
+  });
+
+  test('Masmorra teste: morrer na arena aberta pelo menu encerra a run e volta ao menu', async ({ page }) => {
+    const errors = trackErrors(page);
+    await installTextSpy(page);
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await seedSave(page, { souls: 15 });
+    await openMenu(page);
+    await page.evaluate(() => window.__SUBMUNDO_MENU_DEBUG__!.enter());
+    await waitForTestArena(page);
+
+    await clearTexts(page);
+    await page.evaluate(() => {
+      const d = window.__SUBMUNDO_DEBUG__!;
+      const hero = d.getHero();
+      hero.invulnerableUntilMs = 0;
+      hero.basicAttackReadyAtMs = 999999;
+      hero.baseStats.defense = 0;
+      hero.stats.defense = 0;
+      hero.stats.hp = 1;
+      hero.minions = [];
+      const attacker = d.getMonsters().find((m) => m.isAlive)!;
+      attacker.hp = Math.max(attacker.hp, 500);
+      attacker.stunnedUntilMs = 0;
+      attacker.position = { x: hero.position.x, y: hero.position.y };
+      attacker.nextAttackAtMs = 0;
+    });
+    await waitMenuAgain(page);
+    await seenText(page, /^Derrota\./);
+    const save = await readSave(page);
+    expect(save.stats.runsFailed).toBe(1);
+    expect((await menuState(page)).soulsText).toBe(String(save.souls));
+    expectClean(errors);
   });
 });
 
@@ -631,6 +692,7 @@ test.describe('SUBMUNDO M11 — Inventário e mochila cheia', () => {
     expect(before.maxStashSize).toBe(30);
     await openMenu(page);
     await openInventoryByClick(page);
+    await seenText(page, /MOCHILA \(30\/30\).*BA. CHEIO/);
     await shot(page, 'm11_inventario_cheio.png');
 
     // Desequipar com o Baú cheio: bloqueado, item continua equipado, nada some, aviso aparece.
@@ -670,7 +732,7 @@ test.describe('SUBMUNDO M11 — Inventário e mochila cheia', () => {
     expectClean(errors);
   });
 
-  test('mochila cheia (30/30): vitória com item novo volta ao menu sem erro; o item novo é descartado em silêncio', async ({ page }) => {
+  test('mochila cheia (30/30): vitória com item novo volta ao menu e avisa que não coube no Baú', async ({ page }) => {
     const errors = trackErrors(page);
     await installTextSpy(page);
     await page.setViewportSize(DESKTOP_VIEWPORT);
@@ -692,25 +754,28 @@ test.describe('SUBMUNDO M11 — Inventário e mochila cheia', () => {
       return { status: d.getRunState().status, souls: d.getRunState().soulsCollected };
     });
     expect(run.status).toBe('victory');
-    const heldInRun = await page.evaluate(
+    const runLoot = await page.evaluate(
       (id) => {
         const inv = window.__SUBMUNDO_DEBUG__!.getInventory();
-        return [...inv.bag, ...Object.values(inv.equipped).filter(Boolean)].some((i: any) => i.instanceId === id);
+        const items = [...inv.bag, ...Object.values(inv.equipped).filter(Boolean)] as any[];
+        return {
+          heldDrop: items.some((i) => i.instanceId === id),
+          totalHeld: items.length,
+        };
       },
       drop.instanceId
     );
+    expect(runLoot.heldDrop).toBe(true);
+    await clearTexts(page);
     await dispatchWindowKey(page, 'Enter', 'Enter', 13);
     await waitMenuAgain(page);
     await seenText(page, /^Vit.ria!/);
     await shot(page, 'm11_volta_bau_cheio.png');
+    await seenText(page, new RegExp(`Ba. cheio: ${runLoot.totalHeld} item\\(ns\\) n.o couberam`));
     const save = await readSave(page);
     expect(save.stash).toHaveLength(30); // nunca passa de maxStashSize
-    expect(save.souls).toBeGreaterThanOrEqual(run.souls);
-    // Documenta o comportamento atual: se o herói segurava o item na run e o Baú está cheio, ele some.
-    // (ressalva no qa-M11: o aviso da volta diz "1 item(ns) obtido(s)" mesmo assim)
-    if (heldInRun && !stashIds(save).includes(drop.instanceId)) {
-      test.info().annotations.push({ type: 'ressalva', description: 'item da run descartado em silêncio com o Baú cheio' });
-    }
+    expect(save.souls).toBe(run.souls);
+    expect(stashIds(save)).not.toContain(drop.instanceId);
     expect((await menuState(page)).selected).toBe('masmorras');
     // O menu continua utilizável: Inventário abre e fecha.
     await openInventoryByClick(page);

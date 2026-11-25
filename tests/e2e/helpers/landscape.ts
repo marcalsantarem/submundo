@@ -163,8 +163,8 @@ export const MENU_ORDER = ['masmorras', 'inventario', 'forja', 'personagem', 'ha
 
 /**
  * Centro lógico (960x540) do botão do menu pelo índice, conforme o layout do `MenuHubScene`.
- * O jogo é sempre 960x540 lógico, então o layout `mobile` do menu (h<=420) nunca ativa:
- * use `mobile=false` também no celular (ver ressalva no qa-M11).
+ * `mobile=true` ativa em viewports baixos/largos (ex.: `844x390`, `ph <= 420 || pw/ph > 2`);
+ * `mobile=false` vale para desktop (`960x540`).
  */
 export function menuButtonPoint(id: (typeof MENU_ORDER)[number], mobile: boolean): { x: number; y: number } {
   const i = MENU_ORDER.indexOf(id);
