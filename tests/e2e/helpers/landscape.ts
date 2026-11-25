@@ -137,6 +137,49 @@ export async function dispatchWindowKey(
   );
 }
 
+/**
+ * M11 (Decisão #29): a Vila saiu do fluxo. Abre `/?test` (testArena), limpa o save e
+ * reinicia como uma run normal do Ato 1 (`act1_submundo`, 5 salas) via `restartRun`.
+ */
+export async function openAct1Run(
+  page: Page,
+  stageId = 'act1_submundo',
+  options?: { clearStorage?: boolean }
+): Promise<void> {
+  await page.goto('/?test');
+  await page.waitForFunction(() => typeof window.__SUBMUNDO_DEBUG__ !== 'undefined', undefined, {
+    timeout: 10000,
+  });
+  if (options?.clearStorage !== false) {
+    await page.evaluate(() => window.localStorage.clear());
+  }
+  await page.evaluate((id) => {
+    window.__SUBMUNDO_DEBUG__!.restartRun(id as never);
+  }, stageId);
+}
+
+/** Ordem dos botões do menu-hub (MENU_HUB_ITEMS). */
+export const MENU_ORDER = ['masmorras', 'inventario', 'forja', 'personagem', 'habilidades', 'configuracoes'] as const;
+
+/**
+ * Centro lógico (960x540) do botão do menu pelo índice, conforme o layout do `MenuHubScene`.
+ * `mobile=true` ativa em viewports baixos/largos (ex.: `844x390`, `ph <= 420 || pw/ph > 2`);
+ * `mobile=false` vale para desktop (`960x540`).
+ */
+export function menuButtonPoint(id: (typeof MENU_ORDER)[number], mobile: boolean): { x: number; y: number } {
+  const i = MENU_ORDER.indexOf(id);
+  return mobile
+    ? { x: 16 + 236 / 2, y: 76 + i * 48 + 22 }
+    : { x: 36 + 276 / 2, y: 150 + i * 58 + 25 };
+}
+
+/** Aguarda o menu-hub (M11) estar ativo; opcionalmente limpa o save e recarrega o menu. */
+export async function waitForMenuHub(page: Page): Promise<void> {
+  await page.waitForFunction(() => typeof window.__SUBMUNDO_MENU_DEBUG__ !== 'undefined', undefined, {
+    timeout: 15000,
+  });
+}
+
 export async function ensureHubScene(
   page: Page,
   options?: { clearStorage?: boolean }

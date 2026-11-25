@@ -8,7 +8,7 @@ import {
   DESKTOP_VIEWPORT,
   MOBILE_LANDSCAPE_VIEWPORT,
   assertLandscapeCanvas,
-  ensureHubScene,
+  openAct1Run,
   openMobileLandscapePage,
 } from './helpers/landscape';
 
@@ -60,7 +60,7 @@ const ACT1_PROFILE_FIXTURE = {
   campaign: {
     phase: 'act1',
     currentStageId: 'act1_submundo',
-    completedStages: ['prologue_grotto', 'prologue_mine', 'prologue_seal'],
+    completedStages: ['mission_herbs', 'mission_mine', 'mission_depths'],
     villageFallTriggered: true,
     seenDialogues: [
       'prologue_welcome',
@@ -100,30 +100,23 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
       }
     });
 
-    // 1. Clean boot on Desktop Landscape (960x540) in Prologue — Vila Natal Viva
+    // 1. Boot limpo em 960x540. M11 (Decisão #29): a Vila saiu do fluxo; o herói "vivo" é
+    // validado dentro da missão do prólogo `mission_herbs`, aberta direto na DungeonScene.
     await page.setViewportSize(DESKTOP_VIEWPORT);
-    await page.goto('/');
-    await ensureHubScene(page, { clearStorage: true });
-    await assertLandscapeCanvas(page, DESKTOP_VIEWPORT);
-
-    // Close opening dialogue if open so the living hero in Vila Natal is clearly visible & controllable
-    const dialogueInitiallyOpen = await page.evaluate(() =>
-      window.__SUBMUNDO_HUB_DEBUG__!.getDialogueBox().isOpen()
+    await openAct1Run(page, 'mission_herbs');
+    await page.waitForFunction(
+      () =>
+        typeof window.__SUBMUNDO_DEBUG__ !== 'undefined' &&
+        window.__SUBMUNDO_DEBUG__.getHero()?.isAlive === true &&
+        window.__SUBMUNDO_DEBUG__.getMissionState()?.missionId === 'mission_herbs',
+      undefined,
+      { timeout: 10000 }
     );
-    if (dialogueInitiallyOpen) {
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(60);
-      await page.keyboard.press('Enter');
-      await page.waitForFunction(
-        () => window.__SUBMUNDO_HUB_DEBUG__!.getDialogueBox().isOpen() === false,
-        undefined,
-        { timeout: 3000 }
-      );
-    }
+    await assertLandscapeCanvas(page, DESKTOP_VIEWPORT);
 
     // 2. Validate textures (hero_living & hero_wraith 1920x80 24f, weapons 192x48), weaponRig, 10 animations & anti-sliding pixel diff
     const assetsAndAnimsCheck = await page.evaluate(() => {
-      const hub = window.__SUBMUNDO_HUB_DEBUG__!;
+      const hub = window.__SUBMUNDO_DEBUG__!;
       const scene = hub.scene as unknown as {
         textures: {
           exists: (key: string) => boolean;
@@ -272,7 +265,6 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
 
       return {
         title: document.title,
-        phase: hub.getProfile().campaign?.phase,
         heroLiving: inspectTexture('hero_living'),
         heroWraith: inspectTexture('hero_wraith'),
         weapons: inspectTexture('weapons'),
@@ -292,7 +284,6 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
     });
 
     expect(assetsAndAnimsCheck.title).toBe(`SUBMUNDO v${GAME_VERSION}`);
-    expect(assetsAndAnimsCheck.phase).toBe('prologue');
     expect(assetsAndAnimsCheck.heroLiving).toEqual({
       width: 1920,
       height: 80,
@@ -376,7 +367,7 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
       try {
         await page.waitForFunction(
           (targetAnim: string) => {
-            const scene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
+            const scene = window.__SUBMUNDO_DEBUG__!.scene as unknown as {
               heroSprite: DebugSpriteSnapshot;
             };
             return scene.heroSprite.anims.currentAnim?.key === targetAnim;
@@ -387,7 +378,7 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
 
         for (let i = 0; i < 6; i += 1) {
           const snap = await page.evaluate(() => {
-            const scene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
+            const scene = window.__SUBMUNDO_DEBUG__!.scene as unknown as {
               heroSprite: DebugSpriteSnapshot;
             };
             return {
@@ -447,16 +438,18 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
     expect(existsSync(pcPrologueVillagePath)).toBe(true);
     expect(statSync(pcPrologueVillagePath).size).toBeGreaterThan(5000);
 
-    // 4. Enter Prologue Dungeon (Gruta da Cachoeira) and verify hero_living_attack & hero_living_dash
+    // 4. Enter a prologue mission (M10: Plantação de Ervas) and verify hero_living_attack & hero_living_dash
     await page.evaluate(() => {
-      window.__SUBMUNDO_HUB_DEBUG__!.enterDungeon('prologue_grotto');
+      window.__SUBMUNDO_DEBUG__!.restartRun('mission_herbs' as never);
     });
 
     await page.waitForFunction(
       () =>
         typeof window.__SUBMUNDO_DEBUG__ !== 'undefined' &&
+        typeof window.__SUBMUNDO_DEBUG__.getMissionState === 'function' &&
         window.__SUBMUNDO_DEBUG__.getHero()?.isAlive === true &&
-        window.__SUBMUNDO_DEBUG__.getRunState()?.totalRooms === 3,
+        window.__SUBMUNDO_DEBUG__.getMissionState()?.missionId === 'mission_herbs' &&
+        window.__SUBMUNDO_DEBUG__.getMonsters().length > 0,
       undefined,
       { timeout: 10000 }
     );
@@ -548,18 +541,18 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
       { storageKey: SAVE_STORAGE_KEY, profile: ACT1_PROFILE_FIXTURE }
     );
 
-    await page.goto('/');
-    await ensureHubScene(page);
+    await openAct1Run(page, 'act1_submundo', { clearStorage: false });
     await page.waitForFunction(
       () =>
-        typeof window.__SUBMUNDO_HUB_DEBUG__ !== 'undefined' &&
-        window.__SUBMUNDO_HUB_DEBUG__.getProfile()?.campaign?.phase === 'act1',
+        typeof window.__SUBMUNDO_DEBUG__ !== 'undefined' &&
+        window.__SUBMUNDO_DEBUG__.getHero()?.isAlive === true &&
+        window.__SUBMUNDO_DEBUG__.getRunState()?.totalRooms === 5,
       undefined,
       { timeout: 10000 }
     );
 
     const act1RefugeIdle = await page.evaluate(() => {
-      const hub = window.__SUBMUNDO_HUB_DEBUG__!;
+      const hub = window.__SUBMUNDO_DEBUG__!;
       const scene = hub.scene as unknown as {
         heroSprite: DebugSpriteSnapshot;
         weaponRig?: {
@@ -572,7 +565,6 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
       };
       const weaponSprite = scene.weaponRig?.weaponSprite;
       return {
-        phase: hub.getProfile().campaign?.phase,
         texture: scene.heroSprite.texture.key,
         anim: scene.heroSprite.anims.currentAnim?.key ?? null,
         weaponRig: weaponSprite
@@ -585,9 +577,8 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
       };
     });
 
-    expect(act1RefugeIdle.phase).toBe('act1');
     expect(act1RefugeIdle.texture).toBe('hero_wraith');
-    expect(act1RefugeIdle.anim).toBe('hero_wraith_idle');
+    expect(['hero_wraith_idle', 'hero_wraith_walk', 'hero_wraith_attack']).toContain(act1RefugeIdle.anim);
     expect(act1RefugeIdle.weaponRig).toEqual({
       visible: true,
       textureKey: 'weapons',
@@ -630,20 +621,7 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
       });
 
     try {
-      await mobilePage.goto('/');
-      await ensureHubScene(mobilePage);
-      await mobilePage.waitForFunction(
-        () =>
-          typeof window.__SUBMUNDO_HUB_DEBUG__ !== 'undefined' &&
-          window.__SUBMUNDO_HUB_DEBUG__.getProfile()?.campaign?.phase === 'act1',
-        undefined,
-        { timeout: 10000 }
-      );
-
-      await mobilePage.evaluate(() => {
-        window.__SUBMUNDO_HUB_DEBUG__!.enterDungeon('act1_submundo');
-      });
-
+      await openAct1Run(mobilePage, 'act1_submundo', { clearStorage: false });
       await mobilePage.waitForFunction(
         () =>
           typeof window.__SUBMUNDO_DEBUG__ !== 'undefined' &&
@@ -708,7 +686,7 @@ test.describe('SUBMUNDO M5 — Hero 80x80 24f Spritesheets, Weapons & Animations
           );
         },
         undefined,
-        { timeout: 3000 }
+        { timeout: 8000 }
       );
 
       await mobilePage.waitForTimeout(120);

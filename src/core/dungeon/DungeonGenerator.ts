@@ -140,7 +140,10 @@ function generateStageRooms(
     const monsterIds: string[] = [];
 
     if (isBossRoom) {
-      monsterIds.push(stage.bossId);
+      // `bossId` is optional (e.g. `mission_herbs` has no boss).
+      if (stage.bossId) {
+        monsterIds.push(stage.bossId);
+      }
       const escortCount = stage.difficultyScale >= 0.85 ? 2 : 1;
       for (let i = 0; i < escortCount; i++) {
         const pick = pool[Math.floor(rng() * pool.length)];

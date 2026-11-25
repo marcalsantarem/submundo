@@ -1,53 +1,101 @@
 {
   "stages": [
     {
-      "id": "prologue_grotto",
+      "id": "mission_herbs",
       "phase": "prologue",
       "order": 1,
-      "name": "A Gruta da Cachoeira",
-      "subtitle": "Prólogo — Teste do Mestre",
-      "description": "Enfrente limos e morcegos nas grutas próximas à vila sob a tutela do Mestre de Armas.",
-      "biome": "village_grotto",
+      "name": "A Plantação de Ervas",
+      "subtitle": "Prólogo — O Pedido de Lyra",
+      "description": "Limpe os limos da plantação e colha as ervas medicinais que Lyra precisa.",
+      "giverNpcId": "lyra",
+      "requires": [],
+      "biome": "herb_field",
+      "mapMode": "giant",
       "totalRooms": 3,
-      "difficultyScale": 0.7,
-      "monsterPool": ["abyssal_slime", "cave_bat"],
-      "bossId": "bone_sentinel",
-      "introDialogueIds": ["prologue_welcome", "stage_grotto_intro"],
-      "victoryDialogueIds": ["stage_grotto_victory"],
-      "unlocksStageId": "prologue_mine"
+      "difficultyScale": 1.0,
+      "monsterPool": ["slime"],
+      "waves": [
+        ["slime", "slime", "slime"],
+        ["slime", "slime", "slime", "slime", "slime"],
+        ["slime", "slime", "slime", "slime", "slime", "slime", "slime"]
+      ],
+      "objective": {
+        "kind": "collect",
+        "itemId": "herb",
+        "count": 5
+      },
+      "dropPolicy": {
+        "chance": 0.05,
+        "maxRarity": "magic"
+      },
+      "introDialogueIds": [],
+      "victoryDialogueIds": []
     },
     {
-      "id": "prologue_mine",
+      "id": "mission_mine",
       "phase": "prologue",
       "order": 2,
-      "name": "A Mina Abandonada",
-      "subtitle": "Prólogo — Sombras na Escavação",
-      "description": "Expurgue os morcegos e sentinelas ósseos que emergiram dos túneis antigos durante a noite.",
+      "name": "A Mina Iluminada",
+      "subtitle": "Prólogo — As Ferramentas de Gorran",
+      "description": "Atravesse a mina tomada por limos e lobos e recupere as ferramentas de Gorran.",
+      "giverNpcId": "gorran",
+      "requires": [],
       "biome": "village_mine",
-      "totalRooms": 3,
-      "difficultyScale": 0.85,
-      "monsterPool": ["cave_bat", "bone_sentinel"],
-      "bossId": "bone_sentinel",
-      "introDialogueIds": ["stage_mine_intro"],
-      "victoryDialogueIds": ["stage_mine_victory"],
-      "unlocksStageId": "prologue_seal"
+      "mapMode": "rooms",
+      "totalRooms": 4,
+      "difficultyScale": 0.8,
+      "monsterPool": ["slime", "wolf"],
+      "waves": [
+        ["slime", "slime", "wolf", "wolf"],
+        ["slime", "slime", "slime", "wolf", "wolf"],
+        ["slime", "slime", "slime", "slime", "slime", "wolf", "wolf", "wolf"],
+        ["wolf", "wolf"]
+      ],
+      "bossId": "wolf_alpha",
+      "objective": {
+        "kind": "collect",
+        "itemId": "mine_tool",
+        "count": 4
+      },
+      "finalEventId": "strange_sight",
+      "dropPolicy": {
+        "chance": 0.05,
+        "maxRarity": "magic"
+      },
+      "introDialogueIds": [],
+      "victoryDialogueIds": []
     },
     {
-      "id": "prologue_seal",
+      "id": "mission_depths",
       "phase": "prologue",
       "order": 3,
-      "name": "O Selo Antigo",
-      "subtitle": "Prólogo — A Ruptura",
-      "description": "Desça até a câmara selada no fundo da mina antes que o Arauto do Abismo rompa a barreira.",
-      "biome": "ancient_seal",
-      "totalRooms": 4,
+      "name": "O Fundo da Mina",
+      "subtitle": "Prólogo — O Que Espreita no Escuro",
+      "description": "Desça às salas escuras no fundo da mina e descubra o que o herói viu.",
+      "giverNpcId": "master",
+      "requires": ["mission_herbs", "mission_mine"],
+      "biome": "mine_depths",
+      "mapMode": "rooms",
+      "totalRooms": 5,
       "difficultyScale": 1.0,
-      "monsterPool": ["abyssal_slime", "cave_bat", "bone_sentinel"],
-      "bossId": "abyss_herald",
-      "introDialogueIds": ["stage_seal_intro"],
-      "victoryDialogueIds": ["village_fall_pact", "act1_briefing"],
+      "monsterPool": ["slime", "cave_bat", "skeleton"],
+      "waves": [
+        ["slime", "slime", "cave_bat", "cave_bat"],
+        ["slime", "slime", "cave_bat", "cave_bat", "cave_bat", "cave_bat"],
+        ["slime", "slime", "cave_bat", "cave_bat", "cave_bat", "cave_bat"],
+        ["cave_bat", "cave_bat", "cave_bat", "cave_bat", "skeleton", "skeleton"],
+        []
+      ],
+      "bossId": "karnak",
+      "bossInvincible": true,
+      "dropPolicy": {
+        "chance": 0.05,
+        "maxRarity": "magic"
+      },
+      "endsPrologue": true,
       "unlocksStageId": "act1_submundo",
-      "triggersFallOfVillage": true
+      "introDialogueIds": [],
+      "victoryDialogueIds": []
     },
     {
       "id": "act1_submundo",

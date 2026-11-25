@@ -11,6 +11,21 @@ import {
 } from './DarkFantasyUiBuilder';
 import { VirtualJoystick } from './VirtualJoystick';
 
+/**
+ * Tela só de toque (celular/tablet): sem mouse com hover. Usado para esconder o
+ * selo da tecla "E" (ressalva da validação do M9).
+ */
+export function isTouchOnlyScreen(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+  try {
+    return window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+  } catch {
+    return false;
+  }
+}
+
 /** Estado da HUD da Vila Natal (T-139). */
 export interface VillageHudSnapshot {
   heroName: string;
@@ -31,7 +46,23 @@ export interface VillageHudSnapshot {
     gate: Vector2D;
     house: Vector2D;
     campfire: Vector2D;
-    npcs: Array<{ id: string; pos: Vector2D; alert: boolean }>;
+    npcs: Array<{
+      id: string;
+      pos: Vector2D;
+      alert: boolean;
+      /** Marcador de missão do NPC (T-147); colore o ponto no minimapa. */
+      marker?: '!' | '?gray' | '?yellow' | null;
+    }>;
+    /** Portão com "!" (missão aceita para sair). */
+    gateAlert?: boolean;
+    /** Planta da clareira (T-152), em pixels de mundo. */
+    plan?: {
+      /** Chão de terra batida (área andável). */
+      ground: Array<{ x: number; y: number; w: number; h: number }>;
+      /** Paliçadas (linhas de muro). */
+      walls: Array<{ x1: number; y1: number; x2: number; y2: number }>;
+      forge?: Vector2D;
+    };
   };
 }
 
@@ -97,6 +128,8 @@ export class VillageHud {
   private readonly minimapDots: Phaser.GameObjects.Graphics;
   private readonly minimapNorth: Phaser.GameObjects.Text;
   private readonly minimapAlert: Phaser.GameObjects.Text;
+  private readonly minimapMask: Phaser.GameObjects.Graphics | null;
+  private minimapDebug = { scale: 0, gate: { x: 0, y: 0 }, npcs: 0, planRects: 0 };
 
   private readonly bagBtn: UtilityButton;
   private readonly muteBtn: UtilityButton;
@@ -193,6 +226,11 @@ export class VillageHud {
     // --- Minimapa -------------------------------------------------------------
     this.minimapBg = this.track(scene.add.graphics());
     this.minimapDots = this.track(scene.add.graphics());
+    this.minimapMask =
+      typeof scene.make?.graphics === 'function' ? scene.make.graphics({}, false) : null;
+    if (this.minimapMask && typeof this.minimapMask.createGeometryMask === 'function') {
+      this.minimapDots.setMask(this.minimapMask.createGeometryMask());
+    }
     this.minimapNorth = this.track(this.text(0, 0, 'N', 8, DF_PALETTE.textGold, true)).setOrigin(0.5);
     this.minimapAlert = this.track(this.text(0, 0, '!', 9, '#facc15', true)).setOrigin(0.5);
 
@@ -414,6 +452,11 @@ export class VillageHud {
     const my = 60;
     this.minimapBg.setPosition(mx, my);
     this.minimapDots.setPosition(mx, my);
+    if (this.minimapMask) {
+      this.minimapMask.clear();
+      this.minimapMask.fillStyle(0xffffff, 1);
+      this.minimapMask.fillCircle(mx, my, MINIMAP_R - 3);
+    }
     this.minimapNorth.setPosition(mx, my - MINIMAP_R + 8);
     this.drawMinimapShell();
 
@@ -446,6 +489,7 @@ export class VillageHud {
     }
     this.joystick.destroy();
     this.portraitMask?.destroy();
+    this.minimapMask?.destroy();
     for (const obj of this.all) {
       obj.destroy();
     }
@@ -630,49 +674,95 @@ export class VillageHud {
   private drawMinimapDots(snap: VillageHudSnapshot): void {
     const m = snap.minimap;
     const g = this.minimapDots;
-    const sx0 = -34;
-    const sy0 = -15;
-    const sw = 68;
-    const sh = 30;
-    const top = m.mapTop - 44;
-    const map = (p: Vector2D) => ({
-      x: sx0 + (p.x / m.mapWidth) * sw,
-      y: sy0 + ((p.y - top) / (m.mapBottom - top)) * sh,
-    });
+    const usableR = MINIMAP_R - 6;
+    // Escala fixa centrada no herói (T-152): a clareira inteira (~1000 px) cabe
+    // quase toda no círculo; o que sai fica cortado pela máscara circular.
+    const scale = 0.1;
+    const cx = m.hero.x;
+    const cy = m.hero.y;
+    const map = (p: Vector2D) => ({ x: (p.x - cx) * scale, y: (p.y - cy) * scale });
+    const clamp = (p: { x: number; y: number }, limit = usableR) => {
+      const d = Math.hypot(p.x, p.y);
+      return d > limit && d > 0 ? { x: (p.x * limit) / d, y: (p.y * limit) / d } : p;
+    };
     g.clear();
-    g.fillStyle(0x342e28, 0.9);
-    g.fillRect(sx0, sy0, sw, sh);
-    g.lineStyle(1, 0x786040, 0.9);
-    g.strokeRect(sx0, sy0, sw, sh);
 
-    const gate = map(m.gate);
-    g.fillStyle(0x463e34, 0.95);
-    g.fillRect(gate.x - 3, gate.y - 9, 6, 9);
-    g.fillStyle(0x94a3b8, 0.8);
-    g.fillTriangle(gate.x - 4, gate.y - 1, gate.x + 4, gate.y - 1, gate.x, gate.y - 5);
+    // Planta: grama de fundo, chão de terra e paliçadas.
+    g.fillStyle(0x1d2a1a, 0.92);
+    g.fillCircle(0, 0, MINIMAP_R - 3);
+    const plan = m.plan;
+    if (plan) {
+      g.fillStyle(0x5a4630, 0.95);
+      for (const r of plan.ground) {
+        const a = map({ x: r.x, y: r.y });
+        g.fillRect(a.x, a.y, r.w * scale, r.h * scale);
+      }
+      g.lineStyle(1.6, 0x8b6a3e, 1);
+      for (const w of plan.walls) {
+        const a = map({ x: w.x1, y: w.y1 });
+        const b = map({ x: w.x2, y: w.y2 });
+        g.lineBetween(a.x, a.y, b.x, b.y);
+      }
+    } else {
+      const a = map({ x: 0, y: m.mapTop });
+      g.fillStyle(0x5a4630, 0.95);
+      g.fillRect(a.x, a.y, m.mapWidth * scale, (m.mapBottom - m.mapTop) * scale);
+    }
+
+    // Marcos: casa, fogueira, forja.
     const house = map(m.house);
-    g.fillStyle(0xaa8c50, 0.9);
-    g.fillRect(house.x - 5, house.y - 3, 10, 4);
+    g.fillStyle(0xaa8c50, 0.95);
+    g.fillRect(house.x - 5, house.y - 3, 10, 5);
     const fire = map(m.campfire);
     g.fillStyle(0xf97316, 1);
     g.fillCircle(fire.x, fire.y, 1.8);
+    if (plan?.forge) {
+      const forge = map(plan.forge);
+      g.fillStyle(0xdc2626, 0.95);
+      g.fillRect(forge.x - 2.5, forge.y - 2, 5, 4);
+    }
+
+    // Portão: abertura na paliçada; preso à borda quando fora do alcance.
+    const gateRaw = map(m.gate);
+    const gateOut = Math.hypot(gateRaw.x, gateRaw.y) > usableR;
+    const gate = clamp(gateRaw);
+    g.fillStyle(0x1f1a14, 1);
+    g.fillRect(gate.x - 4, gate.y - 3, 8, 5);
+    g.lineStyle(1.2, m.gateAlert ? 0xfacc15 : 0xcbd5e1, gateOut ? 0.8 : 1);
+    g.strokeRect(gate.x - 4, gate.y - 3, 8, 5);
 
     let alertPos: { x: number; y: number } | null = null;
+    if (m.gateAlert) {
+      alertPos = { x: gate.x, y: gate.y - 2 };
+    }
     for (const npc of m.npcs) {
-      const p = map(npc.pos);
-      if (npc.alert) {
+      const raw = map(npc.pos);
+      const out = Math.hypot(raw.x, raw.y) > usableR;
+      if (out && !npc.marker) continue;
+      const p = clamp(raw);
+      if (npc.marker === '!' || npc.marker === '?yellow' || npc.alert) {
+        g.fillStyle(0x000000, 0.6);
+        g.fillCircle(p.x, p.y, 3.4);
         g.fillStyle(0xfacc15, 1);
         g.fillCircle(p.x, p.y, 2.6);
-        alertPos = p;
+        if (npc.marker === '!' || npc.alert) alertPos ??= p;
+      } else if (npc.marker === '?gray') {
+        g.fillStyle(0x000000, 0.6);
+        g.fillCircle(p.x, p.y, 3);
+        g.fillStyle(0xcbd5e1, 1);
+        g.fillCircle(p.x, p.y, 2.2);
       } else {
         g.fillStyle(0x86efac, 0.95);
-        g.fillCircle(p.x, p.y, 1.8);
+        g.fillCircle(p.x, p.y, 1.9);
       }
     }
-    const hp = map(m.hero);
+
+    // Herói no centro, apontando para onde olha.
     const f = m.heroFacingX < 0 ? -1 : 1;
+    g.fillStyle(0x0b1220, 0.8);
+    g.fillCircle(0, 0, 4.2);
     g.fillStyle(0x38bdf8, 1);
-    g.fillTriangle(hp.x + 4 * f, hp.y, hp.x - 3 * f, hp.y - 3.5, hp.x - 3 * f, hp.y + 3.5);
+    g.fillTriangle(4 * f, 0, -3 * f, -3.5, -3 * f, 3.5);
 
     if (alertPos) {
       this.minimapAlert
@@ -681,6 +771,22 @@ export class VillageHud {
     } else {
       this.minimapAlert.setVisible(false);
     }
+    this.minimapDebug = {
+      scale,
+      gate: { x: gate.x, y: gate.y },
+      npcs: m.npcs.length,
+      planRects: plan?.ground.length ?? 0,
+    };
+  }
+
+  /** Estado do minimapa (debug/E2E). */
+  public getMinimapState(): {
+    scale: number;
+    gate: { x: number; y: number };
+    npcs: number;
+    planRects: number;
+  } {
+    return { ...this.minimapDebug, gate: { ...this.minimapDebug.gate } };
   }
 
   private drawInteractButton(): void {
@@ -722,14 +828,17 @@ export class VillageHud {
       g.fillCircle(cx + k * 7, cy - 2.5, 2.2);
     }
 
-    // Selo da tecla E.
-    g.fillStyle(DF_PALETTE.obsidianBg, 0.95);
-    g.fillCircle(r - 6, -r + 8, 9);
-    g.lineStyle(1.3, DF_PALETTE.agedGold, 0.9);
-    g.strokeCircle(r - 6, -r + 8, 9);
+    // Selo da tecla E (só com teclado; some em telas de toque).
+    const showKey = !isTouchOnlyScreen();
+    if (showKey) {
+      g.fillStyle(DF_PALETTE.obsidianBg, 0.95);
+      g.fillCircle(r - 6, -r + 8, 9);
+      g.lineStyle(1.3, DF_PALETTE.agedGold, 0.9);
+      g.strokeCircle(r - 6, -r + 8, 9);
+    }
 
     this.interactLabel.setAlpha(active ? 1 : 0.6);
-    this.interactKeyText.setAlpha(active ? 1 : 0.6);
+    this.interactKeyText.setVisible(showKey).setAlpha(active ? 1 : 0.6);
     this.interactContainer.setScale(pressed ? 0.95 : 1);
   }
 

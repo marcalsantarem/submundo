@@ -461,7 +461,7 @@
     "portraits": {
       "key": "portraits",
       "file": "portraits.png",
-      "width": 1024,
+      "width": 1152,
       "height": 128,
       "frameWidth": 128,
       "frameHeight": 128,
@@ -473,7 +473,8 @@
         "emissary",
         "spectral_blacksmith",
         "infernal_warden",
-        "system"
+        "system",
+        "village_healer"
       ]
     },
     "village_tiles": {
@@ -2773,6 +2774,309 @@
         "dx": -28.7,
         "dy": -17.3
       }
+    },
+    "quest_markers": {
+      "key": "quest_markers",
+      "file": "quest_markers.png",
+      "width": 192,
+      "height": 24,
+      "frameWidth": 16,
+      "frameHeight": 24,
+      "frames": [
+        "avail0",
+        "avail1",
+        "avail2",
+        "avail3",
+        "progress0",
+        "progress1",
+        "progress2",
+        "progress3",
+        "ready0",
+        "ready1",
+        "ready2",
+        "ready3"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 1.0
+      },
+      "animations": {
+        "avail": {
+          "frames": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "frameRate": 6,
+          "repeat": -1
+        },
+        "progress": {
+          "frames": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "frameRate": 4,
+          "repeat": -1
+        },
+        "ready": {
+          "frames": [
+            8,
+            9,
+            10,
+            11
+          ],
+          "frameRate": 6,
+          "repeat": -1
+        }
+      },
+      "headOffsetY": -4
+    },
+    "mission_herb": {
+      "key": "mission_herb",
+      "file": "mission_herb.png",
+      "width": 160,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "glow0",
+        "glow1",
+        "glow2",
+        "glow3",
+        "picked"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.875
+      },
+      "animations": {
+        "glow": {
+          "frames": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "frameRate": 6,
+          "repeat": -1
+        }
+      }
+    },
+    "mission_tools": {
+      "key": "mission_tools",
+      "file": "mission_tools.png",
+      "width": 160,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": [
+        "glow0",
+        "glow1",
+        "glow2",
+        "glow3",
+        "empty"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.875
+      },
+      "animations": {
+        "glow": {
+          "frames": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "frameRate": 6,
+          "repeat": -1
+        }
+      }
+    },
+    "mission_strange": {
+      "key": "mission_strange",
+      "file": "mission_strange.png",
+      "width": 288,
+      "height": 48,
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "frames": [
+        "pulse0",
+        "pulse1",
+        "pulse2",
+        "pulse3",
+        "pulse4",
+        "pulse5"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.7916666666666666
+      },
+      "animations": {
+        "pulse": {
+          "frames": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "frameRate": 6,
+          "repeat": -1
+        }
+      }
+    },
+    "mission_icons": {
+      "key": "mission_icons",
+      "file": "mission_icons.png",
+      "width": 32,
+      "height": 16,
+      "frameWidth": 16,
+      "frameHeight": 16,
+      "frames": [
+        "icon_herb",
+        "icon_tools"
+      ],
+      "origin": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "menu_panel_frame_tall": {
+      "key": "menu_panel_frame_tall",
+      "file": "../ui/menu/panel_frame_tall.png",
+      "width": 306,
+      "height": 489,
+      "nineSlice": {
+        "left": 72,
+        "top": 72,
+        "right": 72,
+        "bottom": 72
+      }
+    },
+    "menu_compass_logo": {
+      "key": "menu_compass_logo",
+      "file": "../ui/menu/compass_logo.png",
+      "width": 143,
+      "height": 120
+    },
+    "menu_btn_normal": {
+      "key": "menu_btn_normal",
+      "file": "../ui/menu/btn_normal.png",
+      "width": 263,
+      "height": 56,
+      "nineSlice": {
+        "left": 28,
+        "top": 14,
+        "right": 28,
+        "bottom": 14
+      }
+    },
+    "menu_btn_selected": {
+      "key": "menu_btn_selected",
+      "file": "../ui/menu/btn_selected.png",
+      "width": 279,
+      "height": 73,
+      "nineSlice": {
+        "left": 36,
+        "top": 18,
+        "right": 36,
+        "bottom": 18
+      }
+    },
+    "menu_btn_gold": {
+      "key": "menu_btn_gold",
+      "file": "../ui/menu/btn_gold.png",
+      "width": 266,
+      "height": 60,
+      "nineSlice": {
+        "left": 28,
+        "top": 14,
+        "right": 28,
+        "bottom": 14
+      }
+    },
+    "menu_slot_dashed": {
+      "key": "menu_slot_dashed",
+      "file": "../ui/menu/slot_dashed.png",
+      "width": 260,
+      "height": 68,
+      "nineSlice": {
+        "left": 20,
+        "top": 20,
+        "right": 20,
+        "bottom": 20
+      }
+    },
+    "menu_panel_frame_wide": {
+      "key": "menu_panel_frame_wide",
+      "file": "../ui/menu/panel_frame_wide.png",
+      "width": 268,
+      "height": 162,
+      "nineSlice": {
+        "left": 56,
+        "top": 56,
+        "right": 56,
+        "bottom": 56
+      }
+    },
+    "menu_panel_frame_wide_glow": {
+      "key": "menu_panel_frame_wide_glow",
+      "file": "../ui/menu/panel_frame_wide_glow.png",
+      "width": 290,
+      "height": 177,
+      "nineSlice": {
+        "left": 64,
+        "top": 64,
+        "right": 64,
+        "bottom": 64
+      }
+    },
+    "menu_icon_souls": {
+      "key": "menu_icon_souls",
+      "file": "../ui/menu/icon_souls.png",
+      "width": 110,
+      "height": 111
+    },
+    "menu_icon_essence": {
+      "key": "menu_icon_essence",
+      "file": "../ui/menu/icon_essence.png",
+      "width": 71,
+      "height": 96
+    },
+    "menu_btn_locked": {
+      "key": "menu_btn_locked",
+      "file": "../ui/menu/btn_locked.png",
+      "width": 263,
+      "height": 56,
+      "nineSlice": {
+        "left": 28,
+        "top": 14,
+        "right": 28,
+        "bottom": 14
+      }
+    },
+    "menu_icon_lock": {
+      "key": "menu_icon_lock",
+      "file": "../ui/menu/icon_lock.png",
+      "width": 44,
+      "height": 56
+    },
+    "menu_bg": {
+      "key": "menu_bg",
+      "file": "../ui/menu/menu_bg.png",
+      "width": 960,
+      "height": 540
+    },
+    "menu_bg_mobile": {
+      "key": "menu_bg_mobile",
+      "file": "../ui/menu/menu_bg_mobile.png",
+      "width": 844,
+      "height": 390
     }
   }
 }

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'submundo-cache-v0.9.0-vila';
+const CACHE_NAME = 'submundo-cache-v0.9.1-missoes';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting());

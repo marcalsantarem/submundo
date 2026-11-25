@@ -8,7 +8,10 @@ import type {
   CampaignProgress,
   CampaignStageId,
   EquipSlot,
+  PrologueMissionId,
+  PrologueQuestState,
   HeroStats,
+  MenuHubItemId,
   ItemInstance,
   ProgressionCatalog,
   RunEndReport,
@@ -16,6 +19,8 @@ import type {
   StatBonus,
   Vector2D,
 } from '../index';
+import { MENU_HUB_ITEMS } from '../index';
+import { isPrologueMissionId, isPrologueQuestState } from './PrologueQuests';
 import {
   applyGearToHero,
   computeGearBonuses,
@@ -52,10 +57,16 @@ const ALTAR_IDS: readonly AltarUpgradeId[] = [
 ];
 const CAMPAIGN_PHASES: readonly CampaignPhase[] = ['prologue', 'act1'];
 const CAMPAIGN_STAGE_IDS: readonly CampaignStageId[] = [
+  'mission_herbs',
+  'mission_mine',
+  'mission_depths',
+  'act1_submundo',
+];
+/** Fases do prólogo antigo (até o M9); saves com elas recomeçam o prólogo novo (T-142). */
+const LEGACY_PROLOGUE_STAGE_IDS: readonly string[] = [
   'prologue_grotto',
   'prologue_mine',
   'prologue_seal',
-  'act1_submundo',
 ];
 
 function isCampaignPhase(value: unknown): value is CampaignPhase {
@@ -72,31 +83,70 @@ function isCampaignStageId(value: unknown): value is CampaignStageId {
   );
 }
 
+function normalizePrologueQuests(
+  raw: unknown
+): Partial<Record<PrologueMissionId, PrologueQuestState>> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return undefined;
+  }
+  const quests: Partial<Record<PrologueMissionId, PrologueQuestState>> = {};
+  for (const [id, state] of Object.entries(raw as Record<string, unknown>)) {
+    if (isPrologueMissionId(id) && isPrologueQuestState(state)) {
+      quests[id] = state;
+    }
+  }
+  return quests;
+}
+
 function normalizeCampaign(raw: unknown): CampaignProgress | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return undefined;
   }
   const candidate = raw as Partial<CampaignProgress>;
+  const phase: CampaignPhase = isCampaignPhase(candidate.phase) ? candidate.phase : 'prologue';
+  const villageFallTriggered =
+    typeof candidate.villageFallTriggered === 'boolean'
+      ? candidate.villageFallTriggered
+      : false;
+  const seenDialogues = Array.isArray(candidate.seenDialogues)
+    ? candidate.seenDialogues.filter((id): id is string => typeof id === 'string')
+    : [];
+  const completedStages = Array.isArray(candidate.completedStages)
+    ? candidate.completedStages.filter(isCampaignStageId)
+    : [];
+  const inAct1 = phase === 'act1' || villageFallTriggered;
+
+  // Migração (T-142): save no prólogo antigo recomeça o fluxo novo do zero.
+  const hasLegacyPrologue =
+    LEGACY_PROLOGUE_STAGE_IDS.includes(candidate.currentStageId as string) ||
+    LEGACY_PROLOGUE_STAGE_IDS.includes(candidate.masterBriefedStageId as string) ||
+    (Array.isArray(candidate.completedStages) &&
+      candidate.completedStages.some((id) => LEGACY_PROLOGUE_STAGE_IDS.includes(id as string)));
+  if (hasLegacyPrologue && !inAct1) {
+    return {
+      phase: 'prologue',
+      currentStageId: 'mission_herbs',
+      completedStages: [],
+      seenDialogues,
+      villageFallTriggered: false,
+    };
+  }
+
+  const prologueQuests = normalizePrologueQuests(candidate.prologueQuests);
   return {
-    phase: isCampaignPhase(candidate.phase) ? candidate.phase : 'prologue',
+    phase,
     currentStageId: isCampaignStageId(candidate.currentStageId)
       ? candidate.currentStageId
-      : 'prologue_grotto',
-    completedStages: Array.isArray(candidate.completedStages)
-      ? candidate.completedStages.filter(isCampaignStageId)
-      : [],
-    seenDialogues: Array.isArray(candidate.seenDialogues)
-      ? candidate.seenDialogues.filter(
-          (id): id is string => typeof id === 'string'
-        )
-      : [],
-    villageFallTriggered:
-      typeof candidate.villageFallTriggered === 'boolean'
-        ? candidate.villageFallTriggered
-        : false,
-    ...(isCampaignStageId(candidate.masterBriefedStageId)
-      ? { masterBriefedStageId: candidate.masterBriefedStageId }
+      : inAct1
+        ? 'act1_submundo'
+        : 'mission_herbs',
+    completedStages,
+    seenDialogues,
+    villageFallTriggered,
+    ...(typeof candidate.masterIntroDone === 'boolean'
+      ? { masterIntroDone: candidate.masterIntroDone }
       : {}),
+    ...(prologueQuests ? { prologueQuests } : {}),
   };
 }
 
@@ -165,9 +215,45 @@ export function getProgressionCatalog(): ProgressionCatalog {
   return progressionJson as ProgressionCatalog;
 }
 
+function defaultMenuUnlocks(): MenuHubItemId[] {
+  return MENU_HUB_ITEMS.filter((i) => i.unlockedByDefault).map((i) => i.id);
+}
+
+function normalizeMenuUnlocks(raw: unknown): MenuHubItemId[] {
+  const valid = new Set<MenuHubItemId>(MENU_HUB_ITEMS.map((i) => i.id));
+  const result = defaultMenuUnlocks();
+  if (Array.isArray(raw)) {
+    for (const id of raw) {
+      if (valid.has(id as MenuHubItemId) && !result.includes(id as MenuHubItemId)) {
+        result.push(id as MenuHubItemId);
+      }
+    }
+  }
+  return result;
+}
+
+export function isMenuItemUnlocked(
+  profile: SaveProfile,
+  id: MenuHubItemId
+): boolean {
+  return profile.menuUnlocks.includes(id);
+}
+
+/** Libera um item do menu-hub (idempotente, sem duplicar). Muta e devolve o perfil. */
+export function unlockMenuItem(
+  profile: SaveProfile,
+  id: MenuHubItemId
+): SaveProfile {
+  if (!profile.menuUnlocks.includes(id)) {
+    profile.menuUnlocks.push(id);
+  }
+  return profile;
+}
+
 export function createDefaultProfile(): SaveProfile {
   return {
     version: DEFAULT_PROFILE_VERSION,
+    menuUnlocks: defaultMenuUnlocks(),
     souls: 0,
     generalEssences: 0,
     altarLevels: {
@@ -226,6 +312,7 @@ export function loadOrCreateProfile(storage?: StorageLike): SaveProfile {
       typeof loaded.version === 'number' && Number.isFinite(loaded.version)
         ? loaded.version
         : DEFAULT_PROFILE_VERSION,
+    menuUnlocks: normalizeMenuUnlocks(loaded.menuUnlocks),
     souls:
       typeof loaded.souls === 'number' && Number.isFinite(loaded.souls)
         ? Math.max(0, loaded.souls)
@@ -526,12 +613,60 @@ export function unequipProfileSlot(
   return true;
 }
 
+/**
+ * Guarda no perfil os itens que voltam da run, sem duplicar (ids já equipados/no Baú são ignorados).
+ * `equipEmptySlots` (missões do prólogo): o item vai direto para o slot vazio do perfil, como a
+ * dungeon faz ao pegar um item com o slot livre; o resto vai para o Baú (até `maxStashSize`).
+ */
+function storeRunItems(
+  profile: SaveProfile,
+  items: readonly ItemInstance[],
+  equipEmptySlots: boolean
+): void {
+  const knownIds = new Set<string>();
+  for (const slot of EQUIP_SLOTS) {
+    const equippedItem = profile.equipped[slot];
+    if (equippedItem !== null) {
+      knownIds.add(equippedItem.instanceId);
+    }
+  }
+  for (const stashedItem of profile.stash) {
+    knownIds.add(stashedItem.instanceId);
+  }
+
+  for (const item of items) {
+    if (knownIds.has(item.instanceId)) {
+      continue;
+    }
+    if (equipEmptySlots && profile.equipped[item.slot] === null) {
+      profile.equipped[item.slot] = item;
+    } else if (profile.stash.length < profile.maxStashSize) {
+      profile.stash.push(item);
+    } else {
+      continue;
+    }
+    knownIds.add(item.instanceId);
+  }
+}
+
+/** Missão do prólogo (Decisão #26): os itens pegos ficam com o jogador na vitória e na derrota. */
+export function isPrologueMissionReport(report: RunEndReport): boolean {
+  return report.stageId !== undefined && isPrologueMissionId(report.stageId);
+}
+
 export function applyRunOutcomeToProfile(
   profile: SaveProfile,
   report: RunEndReport
 ): SaveProfile {
-  const soulsGained = Math.max(0, Math.round(report.soulsGained));
-  const essencesGained = Math.max(0, Math.round(report.essencesGained));
+  const prologueMission = isPrologueMissionReport(report);
+
+  // Decisão #27: o prólogo não conta Almas nem Essências (vitória ou derrota).
+  const soulsGained = prologueMission
+    ? 0
+    : Math.max(0, Math.round(report.soulsGained));
+  const essencesGained = prologueMission
+    ? 0
+    : Math.max(0, Math.round(report.essencesGained));
 
   profile.souls += soulsGained;
   profile.stats.totalSoulsEarned += soulsGained;
@@ -542,31 +677,17 @@ export function applyRunOutcomeToProfile(
     if (report.bossDefeated) {
       profile.stats.bossesDefeated += 1;
     }
-
-    const knownIds = new Set<string>();
-    for (const slot of EQUIP_SLOTS) {
-      const equippedItem = profile.equipped[slot];
-      if (equippedItem !== null) {
-        knownIds.add(equippedItem.instanceId);
-      }
-    }
-    for (const stashedItem of profile.stash) {
-      knownIds.add(stashedItem.instanceId);
-    }
-
-    for (const keptItem of report.keptItems) {
-      if (knownIds.has(keptItem.instanceId)) {
-        continue;
-      }
-      if (profile.stash.length >= profile.maxStashSize) {
-        break;
-      }
-      profile.stash.push(keptItem);
-      knownIds.add(keptItem.instanceId);
-    }
   } else {
     profile.stats.runsFailed += 1;
   }
+
+  if (prologueMission) {
+    // T-150: no prólogo nada se perde; a cena manda os itens da derrota em `lostItems`.
+    storeRunItems(profile, [...report.keptItems, ...report.lostItems], true);
+  } else if (report.victory) {
+    storeRunItems(profile, report.keptItems, false);
+  }
+  // Fora do prólogo, morrer descarta os itens não extraídos (regra de risco/recompensa).
 
   return profile;
 }

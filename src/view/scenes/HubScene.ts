@@ -16,6 +16,7 @@ import {
 import {
   ensureCampaignProgress,
   getAvailableStages,
+  getCampaignCatalog,
   getCampaignStage,
   getDialogueLine,
   markDialogueSeen,
@@ -37,11 +38,18 @@ import {
 } from '../../core/progression/ProfileManager';
 import { clearProfileStorage } from '../../core/progression/StorageAdapter';
 import {
-  getPrologueDungeonList,
-  getVillageObjective,
+  completeMission,
+  getGateMissions,
+  getPrologueMission,
+  getQuestMarkers,
+  getVillageObjectiveText,
+  isPrologueMissionId,
+  talkToNpc,
+  type QuestMarkers,
+  type TalkOutcome,
+} from '../../core/progression/PrologueQuests';
+import {
   getVillageSpawn,
-  isGateUnlocked,
-  talkToMaster,
   type VillageArrivalOrigin,
   type VillageNpcId,
 } from '../../core/progression/VillageHub';
@@ -66,12 +74,14 @@ import {
   hasUiTextureFrame,
 } from '../ui/DarkFantasyUiBuilder';
 import { DialogueBox } from '../ui/DialogueBox';
-import { GateModal } from '../ui/GateModal';
+import { GateModal, type GateMissionEntry } from '../ui/GateModal';
+import { PrologueEndScreen } from '../ui/PrologueEndScreen';
 import { VillageHud } from '../ui/VillageHud';
 import {
   HERO_FEET_OFFSET,
   VILLAGE_ACTOR_SCALE,
   VILLAGE_LANDMARKS,
+  VILLAGE_MINIMAP_PLAN,
   VILLAGE_MAP_H,
   VILLAGE_MAP_W,
   VILLAGE_NPCS,
@@ -110,13 +120,41 @@ export interface VillageDebugState {
   alertNpcId: VillageNpcId | null;
   dialogueOpen: boolean;
   gateModalOpen: boolean;
+  /** Marcadores de missão (T-147). */
+  markers: QuestMarkers;
+  /** Ids das missões listadas no portão. */
+  gateMissions: string[];
+  /** Última conversa com NPC (resultado de `talkToNpc`) e a fala aberta. */
+  lastTalk: { npcId: VillageNpcId; outcome: TalkOutcome; dialogueId: string } | null;
+  bannerText: string | null;
 }
 
 export interface SubmundoVillageDebugApi {
   getVillageState: () => VillageDebugState | null;
+  /** Leva o herói ao NPC e interage (Decisão #24). `true` se abriu uma fala. */
   talkTo: (npcId: VillageNpcId) => boolean;
   openGate: () => boolean;
+  getQuestMarkers: () => QuestMarkers | null;
+  /** Marca uma missão aceita como cumprida (atalho de teste da vitória). */
+  completeMission: (missionId: string) => boolean;
+  /** Mostra a tela "Fim do Prólogo" (pré-visualização; a DungeonScene chama a real). */
+  showPrologueEnd: () => boolean;
 }
+
+const VILLAGE_DEBUG_KEYS = [
+  'getVillageState',
+  'talkTo',
+  'openGate',
+  'getQuestMarkers',
+  'completeMission',
+  'showPrologueEnd',
+] as const;
+
+const QUEST_GIVER_NAMES: Record<VillageNpcId, string> = {
+  master: 'Mestre de Armas',
+  lyra: 'Lyra',
+  gorran: 'Gorran',
+};
 
 declare global {
   interface Window {
@@ -262,7 +300,9 @@ export class HubScene extends Phaser.Scene {
   private stations: HubStationView[] = [];
   private nearbyStationId: HubStationId | null = null;
   private emissaryDialogueIndex = 0;
-  private selectedStageId: CampaignStageId = 'prologue_grotto';
+  private selectedStageId: CampaignStageId = 'mission_herbs';
+  private lastVillageTalk: VillageDebugState['lastTalk'] = null;
+  private villageDebugKeysAdded: string[] = [];
 
   private elapsedTimeMs = 0;
   private bannerText?: string;
@@ -280,6 +320,9 @@ export class HubScene extends Phaser.Scene {
   public create(data?: HubTransitionData): void {
     this.enteringDungeon = false;
     this.elapsedTimeMs = 0;
+    // A cena é reaproveitada entre idas e voltas: o banner da visita anterior não vaza.
+    this.bannerText = undefined;
+    this.bannerExpiresAtMs = 0;
     this.nearbyStationId = null;
     this.emissaryDialogueIndex = 0;
     this.lastFootstepFrame = -1;
@@ -307,10 +350,10 @@ export class HubScene extends Phaser.Scene {
         applyRunOutcomeToProfile(this.profile, transitionExt.fromRun);
         persistProfile(this.profile);
       }
-      this.showTimedBanner(
-        this.formatRunEndBanner(transitionExt.fromRun),
-        9000
-      );
+      const runBanner = this.formatRunEndBanner(transitionExt.fromRun);
+      if (runBanner) {
+        this.showTimedBanner(runBanner, 9000);
+      }
     } else {
       const welcomeText =
         campaign.phase === 'prologue'
@@ -545,7 +588,10 @@ export class HubScene extends Phaser.Scene {
         applyRunOutcomeToProfile(this.profile, data.fromRun);
         persistProfile(this.profile);
       }
-      this.showTimedBanner(this.formatRunEndBanner(data.fromRun), 7000);
+      const runBanner = this.formatRunEndBanner(data.fromRun);
+      if (runBanner) {
+        this.showTimedBanner(runBanner, 7000);
+      }
     }
     this.syncSelectedStage(data?.stageId);
     this.cameras.main.setBackgroundColor('#141a12');
@@ -554,7 +600,8 @@ export class HubScene extends Phaser.Scene {
     this.heroFacingX = 1;
 
     const origin: VillageArrivalOrigin = data?.villageOrigin ?? 'boot';
-    const world = new VillageWorld(this, isGateUnlocked(this.profile));
+    this.lastVillageTalk = null;
+    const world = new VillageWorld(this, getGateMissions(this.profile).length > 0);
     this.villageWorld = world;
     const spawn = world.getSpawn(getVillageSpawn(this.profile, origin));
     this.hero = buildHeroFromProfile(this.profile, spawn);
@@ -705,8 +752,12 @@ export class HubScene extends Phaser.Scene {
     if (!this.villageHud || !this.villageWorld) {
       return;
     }
-    const objective = getVillageObjective(this.profile);
-    this.villageWorld.setAlertNpc(objective.alertNpcId);
+    const markers = getQuestMarkers(this.profile);
+    this.villageWorld.setQuestMarkers(markers.npcs, markers.gate);
+    const gateOpen = markers.gate !== null;
+    if (this.villageWorld.isGateOpen() !== gateOpen) {
+      this.villageWorld.setGateOpen(gateOpen);
+    }
     const heroLevel =
       1 + Object.values(this.profile.altarLevels).reduce((a, b) => a + b, 0);
     this.villageHud.update({
@@ -714,7 +765,7 @@ export class HubScene extends Phaser.Scene {
       heroLevel,
       hp: this.hero.stats.hp,
       maxHp: this.hero.stats.maxHp,
-      objectiveText: objective.text,
+      objectiveText: getVillageObjectiveText(this.profile),
       interactLabel: this.villageNearby?.label,
       isMuted: soundManager.isMuted(),
       bannerText: this.bannerText,
@@ -730,8 +781,15 @@ export class HubScene extends Phaser.Scene {
         npcs: VILLAGE_NPCS.map((n) => ({
           id: n.id,
           pos: n.pos,
-          alert: objective.alertNpcId === n.id,
+          alert: markers.npcs[n.id] === '!' || markers.npcs[n.id] === '?yellow',
+          marker: markers.npcs[n.id],
         })),
+        gateAlert: gateOpen,
+        plan: {
+          ground: VILLAGE_MINIMAP_PLAN.ground.map((r) => ({ ...r })),
+          walls: VILLAGE_MINIMAP_PLAN.walls.map((w) => ({ ...w })),
+          forge: VILLAGE_MINIMAP_PLAN.forge,
+        },
       },
     });
   }
@@ -743,37 +801,108 @@ export class HubScene extends Phaser.Scene {
     }
     soundManager.unlock();
     if (near.id === 'gate') {
-      if (isGateUnlocked(this.profile)) {
+      if (getGateMissions(this.profile).length > 0) {
         this.openGateModal();
       } else {
-        this.openDialogue(['village_gate_locked']);
+        this.openGateLockedLine();
       }
       return;
     }
     this.talkToVillageNpc(near.id);
   }
 
-  private talkToVillageNpc(id: VillageNpcId): void {
-    if (id === 'master') {
-      const firstTalk = talkToMaster(this.profile);
-      persistProfile(this.profile);
-      this.villageWorld?.setGateOpen(isGateUnlocked(this.profile));
-      const stage = ensureCampaignProgress(this.profile).currentStageId;
-      const missionKey: Partial<Record<CampaignStageId, string>> = {
-        prologue_grotto: 'village_master_mission_grotto',
-        prologue_mine: 'village_master_mission_mine',
-        prologue_seal: 'village_master_mission_seal',
-      };
-      const line = firstTalk
-        ? (missionKey[stage] ?? 'village_master_idle')
-        : 'village_master_idle';
-      this.openDialogue([line]);
-      this.updateHud();
+  /** Portão sem missão aceita (T-147): antes do Mestre, a fala do M9; depois, um lembrete. */
+  private openGateLockedLine(): void {
+    if (!ensureCampaignProgress(this.profile).masterIntroDone) {
+      this.openDialogue(['village_gate_locked']);
       return;
     }
-    const idx = this.villageLineIdx[id];
-    this.villageLineIdx[id] = idx + 1;
-    this.openDialogue([idx % 2 === 0 ? `village_${id}_idle` : `village_${id}_idle_2`]);
+    const base = getDialogueLine('village_gate_locked');
+    if (!base) {
+      return;
+    }
+    this.openDialogueLines([
+      {
+        ...base,
+        text: 'Nenhuma missão aceita no momento. Fale com os moradores da vila antes de sair.',
+        shortText: 'Aceite uma missão antes de sair.',
+      },
+    ]);
+  }
+
+  /** Fala certa para o resultado de `talkToNpc` (Decisão #24). */
+  private questDialogueId(npcId: VillageNpcId, outcome: TalkOutcome): string {
+    if (npcId === 'master') {
+      switch (outcome.kind) {
+        case 'intro':
+          return 'quest_master_intro';
+        case 'accepted':
+          return 'quest_master_depths_offer';
+        case 'in_progress':
+          return 'quest_master_depths_progress';
+        default:
+          return 'quest_master_wait';
+      }
+    }
+    switch (outcome.kind) {
+      case 'accepted':
+        return `quest_${npcId}_offer`;
+      case 'in_progress':
+        return `quest_${npcId}_progress`;
+      case 'turned_in':
+        return `quest_${npcId}_turnin`;
+      default:
+        // Antes da introdução do Mestre ainda não há missão: falas soltas do M9.
+        if (!ensureCampaignProgress(this.profile).masterIntroDone) {
+          const idx = this.villageLineIdx[npcId];
+          this.villageLineIdx[npcId] = idx + 1;
+          return idx % 2 === 0 ? `village_${npcId}_idle` : `village_${npcId}_idle_2`;
+        }
+        return `quest_${npcId}_done`;
+    }
+  }
+
+  private talkToVillageNpc(id: VillageNpcId): void {
+    const outcome = talkToNpc(this.profile, id);
+    persistProfile(this.profile);
+    const dialogueId = this.questDialogueId(id, outcome);
+    this.lastVillageTalk = { npcId: id, outcome, dialogueId };
+
+    if (outcome.missionId && (outcome.kind === 'accepted' || outcome.kind === 'turned_in')) {
+      const name = this.missionName(outcome.missionId);
+      if (outcome.kind === 'accepted') {
+        this.showTimedBanner(`Missão aceita: ${name}`, 3200);
+      } else {
+        soundManager.play('altar');
+        this.showTimedBanner(`Missão concluída: ${name}`, 3600);
+      }
+    }
+    this.openDialogue([dialogueId]);
+    this.updateHud();
+  }
+
+  private missionName(missionId: string): string {
+    if (!isPrologueMissionId(missionId)) {
+      return missionId;
+    }
+    try {
+      return getPrologueMission(missionId).name;
+    } catch {
+      return missionId;
+    }
+  }
+
+  private buildGateEntries(): GateMissionEntry[] {
+    return getGateMissions(this.profile).map((mission) => {
+      const itemId = mission.objective?.itemId;
+      const giver = mission.giverNpcId as VillageNpcId | undefined;
+      return {
+        stageId: mission.id,
+        title: mission.name,
+        giverName: giver ? QUEST_GIVER_NAMES[giver] : undefined,
+        icon: itemId === 'herb' ? 'herb' : itemId === 'mine_tool' ? 'tools' : null,
+      };
+    });
   }
 
   private openGateModal(): void {
@@ -782,7 +911,7 @@ export class HubScene extends Phaser.Scene {
     }
     soundManager.play('ui_click');
     this.closeAllModalsExcept('gate');
-    this.gateModal.open(getPrologueDungeonList(this.profile));
+    this.gateModal.open(this.buildGateEntries());
     this.updateHud();
   }
 
@@ -803,15 +932,24 @@ export class HubScene extends Phaser.Scene {
     if (!this.isVillage || !this.hero) {
       return null;
     }
-    const objective = getVillageObjective(this.profile);
+    const markers = getQuestMarkers(this.profile);
+    const gate = getGateMissions(this.profile);
+    const alertNpcId =
+      VILLAGE_NPCS.map((n) => n.id).find(
+        (id) => markers.npcs[id] === '!' || markers.npcs[id] === '?yellow'
+      ) ?? null;
     return {
       hero: { x: Math.round(this.hero.position.x), y: Math.round(this.hero.position.y) },
       nearby: this.villageNearby?.id ?? null,
-      gateUnlocked: isGateUnlocked(this.profile),
-      objective: objective.text,
-      alertNpcId: objective.alertNpcId,
+      gateUnlocked: gate.length > 0,
+      objective: getVillageObjectiveText(this.profile),
+      alertNpcId,
       dialogueOpen: Boolean(this.dialogueBox?.isOpen()),
       gateModalOpen: Boolean(this.gateModal?.isOpen()),
+      markers,
+      gateMissions: gate.map((m) => m.id),
+      lastTalk: this.lastVillageTalk,
+      bannerText: this.bannerText ?? null,
     };
   }
 
@@ -839,6 +977,30 @@ export class HubScene extends Phaser.Scene {
         this.interactInVillage();
         return Boolean(this.gateModal?.isOpen());
       },
+      getQuestMarkers: () => (this.isVillage ? getQuestMarkers(this.profile) : null),
+      completeMission: (missionId: string) => {
+        if (!this.isVillage || !isPrologueMissionId(missionId)) {
+          return false;
+        }
+        const result = completeMission(this.profile, missionId);
+        if (result.changed) {
+          persistProfile(this.profile);
+          this.updateHud();
+        }
+        return result.changed;
+      },
+      showPrologueEnd: () => {
+        if (!this.isVillage) {
+          return false;
+        }
+        this.closeAllModalsExcept(null);
+        PrologueEndScreen.show(this, {
+          title: getDialogueLine('prologue_end_title')?.text ?? 'Fim do Prólogo',
+          text: getDialogueLine('prologue_end_text')?.text ?? '',
+          onContinue: () => this.updateHud(),
+        });
+        return true;
+      },
     };
     window.__SUBMUNDO_HUB_DEBUG__ = {
       scene: this,
@@ -857,9 +1019,18 @@ export class HubScene extends Phaser.Scene {
       getDialogueBox: () => this.dialogueBox,
       ...village,
     };
-    // Também em `window.__SUBMUNDO_DEBUG__` (objeto da DungeonScene, quando existir).
+    // Também em `window.__SUBMUNDO_DEBUG__`, só com a Vila ativa e sem sobrescrever
+    // chaves da DungeonScene (ressalva do M9). As chaves saem no SHUTDOWN.
     const w = window as unknown as { __SUBMUNDO_DEBUG__?: Record<string, unknown> };
-    w.__SUBMUNDO_DEBUG__ = Object.assign(w.__SUBMUNDO_DEBUG__ ?? {}, village);
+    const target = w.__SUBMUNDO_DEBUG__ ?? {};
+    this.villageDebugKeysAdded = [];
+    for (const key of VILLAGE_DEBUG_KEYS) {
+      if (!(key in target)) {
+        target[key] = village[key];
+        this.villageDebugKeysAdded.push(key);
+      }
+    }
+    w.__SUBMUNDO_DEBUG__ = target;
   }
 
   private createModals(): void {
@@ -1002,6 +1173,14 @@ export class HubScene extends Phaser.Scene {
     const lines = ids
       .map((id) => getDialogueLine(id))
       .filter((line): line is DialogueLine => line !== null);
+    this.openDialogueLines(lines, onComplete);
+  }
+
+  /** Abre falas já montadas (ex.: variação do texto do portão). */
+  private openDialogueLines(lines: DialogueLine[], onComplete?: () => void): void {
+    if (this.enteringDungeon) {
+      return;
+    }
     if (lines.length === 0) {
       onComplete?.();
       return;
@@ -1275,7 +1454,8 @@ export class HubScene extends Phaser.Scene {
       }
     }
 
-    this.selectedStageId = available[0]?.id ?? 'prologue_grotto';
+    this.selectedStageId =
+      available[0]?.id ?? (campaign.phase === 'act1' ? 'act1_submundo' : 'mission_herbs');
   }
 
   private cycleSelectedStage(): void {
@@ -1337,9 +1517,18 @@ export class HubScene extends Phaser.Scene {
     const fromRun = transitionExt?.fromRun;
 
     if (fromRun?.triggeredVillageFall) {
-      const fallIds = ['village_fall_boss', 'village_fall_pact', 'act1_briefing'];
+      // T-153: o Ato 1 abre com a chegada ao Submundo (`act1_arrival_*`, AG06).
+      // As falas da queda antiga (`village_fall_*`, `act1_briefing`) saíram do fluxo.
+      const arrivalIds: string[] = [];
+      for (let i = 1; i <= 9; i++) {
+        const id = `act1_arrival_${i}`;
+        if (getDialogueLine(id)) arrivalIds.push(id);
+      }
+      if (arrivalIds.length === 0) {
+        return;
+      }
       let changed = false;
-      for (const id of fallIds) {
+      for (const id of arrivalIds) {
         if (markDialogueSeen(this.profile, id)) {
           changed = true;
         }
@@ -1347,11 +1536,14 @@ export class HubScene extends Phaser.Scene {
       if (changed) {
         persistProfile(this.profile);
       }
-      this.openDialogue(fallIds);
+      this.openDialogue(arrivalIds);
       return;
     }
 
-    if (fromRun?.victory && fromRun.stageId) {
+    const stageExists =
+      Boolean(fromRun?.stageId) &&
+      getCampaignCatalog().stages.some((stage) => stage.id === fromRun?.stageId);
+    if (fromRun?.victory && fromRun.stageId && stageExists) {
       try {
         const stageDef = getCampaignStage(fromRun.stageId);
         const unseenVictoryIds = stageDef.victoryDialogueIds.filter(
@@ -1375,7 +1567,7 @@ export class HubScene extends Phaser.Scene {
       campaign.phase === 'prologue' &&
       !campaign.seenDialogues.includes('prologue_welcome')
     ) {
-      const introIds = ['prologue_welcome', 'stage_grotto_intro'];
+      const introIds = ['prologue_welcome'];
       for (const id of introIds) {
         markDialogueSeen(this.profile, id);
       }
@@ -1771,7 +1963,45 @@ export class HubScene extends Phaser.Scene {
     this.updateHud();
   }
 
-  private formatRunEndBanner(report: RunEndReport): string {
+  /**
+   * Banner de volta (T-153). Missões do prólogo: "Missão cumprida: <nome>. Fale
+   * com <NPC>." / derrota "tente de novo"; textos do AG06 quando existirem.
+   * Morte para o Karnak (fim do prólogo): sem banner (as falas do Ato 1 assumem).
+   */
+  private formatRunEndBanner(report: RunEndReport): string | null {
+    if (report.triggeredVillageFall) {
+      return null;
+    }
+    if (report.stageId && isPrologueMissionId(report.stageId)) {
+      const missionId = report.stageId;
+      let npcName = '';
+      try {
+        const giver = getPrologueMission(missionId).giverNpcId as VillageNpcId | undefined;
+        npcName = giver ? QUEST_GIVER_NAMES[giver] ?? '' : '';
+      } catch {
+        npcName = '';
+      }
+      const fill = (text: string): string =>
+        text.replace(/\{mission\}/g, this.missionName(missionId)).replace(/\{npc\}/g, npcName);
+      const pick = (ids: string[]): string | null => {
+        for (const id of ids) {
+          const line = getDialogueLine(id);
+          const text = (line?.shortText ?? line?.text ?? '').trim();
+          if (text.length > 0) return fill(text);
+        }
+        return null;
+      };
+      if (report.victory) {
+        return (
+          pick(['mission_return_banner_victory', 'mission_return_victory']) ??
+          fill(npcName ? 'Missão cumprida: {mission}. Fale com {npc}.' : 'Missão cumprida: {mission}.')
+        );
+      }
+      return (
+        pick(['mission_return_banner_defeat', 'mission_return_defeat']) ??
+        'Você foi derrotado. Tente de novo pelo portão.'
+      );
+    }
     if (report.victory) {
       return `Extração completa! +${report.soulsGained} Almas, +${report.essencesGained} Essências, ${report.keptItems.length} item(ns) no Baú.`;
     }
@@ -1857,10 +2087,14 @@ export class HubScene extends Phaser.Scene {
       const w = window as unknown as { __SUBMUNDO_DEBUG__?: Record<string, unknown> };
       const dbg = w.__SUBMUNDO_DEBUG__;
       if (dbg) {
-        delete dbg.getVillageState;
-        delete dbg.talkTo;
-        delete dbg.openGate;
+        for (const key of this.villageDebugKeysAdded) {
+          delete dbg[key];
+        }
+        if (Object.keys(dbg).length === 0) {
+          w.__SUBMUNDO_DEBUG__ = undefined;
+        }
       }
+      this.villageDebugKeysAdded = [];
     }
 
     if (

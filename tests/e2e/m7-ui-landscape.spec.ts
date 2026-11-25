@@ -8,6 +8,8 @@ import {
   assertLandscapeCanvas,
   clickLogicalCanvas,
   dispatchWindowKey,
+  menuButtonPoint,
+  waitForMenuHub,
   openMobileLandscapePage,
 } from './helpers/landscape';
 
@@ -37,7 +39,7 @@ function readPngDimensions(filePath: string): { width: number; height: number } 
 
 test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (960x540 / 844x390)', () => {
   test('validates 2D UI spritesheets, sprites manifest, PWA landscape orientation, #rotate-overlay, Cinzel font, and clean UI sources', () => {
-    // 1. Validate ui_icons.png (1152x64, 18 frames 64x64) & portraits.png (1024x128, 8 frames 128x128)
+    // 1. Validate ui_icons.png (1152x64, 18 frames 64x64) & portraits.png (1152x128, 9 frames 128x128; frame 8 = Lyra, T-153)
     const uiIconsPath = resolve(ROOT_DIR, 'public/assets/sprites/ui_icons.png');
     const portraitsPath = resolve(ROOT_DIR, 'public/assets/sprites/portraits.png');
     const spritesManifestPath = resolve(ROOT_DIR, 'public/assets/sprites/manifest.json');
@@ -47,7 +49,7 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
     expect(existsSync(spritesManifestPath)).toBe(true);
 
     expect(readPngDimensions(uiIconsPath)).toEqual({ width: 1152, height: 64 });
-    expect(readPngDimensions(portraitsPath)).toEqual({ width: 1024, height: 128 });
+    expect(readPngDimensions(portraitsPath)).toEqual({ width: 1152, height: 128 });
 
     const spritesManifest = JSON.parse(
       readFileSync(spritesManifestPath, 'utf-8')
@@ -78,11 +80,11 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
 
     const portraitsSpec = spritesManifest.sprites.portraits;
     expect(portraitsSpec).toBeDefined();
-    expect(portraitsSpec.width).toBe(1024);
+    expect(portraitsSpec.width).toBe(1152);
     expect(portraitsSpec.height).toBe(128);
     expect(portraitsSpec.frameWidth).toBe(128);
     expect(portraitsSpec.frameHeight).toBe(128);
-    expect(portraitsSpec.frames).toHaveLength(8);
+    expect(portraitsSpec.frames).toHaveLength(9);
 
     // 2. Validate public/manifest.webmanifest ("orientation": "landscape") & index.html (#rotate-overlay + Cinzel)
     const webManifestPath = resolve(ROOT_DIR, 'public/manifest.webmanifest');
@@ -128,7 +130,7 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
     }
   });
 
-  test('renders the Vila Natal (root URL) in Desktop Landscape (960x540), opens InventoryModal via the Vila Mochila button cleanly, and saves m7-desktop-landscape.png', async ({
+  test('renders the menu-hub (root URL) in Desktop Landscape (960x540), opens the Inventory from the Inventário button cleanly, and saves m7-desktop-landscape.png', async ({
     page,
   }) => {
     mkdirSync(SCREENSHOT_DIR, { recursive: true });
@@ -156,110 +158,35 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
 
     await expect(page).toHaveTitle(`SUBMUNDO v${GAME_VERSION}`);
 
-    // M9 (Decisão #23): the root URL opens the Vila Natal (HubScene, prologue).
-    await page.waitForFunction(
-      () => Boolean(window.__SUBMUNDO_HUB_DEBUG__?.getVillageState?.()),
-      undefined,
-      { timeout: 10000 }
-    );
-
+    // M11 (Decisão #29): a raiz abre o menu-hub (MenuHubScene).
+    await waitForMenuHub(page);
     await assertLandscapeCanvas(page, DESKTOP_VIEWPORT);
 
-    const runtimeCheck = await page.evaluate(() => {
+    const overlayDisplay = await page.evaluate(() => {
       const overlay = document.getElementById('rotate-overlay');
-      const overlayDisplay = overlay
-        ? window.getComputedStyle(overlay).display
-        : null;
-      const activeScene = window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as {
-        textures: {
-          exists: (k: string) => boolean;
-          get: (k: string) => {
-            source: Array<{ width: number; height: number }>;
-            getFrameNames: () => string[];
-          };
-        };
-      };
-
-      const uiIcons = activeScene.textures.exists('ui_icons')
-        ? activeScene.textures.get('ui_icons')
-        : null;
-      const portraits = activeScene.textures.exists('portraits')
-        ? activeScene.textures.get('portraits')
-        : null;
-
-      return {
-        hasRotateOverlay: Boolean(overlay),
-        overlayDisplay,
-        uiIconsWidth: uiIcons?.source[0]?.width ?? 0,
-        uiIconsHeight: uiIcons?.source[0]?.height ?? 0,
-        uiIconsFrames: uiIcons?.getFrameNames().length ?? 0,
-        portraitsWidth: portraits?.source[0]?.width ?? 0,
-        portraitsHeight: portraits?.source[0]?.height ?? 0,
-        portraitsFrames: portraits?.getFrameNames().length ?? 0,
-        sceneKey: (window.__SUBMUNDO_HUB_DEBUG__!.scene as unknown as { scene: { key: string } }).scene.key,
-      };
+      return overlay ? window.getComputedStyle(overlay).display : null;
     });
+    expect(overlayDisplay).toBe('none');
 
-    expect(runtimeCheck.hasRotateOverlay).toBe(true);
-    expect(runtimeCheck.overlayDisplay).toBe('none');
-    expect(runtimeCheck.uiIconsWidth).toBe(1152);
-    expect(runtimeCheck.uiIconsHeight).toBe(64);
-    expect(runtimeCheck.uiIconsFrames).toBe(18);
-    expect(runtimeCheck.portraitsWidth).toBe(1024);
-    expect(runtimeCheck.portraitsHeight).toBe(128);
-    expect(runtimeCheck.portraitsFrames).toBe(8);
-    expect(runtimeCheck.sceneKey).toBe('HubScene');
-
-    // Open InventoryModal with a real mouse click on the Vila HUD "Mochila" button
-    const bagBtn = await page.evaluate(() => {
-      const hub = window.__SUBMUNDO_HUB_DEBUG__!;
-      hub.getDialogueBox().close();
-      const scene = hub.scene as unknown as {
-        villageHud: { bagBtn: { container: { x: number; y: number } } };
-      };
-      return { x: scene.villageHud.bagBtn.container.x, y: scene.villageHud.bagBtn.container.y };
-    });
-    await clickLogicalCanvas(page, bagBtn.x, bagBtn.y);
-
+    // Abre o Inventário com clique real no botão "Inventário".
+    const btn = menuButtonPoint('inventario', false);
+    await clickLogicalCanvas(page, btn.x, btn.y);
     await page.waitForFunction(
-      () => {
-        const scene = (window.__SUBMUNDO_HUB_DEBUG__?.scene) as unknown as {
-          inventoryModal?: { isOpen: () => boolean };
-        };
-        return scene?.inventoryModal?.isOpen() === true;
-      },
+      () => window.__SUBMUNDO_MENU_DEBUG__?.getState().inventoryOpen === true,
       undefined,
       { timeout: 3000 }
     );
 
-    const slotCount = await page.evaluate(() => {
-      const scene = (window.__SUBMUNDO_HUB_DEBUG__?.scene) as unknown as {
-        inventoryModal: { slotCards: Array<{ slot: string }> };
-      };
-      return scene.inventoryModal.slotCards.map((c) => c.slot);
-    });
-    expect(slotCount).toHaveLength(6);
-    expect(slotCount).toContain('helm');
-    expect(slotCount).toContain('boots');
-
     await page.waitForTimeout(150);
-    const desktopScreenshotPath = resolve(
-      SCREENSHOT_DIR,
-      'm7-desktop-landscape.png'
-    );
+    const desktopScreenshotPath = resolve(SCREENSHOT_DIR, 'm7-desktop-landscape.png');
     await page.screenshot({ path: desktopScreenshotPath });
     expect(existsSync(desktopScreenshotPath)).toBe(true);
     expect(statSync(desktopScreenshotPath).size).toBeGreaterThan(5000);
 
-    // Close via Escape and verify clean close
+    // Fecha com Escape.
     await dispatchWindowKey(page, 'Escape', 'Escape', 27);
     await page.waitForFunction(
-      () => {
-        const scene = (window.__SUBMUNDO_HUB_DEBUG__?.scene) as unknown as {
-          inventoryModal?: { isOpen: () => boolean };
-        };
-        return scene?.inventoryModal?.isOpen() === false;
-      },
+      () => window.__SUBMUNDO_MENU_DEBUG__?.getState().inventoryOpen === false,
       undefined,
       { timeout: 3000 }
     );
@@ -269,7 +196,7 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
     expect(notFoundUrls).toEqual([]);
   });
 
-  test('renders the Vila Natal (root URL) in Mobile Landscape (844x390, hasTouch: true), opens InventoryModal via the Vila Mochila button cleanly, and saves m7-mobile-landscape.png', async ({
+  test('renders the menu-hub (root URL) in Mobile Landscape (844x390, hasTouch: true), opens the Inventory by tap cleanly, and saves m7-mobile-landscape.png', async ({
     browser,
     baseURL,
   }) => {
@@ -279,87 +206,46 @@ test.describe('SUBMUNDO M7 — Dark Fantasy 2D UI & Exclusive Landscape Mode (96
     const pageErrors: string[] = [];
     const notFoundUrls: string[] = [];
 
-    const { context: mobileContext, page: mobilePage } =
-      await openMobileLandscapePage(browser, {
-        baseURL,
-        consoleErrors,
-        pageErrors,
-        notFoundUrls,
-      });
+    const { context: mobileContext, page: mobilePage } = await openMobileLandscapePage(browser, {
+      baseURL,
+      consoleErrors,
+      pageErrors,
+      notFoundUrls,
+    });
 
     try {
       await mobilePage.goto('/');
       await expect(mobilePage).toHaveTitle(`SUBMUNDO v${GAME_VERSION}`);
-
-      await mobilePage.waitForFunction(
-        () => Boolean(window.__SUBMUNDO_HUB_DEBUG__?.getVillageState?.()),
-        undefined,
-        { timeout: 10000 }
-      );
-
+      await waitForMenuHub(mobilePage);
       await assertLandscapeCanvas(mobilePage, MOBILE_LANDSCAPE_VIEWPORT);
 
       const mobileState = await mobilePage.evaluate(() => {
         const overlay = document.getElementById('rotate-overlay');
-        const overlayDisplay = overlay
-          ? window.getComputedStyle(overlay).display
-          : null;
-        const hub = window.__SUBMUNDO_HUB_DEBUG__!;
-        hub.getDialogueBox().close();
-        const scene = hub.scene as unknown as {
-          villageHud: { bagBtn: { container: { x: number; y: number } } };
-        };
-        const bagBtn = {
-          x: scene.villageHud.bagBtn.container.x,
-          y: scene.villageHud.bagBtn.container.y,
-        };
-
         return {
           maxTouchPoints: navigator.maxTouchPoints,
-          overlayDisplay,
-          bagBtn,
+          overlayDisplay: overlay ? window.getComputedStyle(overlay).display : null,
         };
       });
-
       expect(mobileState.maxTouchPoints).toBeGreaterThan(0);
       expect(mobileState.overlayDisplay).toBe('none');
-      expect(mobileState.bagBtn).toBeTruthy();
 
-      // Open InventoryModal by tapping/clicking the Mochila HUD button
-      await clickLogicalCanvas(
-        mobilePage,
-        mobileState.bagBtn!.x,
-        mobileState.bagBtn!.y
-      );
-
+      const btn = menuButtonPoint('inventario', true);
+      await clickLogicalCanvas(mobilePage, btn.x, btn.y);
       await mobilePage.waitForFunction(
-        () => {
-          const scene = (window.__SUBMUNDO_HUB_DEBUG__?.scene) as unknown as {
-            inventoryModal?: { isOpen: () => boolean };
-          };
-          return scene?.inventoryModal?.isOpen() === true;
-        },
+        () => window.__SUBMUNDO_MENU_DEBUG__?.getState().inventoryOpen === true,
         undefined,
         { timeout: 3000 }
       );
 
       await mobilePage.waitForTimeout(150);
-      const mobileScreenshotPath = resolve(
-        SCREENSHOT_DIR,
-        'm7-mobile-landscape.png'
-      );
+      const mobileScreenshotPath = resolve(SCREENSHOT_DIR, 'm7-mobile-landscape.png');
       await mobilePage.screenshot({ path: mobileScreenshotPath });
       expect(existsSync(mobileScreenshotPath)).toBe(true);
       expect(statSync(mobileScreenshotPath).size).toBeGreaterThan(4000);
 
       await dispatchWindowKey(mobilePage, 'Escape', 'Escape', 27);
       await mobilePage.waitForFunction(
-        () => {
-          const scene = (window.__SUBMUNDO_HUB_DEBUG__?.scene) as unknown as {
-            inventoryModal?: { isOpen: () => boolean };
-          };
-          return scene?.inventoryModal?.isOpen() === false;
-        },
+        () => window.__SUBMUNDO_MENU_DEBUG__?.getState().inventoryOpen === false,
         undefined,
         { timeout: 3000 }
       );

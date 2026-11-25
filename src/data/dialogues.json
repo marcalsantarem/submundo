@@ -265,6 +265,214 @@
       "title": "Portão da Vila",
       "text": "O portão está trancado. Fale com o Mestre de Armas antes de sair da Vila Natal.",
       "shortText": "Fale com o Mestre antes de sair."
+    },
+    "quest_master_intro": {
+      "id": "quest_master_intro",
+      "speaker": "Mestre de Armas",
+      "portraitId": "weapon_master",
+      "title": "Mestre de Armas — Os Pedidos da Vila",
+      "text": "Guarde a lâmina um instante, garoto. Lyra e Gorran precisam de ajuda. Fale com os dois e resolva o que pedirem.",
+      "shortText": "Lyra e Gorran precisam de ajuda. Fale com eles."
+    },
+    "quest_master_wait": {
+      "id": "quest_master_wait",
+      "speaker": "Mestre de Armas",
+      "portraitId": "weapon_master",
+      "title": "Mestre de Armas",
+      "text": "Lyra e Gorran ainda esperam por você. Volte quando os dois pedidos estiverem resolvidos.",
+      "shortText": "Resolva os pedidos de Lyra e Gorran."
+    },
+    "quest_lyra_offer": {
+      "id": "quest_lyra_offer",
+      "speaker": "Lyra",
+      "portraitId": "village_healer",
+      "title": "Missão — A Plantação de Ervas",
+      "text": "Meus frascos estão quase secos. Colha ervas na Plantação de Ervas para mim. Cuidado: os Slimes tomaram os canteiros.",
+      "shortText": "Missão: colha ervas na Plantação de Ervas. Saia pelo portão."
+    },
+    "quest_lyra_progress": {
+      "id": "quest_lyra_progress",
+      "speaker": "Lyra",
+      "portraitId": "village_healer",
+      "title": "Lyra — Curandeira",
+      "text": "As ervas não se colhem sozinhas, guerreiro. A Plantação fica além do portão.",
+      "shortText": "Lyra: as ervas estão na Plantação."
+    },
+    "quest_lyra_turnin": {
+      "id": "quest_lyra_turnin",
+      "speaker": "Lyra",
+      "portraitId": "village_healer",
+      "title": "Lyra — Ervas Entregues",
+      "text": "Folhas inteiras, raízes boas... Isso vai salvar vidas. Obrigada, guerreiro.",
+      "shortText": "Ervas entregues a Lyra."
+    },
+    "quest_lyra_done": {
+      "id": "quest_lyra_done",
+      "speaker": "Lyra",
+      "portraitId": "village_healer",
+      "title": "Lyra — Curandeira",
+      "text": "Meus frascos estão cheios de novo. Se voltar ferido, já sabe onde me achar.",
+      "shortText": "Lyra: frascos cheios, porta aberta."
+    },
+    "quest_gorran_offer": {
+      "id": "quest_gorran_offer",
+      "speaker": "Gorran",
+      "portraitId": "village_blacksmith",
+      "title": "Missão — A Mina Iluminada",
+      "text": "Lobos tomaram a Mina Iluminada e minhas ferramentas ficaram lá dentro. Sem elas, a bigorna esfria. Traga-as de volta.",
+      "shortText": "Missão: recupere as ferramentas de Gorran na Mina Iluminada."
+    },
+    "quest_gorran_progress": {
+      "id": "quest_gorran_progress",
+      "speaker": "Gorran",
+      "portraitId": "village_blacksmith",
+      "title": "Gorran — Ferreiro",
+      "text": "Martelo, tenaz e cinzel. Estão em algum canto da Mina Iluminada.",
+      "shortText": "Gorran: as ferramentas estão na Mina."
+    },
+    "quest_gorran_turnin": {
+      "id": "quest_gorran_turnin",
+      "speaker": "Gorran",
+      "portraitId": "village_blacksmith",
+      "title": "Gorran — Ferramentas Recuperadas",
+      "text": "Minhas ferramentas! Com elas a bigorna volta a cantar. Você tem braço, rapaz.",
+      "shortText": "Ferramentas entregues a Gorran."
+    },
+    "quest_gorran_done": {
+      "id": "quest_gorran_done",
+      "speaker": "Gorran",
+      "portraitId": "village_blacksmith",
+      "title": "Gorran — Ferreiro",
+      "text": "A forja voltou a queimar. Ferro bom pede ferramenta certa.",
+      "shortText": "Gorran: a forja voltou a queimar."
+    },
+    "quest_master_depths_offer": {
+      "id": "quest_master_depths_offer",
+      "speaker": "Mestre de Armas",
+      "portraitId": "weapon_master",
+      "title": "Missão — O Fundo da Mina",
+      "text": "Um brilho vermelho e pedra quente no fundo da mina? Não gosto disso. Vá ver com os próprios olhos, mas volte ao primeiro sinal de perigo.",
+      "shortText": "Missão: explore o Fundo da Mina. Saia pelo portão."
+    },
+    "quest_master_depths_progress": {
+      "id": "quest_master_depths_progress",
+      "speaker": "Mestre de Armas",
+      "portraitId": "weapon_master",
+      "title": "Mestre de Armas",
+      "text": "O Fundo da Mina espera além do portão. Lá embaixo, cabeça fria e olhos abertos.",
+      "shortText": "O Fundo da Mina espera. Vá com cuidado."
+    },
+    "mission_herbs_enter": {
+      "id": "mission_herbs_enter",
+      "speaker": "Jovem Guerreiro",
+      "portraitId": "hero_living",
+      "title": "A Plantação de Ervas",
+      "text": "Slimes por todos os canteiros... Preciso colher as ervas da Lyra antes que estraguem tudo.",
+      "shortText": "Colha as ervas e limpe os Slimes da Plantação."
+    },
+    "mission_herbs_complete": {
+      "id": "mission_herbs_complete",
+      "speaker": "Jovem Guerreiro",
+      "portraitId": "hero_living",
+      "title": "Ervas Colhidas",
+      "text": "Cesto cheio e canteiros limpos. Hora de levar as ervas para a Lyra.",
+      "shortText": "Ervas colhidas! Volte à Vila e fale com Lyra."
+    },
+    "mission_mine_enter": {
+      "id": "mission_mine_enter",
+      "speaker": "Jovem Guerreiro",
+      "portraitId": "hero_living",
+      "title": "A Mina Iluminada",
+      "text": "Lanternas acesas, mas há uivos nas galerias. As ferramentas do Gorran estão em algum lugar aqui embaixo.",
+      "shortText": "Recupere as ferramentas de Gorran na Mina Iluminada."
+    },
+    "mission_mine_complete": {
+      "id": "mission_mine_complete",
+      "speaker": "Jovem Guerreiro",
+      "portraitId": "hero_living",
+      "title": "Ferramentas Recuperadas",
+      "text": "O Chefe da Matilha caiu e as ferramentas estão comigo. Gorran vai voltar a martelar.",
+      "shortText": "Ferramentas recuperadas! Volte à Vila e fale com Gorran."
+    },
+    "mission_mine_strange": {
+      "id": "mission_mine_strange",
+      "speaker": "Jovem Guerreiro",
+      "portraitId": "hero_living",
+      "title": "Algo no Fundo da Mina",
+      "text": "O que é aquilo? Um brilho vermelho pulsa entre as rochas lá embaixo... e a pedra está quente como brasa. Preciso contar ao Mestre.",
+      "shortText": "Um brilho vermelho pulsa no fundo da mina. Conte ao Mestre."
+    },
+    "mission_depths_enter": {
+      "id": "mission_depths_enter",
+      "speaker": "Jovem Guerreiro",
+      "portraitId": "hero_living",
+      "title": "O Fundo da Mina",
+      "text": "Escuro demais, quente demais. O brilho vermelho está mais perto a cada passo.",
+      "shortText": "Desça ao Fundo da Mina e descubra a origem do brilho."
+    },
+    "mission_depths_karnak": {
+      "id": "mission_depths_karnak",
+      "speaker": "Karnak",
+      "portraitId": "karnak",
+      "title": "Sala 5 — Karnak",
+      "text": "Carne viva no limiar do Inferno... Sua lâmina é palha, mortal. Ninguém sai desta mina.",
+      "shortText": "Karnak: 'Ninguém sai desta mina, mortal.'"
+    },
+    "prologue_end_title": {
+      "id": "prologue_end_title",
+      "speaker": "Sistema",
+      "portraitId": "system",
+      "title": "Fim do Prólogo",
+      "text": "Fim do Prólogo",
+      "shortText": "Fim do Prólogo"
+    },
+    "prologue_end_text": {
+      "id": "prologue_end_text",
+      "speaker": "Sistema",
+      "portraitId": "system",
+      "title": "Fim do Prólogo",
+      "text": "O Jovem Guerreiro tombou no Fundo da Mina, e o brilho vermelho continuou a pulsar. Mas a história dele não termina aqui.",
+      "shortText": "O Jovem Guerreiro tombou. A história não termina aqui."
+    },
+    "mission_return_victory": {
+      "id": "mission_return_victory",
+      "speaker": "Sistema",
+      "portraitId": "system",
+      "title": "Volta à Vila",
+      "text": "Missão cumprida: {mission}. Volte à Vila Natal e fale com {npc}.",
+      "shortText": "Missão cumprida: {mission}. Fale com {npc}."
+    },
+    "mission_return_defeat": {
+      "id": "mission_return_defeat",
+      "speaker": "Sistema",
+      "portraitId": "system",
+      "title": "Volta à Vila",
+      "text": "Você recuou ferido para a Vila Natal. {mission} ainda espera. Fale com {npc}.",
+      "shortText": "Você recuou ferido. Tente {mission} de novo."
+    },
+    "act1_arrival_1": {
+      "id": "act1_arrival_1",
+      "speaker": "Guerreiro Espectral",
+      "portraitId": "hero_wraith",
+      "title": "O Despertar",
+      "text": "O machado do Karnak... o frio da rocha... e depois nada. Que lugar é este? Meu corpo não pesa mais.",
+      "shortText": "Você desperta no Submundo. O Karnak o matou no Fundo da Mina."
+    },
+    "act1_arrival_2": {
+      "id": "act1_arrival_2",
+      "speaker": "Emissário Celestial",
+      "portraitId": "emissary",
+      "title": "O Selo Celestial",
+      "text": "Você morreu no Fundo da Mina, guerreiro. Antes que sua alma se apagasse, cravei nela o Selo Celestial. Agora você é um Guerreiro Espectral, e este é o Refúgio do Submundo.",
+      "shortText": "O Emissário Celestial cravou o Selo Celestial em sua alma."
+    },
+    "act1_arrival_3": {
+      "id": "act1_arrival_3",
+      "speaker": "Emissário Celestial",
+      "portraitId": "emissary",
+      "title": "Ato 1 — A Caçada",
+      "text": "O Karnak é a vanguarda dos Generais do Inferno. Atravesse a Fenda, cace-os um a um, começando pelo Carcereiro Infernal, e o Selo lhe devolverá a vida.",
+      "shortText": "Atravesse a Fenda e cace os Generais do Inferno."
     }
   },
   "dungeon_enter": "As correntes do Submundo rangem, Guerreiro Espectral. Expurgue as quatro câmaras e reivindique a cabeça do Carcereiro Infernal.",
@@ -299,5 +507,31 @@
   "village_lyra_idle_2": "Lyra: lute com a cabeça.",
   "village_gorran_idle": "Gorran: ferro bom é fogo e paciência.",
   "village_gorran_idle_2": "Gorran: a bigorna está ocupada hoje.",
-  "village_gate_locked": "Fale com o Mestre antes de sair."
+  "village_gate_locked": "Fale com o Mestre antes de sair.",
+  "quest_master_intro": "Lyra e Gorran precisam de ajuda. Fale com eles.",
+  "quest_master_wait": "Resolva os pedidos de Lyra e Gorran.",
+  "quest_lyra_offer": "Missão: colha ervas na Plantação de Ervas. Saia pelo portão.",
+  "quest_lyra_progress": "Lyra: as ervas estão na Plantação.",
+  "quest_lyra_turnin": "Ervas entregues a Lyra.",
+  "quest_lyra_done": "Lyra: frascos cheios, porta aberta.",
+  "quest_gorran_offer": "Missão: recupere as ferramentas de Gorran na Mina Iluminada.",
+  "quest_gorran_progress": "Gorran: as ferramentas estão na Mina.",
+  "quest_gorran_turnin": "Ferramentas entregues a Gorran.",
+  "quest_gorran_done": "Gorran: a forja voltou a queimar.",
+  "quest_master_depths_offer": "Missão: explore o Fundo da Mina. Saia pelo portão.",
+  "quest_master_depths_progress": "O Fundo da Mina espera. Vá com cuidado.",
+  "mission_herbs_enter": "Colha as ervas e limpe os Slimes da Plantação.",
+  "mission_herbs_complete": "Ervas colhidas! Volte à Vila e fale com Lyra.",
+  "mission_mine_enter": "Recupere as ferramentas de Gorran na Mina Iluminada.",
+  "mission_mine_complete": "Ferramentas recuperadas! Volte à Vila e fale com Gorran.",
+  "mission_mine_strange": "Um brilho vermelho pulsa no fundo da mina. Conte ao Mestre.",
+  "mission_depths_enter": "Desça ao Fundo da Mina e descubra a origem do brilho.",
+  "mission_depths_karnak": "Karnak: 'Ninguém sai desta mina, mortal.'",
+  "prologue_end_title": "Fim do Prólogo",
+  "prologue_end_text": "O Jovem Guerreiro tombou. A história não termina aqui.",
+  "mission_return_victory": "Missão cumprida: {mission}. Fale com {npc}.",
+  "mission_return_defeat": "Você recuou ferido. Tente {mission} de novo.",
+  "act1_arrival_1": "Você desperta no Submundo. O Karnak o matou no Fundo da Mina.",
+  "act1_arrival_2": "O Emissário Celestial cravou o Selo Celestial em sua alma.",
+  "act1_arrival_3": "Atravesse a Fenda e cace os Generais do Inferno."
 }

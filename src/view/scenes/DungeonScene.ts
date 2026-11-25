@@ -15,6 +15,7 @@ import {
 } from '../../core/dungeon/DungeonRun';
 import {
   generateDungeonMap,
+  mapMinimapLayout,
   MAP_CELL_VOID,
   MAP_FEET_BOX,
   MAP_FEET_OFFSET,
@@ -22,8 +23,27 @@ import {
   type DungeonMap,
   type DungeonMapMode,
   type MapDoor,
+  type MapMinimapLayout,
   type MapZone,
 } from '../../core/dungeon/DungeonMap';
+import {
+  collectAt,
+  createMissionProgress,
+  isAtEventPoint,
+  isEventUnlocked,
+  isMissionComplete,
+  killObjectiveText,
+  monstersAlive,
+  setMonstersKilled,
+  markEventVisited,
+  markZoneCleared,
+  missionMapInputFromStage,
+  missionMapOptions,
+  missionObjectiveLabel,
+  objectiveProgressText,
+  MISSION_PICKUP_RADIUS,
+  type MissionProgress,
+} from '../../core/dungeon/MissionObjectives';
 import {
   autotileDungeonMap,
   doorBlockRect,
@@ -39,7 +59,13 @@ import {
   type ArenaBiomeId,
 } from './BiomeTheme';
 import { moveHero, type HeroState } from '../../core/entities/Hero';
-import { spawnMonster, type MonsterInstance } from '../../core/entities/Monster';
+import {
+  makeMonsterDormant,
+  spawnMonster,
+  updateMonsterAwareness,
+  MONSTER_AGGRO_RADIUS,
+  type MonsterInstance,
+} from '../../core/entities/Monster';
 import {
   resolveViewportConfig,
   type BiomeId,
@@ -105,6 +131,7 @@ import {
 import { SceneCameraRig } from '../ui/CameraRig';
 import { DF_FONTS, DF_RARITY_THEME } from '../ui/DarkFantasyUiBuilder';
 import { DungeonHud, type HudSnapshot } from '../ui/DungeonHud';
+import { PrologueEndScreen } from '../ui/PrologueEndScreen';
 import {
   InventoryModal,
   type InventoryHudSnapshot,
@@ -184,6 +211,47 @@ export interface SubmundoDebugApi {
   pickUpNearest: () => boolean;
   /** Biome of the test arena (`?biome=`, T-073); `dungeon_basic` by default. */
   getBiomeId: () => ArenaBiomeId;
+  /** T-129: state of the prologue mission on the continuous map (null outside one). */
+  getMissionState: () => MissionDebugState | null;
+  /**
+   * T-129 (debug autopilot): walks the hero (feet) to a FEET point along a 16 px BFS that respects
+   * walls, props and sealed doors. Returns the path length in px, or -1 when unreachable. Player
+   * input cancels it.
+   */
+  autoWalkTo: (feetX: number, feetY: number) => number;
+  /** Stops the debug autopilot. */
+  stopAutoWalk: () => void;
+  /** T-129 (debug for e2e): finishes the mission now (mission 3: the Karnak death). */
+  completeMissionNow: () => boolean;
+}
+
+export interface MissionDebugState {
+  missionId: CampaignStageId;
+  seed: number;
+  mapMode: DungeonMapMode;
+  zoneIndex: number;
+  zoneCount: number;
+  zonesCleared: boolean[];
+  doorsOpen: boolean[];
+  zoneTriggers: Array<{ x: number; y: number }>;
+  objective: { itemId: string; collected: number; count: number } | null;
+  collectibles: Array<{ id: number; x: number; y: number; zoneId: number | null; picked: boolean }>;
+  eventPoint: { x: number; y: number; visited: boolean } | null;
+  complete: boolean;
+  finished: boolean;
+  prologueEnded: boolean;
+  karnakIntroShown: boolean;
+  heroFeet: { x: number; y: number };
+  heroHp: number;
+  heroAlive: boolean;
+  runStatus: DungeonRunState['status'];
+  autoWalking: boolean;
+  elapsedMs: number;
+  /** T-151: "Elimine todos os monstros" (o Karnak invencível não conta). */
+  monstersAlive: number;
+  monstersTotal: number;
+  /** Monstros ainda adormecidos (não perceberam o herói). */
+  monstersDormant: number;
 }
 
 declare global {
@@ -226,6 +294,24 @@ const RARITY_DROP_FRAME: Record<Rarity, number> = {
   rare: 2,
   legendary: 3,
 };
+
+/** T-151: a placed boss shows its HP bar only when awake and within this range (px). */
+const BOSS_BAR_RANGE = 560;
+/** T-129: delay between "mission complete" and the victory panel (lets the last line be read). */
+const MISSION_COMPLETE_DELAY_MS = 1600;
+const MISSION_COMPLETE_AFTER_EVENT_MS = 4200;
+/** Delay between the hero's death to Karnak and the "Fim do Prólogo" screen. */
+const PROLOGUE_END_DELAY_MS = 1800;
+/** Click/"Pegar" reach for mission collectibles (feet to collectible). */
+const MISSION_COLLECT_REACH = Math.max(MISSION_PICKUP_RADIUS, 56);
+const MISSION_COLLECTIBLE_TEXTURE: Record<string, { key: string; anim: string; usedFrame: number }> = {
+  herb: { key: 'mission_herb', anim: 'mission_herb_glow', usedFrame: 4 },
+  mine_tool: { key: 'mission_tools', anim: 'mission_tools_glow', usedFrame: 4 },
+};
+
+function newMissionSeed(): number {
+  return Math.floor(Math.random() * 2147483646) + 1;
+}
 
 /** First test run honours `?seed=N`; later restarts use a fresh seed. */
 let urlSeedConsumed = false;
@@ -353,10 +439,39 @@ export class DungeonScene extends Phaser.Scene {
   private manualAttackReadyAtMs = 0;
   private runSeedCounter = 1337;
   private lootSummaryText?: string;
+  /** T-157: end-of-mission modal of the prologue (no Souls, no item lines). */
+  private missionOutcomeModal?: { title: string; body: string; buttonLabel: string };
   private runLootResolved = false;
   private essencesCollected = 0;
   private bossDefeated = false;
   private lastRunReport?: RunEndReport;
+
+  // T-129 / T-146: prologue missions on the continuous map (Decision #24).
+  private isMission = false;
+  private missionSeed = 0;
+  private missionProgress?: MissionProgress;
+  private missionFinished = false;
+  private missionCompleteAtMs?: number;
+  private prologueEnded = false;
+  private prologueEndAtMs?: number;
+  private karnakIntroShown = false;
+  private readonly missionCollectibleSprites = new Map<
+    number,
+    {
+      main: Phaser.GameObjects.Sprite | Phaser.GameObjects.Graphics;
+      light?: Phaser.GameObjects.Image;
+    }
+  >();
+  /** Mission collectible the hero is auto-walking to after a click/"Pegar". */
+  private pickupCollectibleId?: number;
+  /** T-151: room (floor) and zone of each placed mission monster (monsters stay on their room floor). */
+  private readonly monsterRoomIds = new Map<string, number | null>();
+  private readonly monsterZoneIds = new Map<string, number>();
+  /** Instance id of the monster that killed the hero (Karnak's death ends the prologue). */
+  private heroKilledBy?: string;
+  private minimapLayout?: MapMinimapLayout;
+  /** Debug autopilot (BFS over the 16 px grid, centre coords of each step). */
+  private autoWalk?: { path: Vector2D[]; index: number; stuckMs: number; lastIndex?: number };
 
   constructor() {
     super({ key: 'DungeonScene' });
@@ -489,6 +604,10 @@ export class DungeonScene extends Phaser.Scene {
       this.bannerText = undefined;
       this.bannerExpiresAtMs = 0;
       this.isTestArena = false;
+      this.isMission = false;
+      this.prologueEnded = false;
+      this.autoWalk = undefined;
+      this.missionCollectibleSprites.clear();
       this.testArenaWave = 1;
       this.resetTestRoomState();
       // Camera manager may already be torn down during SHUTDOWN (return to Hub).
@@ -539,6 +658,13 @@ export class DungeonScene extends Phaser.Scene {
         },
         pickUpNearest: () => this.pickUpNearestDrop(),
         getBiomeId: () => this.testArenaBiome,
+        getMissionState: () => this.getMissionDebugState(),
+        autoWalkTo: (feetX: number, feetY: number) =>
+          this.startAutoWalk(feetX, feetY),
+        stopAutoWalk: () => {
+          this.autoWalk = undefined;
+        },
+        completeMissionNow: () => this.completeMissionNow(),
       };
     }
   }
@@ -568,6 +694,24 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     const clampedDelta = Math.min(Math.max(0, delta), 100);
+
+    if (this.prologueEnded) {
+      // Hero fell to Karnak: the world freezes behind the "Fim do Prólogo" screen.
+      this.elapsedTimeMs += clampedDelta;
+      this.heroIsMoving = false;
+      this.lastMoveDirX = 0;
+      if (
+        this.prologueEndAtMs !== undefined &&
+        this.elapsedTimeMs >= this.prologueEndAtMs
+      ) {
+        this.prologueEndAtMs = undefined;
+        this.showPrologueEndScreen();
+      }
+      this.syncVisuals(this.elapsedTimeMs);
+      this.updateHud(this.elapsedTimeMs);
+      this.cameraRig?.syncLayers();
+      return;
+    }
 
     this.elapsedTimeMs += clampedDelta;
     const nowMs = this.elapsedTimeMs;
@@ -606,18 +750,25 @@ export class DungeonScene extends Phaser.Scene {
         this.manualAttackQueued = false;
       }
 
+      this.updateMissionMonsterAwareness();
       const events = tickCombat(
         this.hero,
         this.monsters,
         clampedDelta,
         nowMs
       );
+      const killed = events.find((e) => e.type === 'hero_killed');
+      if (killed) {
+        this.heroKilledBy = killed.sourceId;
+      }
+      this.lockInvincibleBosses();
       this.constrainActorsToTestArenaRoom();
       this.processCombatEvents(events);
       this.checkAndUpdateRoomState(nowMs);
       this.checkTestRoomEntry();
+      this.updateMissionObjectives(nowMs);
     } else if (
-      !this.isTestArena &&
+      !this.usesMap() &&
       this.runState.status === 'room_cleared' &&
       this.hero.isAlive
     ) {
@@ -645,6 +796,7 @@ export class DungeonScene extends Phaser.Scene {
       !this.hero.isAlive ||
       this.inventoryModal?.isOpen() ||
       (this.isTestArena && this.testArenaFinished) ||
+      this.prologueEnded ||
       this.runState.status === 'victory' ||
       this.runState.status === 'defeat'
     ) {
@@ -670,6 +822,7 @@ export class DungeonScene extends Phaser.Scene {
     );
 
     if (events.length > 0) {
+      this.lockInvincibleBosses();
       this.constrainActorsToTestArenaRoom();
       // Show dash trail from previous position if dash occurred
       if (events.some((e) => e.type === 'hero_dash')) {
@@ -758,18 +911,20 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     for (const monster of this.monsters) {
-      if (monster.isAlive) {
+      if (monster.isAlive && !this.isInvincibleBoss(monster)) {
         monster.hp = 0;
         monster.isAlive = false;
         this.hero.souls += monster.soulReward;
         this.runState.soulsCollected += monster.soulReward;
         this.runState.monstersKilled += 1;
-        this.vfx.showSoulCollectEffect(
-          monster.position.x,
-          monster.position.y,
-          monster.soulReward
-        );
-        soundManager.play('soul_pickup');
+        if (monster.soulReward > 0) {
+          this.vfx.showSoulCollectEffect(
+            monster.position.x,
+            monster.position.y,
+            monster.soulReward
+          );
+          soundManager.play('soul_pickup');
+        }
         if (monster.defId === 'infernal_warden' || monster.type === 'boss') {
           this.handleBossDefeated(monster.position, monster);
         }
@@ -782,7 +937,8 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   public advanceRoomNow(): void {
-    if (!this.runState || !this.hero.isAlive) {
+    if (!this.runState || !this.hero.isAlive || this.usesMap()) {
+      // Continuous map (test arena / prologue missions): no room switching.
       return;
     }
 
@@ -795,20 +951,12 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   public returnToHub(): void {
-    if ('HubScene' in this.scene.manager.keys) {
-      if (this.isTestArena) {
-        this.scene.start('HubScene', { fromRun: this.lastRunReport });
-        return;
-      }
-      // Decisão #23: o herói volta à Vila e aparece no portão.
-      const won =
-        this.lastRunReport?.victory ?? this.runState?.status === 'victory';
-      const villageOrigin: 'dungeon_victory' | 'dungeon_defeat' = won
-        ? 'dungeon_victory'
-        : 'dungeon_defeat';
-      this.scene.start('HubScene', {
+    // Decisões #28/#29: todo fim de dungeon (teste, missão ou Ato 1) volta ao menu-hub.
+    if ('MenuHub' in this.scene.manager.keys) {
+      // O relatório já foi aplicado ao perfil e persistido aqui (`applied: true`): o menu só o exibe.
+      this.scene.start('MenuHub', {
         fromRun: this.lastRunReport,
-        villageOrigin,
+        applied: this.lastRunReport ? true : undefined,
       });
       return;
     }
@@ -873,6 +1021,7 @@ export class DungeonScene extends Phaser.Scene {
     this.activeProfile = data?.profileSnapshot ?? loadOrCreateProfile();
     const campaign = ensureCampaignProgress(this.activeProfile);
     this.activeStage = getCampaignStage(data?.stageId ?? campaign.currentStageId);
+    this.setupMissionMap();
     this.runState = createDungeonRun(
       width,
       height,
@@ -939,7 +1088,16 @@ export class DungeonScene extends Phaser.Scene {
 
     this.loadCurrentRoom();
 
-    if (!this.isTestArena) {
+    if (this.isMission) {
+      // Decision #24: lines only before and after — the entry line of the mission.
+      const enterLine = getDialogueLine(`${this.activeStage.id}_enter`);
+      this.showTimedBanner(
+        enterLine?.text ??
+          enterLine?.shortText ??
+          dialoguesData.entries.dungeon_enter.shortText,
+        5200
+      );
+    } else if (!this.isTestArena) {
       const introDialogueId =
         this.activeStage.introDialogueIds[
           this.activeStage.introDialogueIds.length - 1
@@ -970,7 +1128,7 @@ export class DungeonScene extends Phaser.Scene {
     this.clearGroundDrops();
     this.cancelHeroActionAnim();
     this.lastHeroFootstepFrame = -1;
-    if (this.isTestArena) {
+    if (this.usesMap()) {
       this.clearMinionVisuals();
     }
     this.buildArenaTilesAndLighting(
@@ -987,12 +1145,15 @@ export class DungeonScene extends Phaser.Scene {
       y: Math.round(height / 2),
     };
 
-    if (this.isTestArena) {
+    if (this.usesMap()) {
       const map = this.dungeonMap;
       if (map) {
         this.hero.position = { x: map.heroStart.x, y: map.heroStart.y };
         this.lastValidFeet.clear();
         this.constrainPositionToTestArenaRoom(this.hero.position, true);
+        if (this.usesPlacedMonsters()) {
+          this.spawnPlacedMissionMonsters();
+        }
         this.enterZone(0, true);
         this.cameras.main.centerOn(this.hero.position.x, this.hero.position.y);
       }
@@ -1034,13 +1195,7 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     if (currentRoom.isBossRoom) {
-      if (this.activeStage?.id === 'prologue_seal') {
-        const fallBossLine = getDialogueLine('village_fall_boss');
-        this.showTimedBanner(
-          fallBossLine?.shortText ?? currentRoom.title,
-          4200
-        );
-      } else if (this.activeStage?.id === 'act1_submundo') {
+      if (this.activeStage?.id === 'act1_submundo') {
         this.showTimedBanner(
           dialoguesData.entries.boss_intro.shortText,
           4000
@@ -1095,7 +1250,7 @@ export class DungeonScene extends Phaser.Scene {
     this.arenaLayer.removeAll(true);
     this.clearTestArenaRoom();
 
-    if (this.isTestArena) {
+    if (this.usesMap()) {
       this.lightingGraphics.clear();
       this.buildTestArenaRoom();
       return;
@@ -1313,9 +1468,7 @@ export class DungeonScene extends Phaser.Scene {
           if (isBoss) {
             this.handleBossDefeated(event.position, killedMonster);
           }
-          const droppedItem = shouldDropLoot(isBoss, Math.random, this.hero.luck)
-            ? generateItemDrop({ luck: this.hero.luck, isBoss })
-            : undefined;
+          const droppedItem = this.rollMonsterDrop(isBoss);
 
           const deathPos = { ...event.position };
           const deathDelayMs = killedId
@@ -1328,8 +1481,9 @@ export class DungeonScene extends Phaser.Scene {
             if (killedId) {
               this.deferredDeathIds.delete(killedId);
             }
-            this.vfx.showSoulCollectEffect(deathPos.x, deathPos.y, reward);
+            // T-157: no Souls in the prologue (reward 0) -> no soul orb either.
             if (reward > 0) {
+              this.vfx.showSoulCollectEffect(deathPos.x, deathPos.y, reward);
               soundManager.play('soul_pickup');
             }
             if (droppedItem) {
@@ -1471,6 +1625,16 @@ export class DungeonScene extends Phaser.Scene {
           if (this.isTestArena) {
             this.hero.stats.hp = this.hero.stats.maxHp;
             this.hero.isAlive = true;
+            // Masmorra teste aberta pelo menu: a morte encerra a run e volta ao menu.
+            if (this.openedFromMenu() && !this.runLootResolved && !this.testArenaFinished) {
+              this.testArenaFinished = true;
+              this.heroIsMoving = false;
+              this.manualAttackQueued = false;
+              this.time.delayedCall(700, () => {
+                this.endTestArenaRun(false);
+                this.returnToHub();
+              });
+            }
             return;
           }
           // Hero died mid-swing: show pending hits now, at last known points.
@@ -1535,7 +1699,7 @@ export class DungeonScene extends Phaser.Scene {
 
   /** Actor movement bounds: the whole map (world px) or the scene. */
   private getActorBounds(): { width: number; height: number; padding: number } {
-    const map = this.isTestArena ? this.dungeonMap : undefined;
+    const map = this.usesMap() ? this.dungeonMap : undefined;
     if (map) {
       return {
         width: map.cols * MAP_TILE + 200,
@@ -1560,6 +1724,20 @@ export class DungeonScene extends Phaser.Scene {
     this.testArenaWave = zone.wave;
     this.testRoomClearAtMs = undefined;
     this.testArenaFinishAtMs = undefined;
+    if (this.usesPlacedMonsters()) {
+      // T-151: no waves, no sealed doors, no wave banners — only Karnak's line in room 5.
+      if (
+        zone.isBossZone &&
+        this.activeStage?.bossInvincible &&
+        !this.karnakIntroShown
+      ) {
+        this.karnakIntroShown = true;
+        const line = getDialogueLine(`${this.activeStage.id}_karnak`);
+        this.showTimedBanner(line?.text ?? line?.shortText ?? zone.title, 5200);
+        this.cameras.main.shake(260, 0.004);
+      }
+      return;
+    }
     if (!initial && zone.entryDoorIds.length > 0) {
       for (const id of zone.entryDoorIds) {
         this.setDoorSealed(id, true);
@@ -1567,6 +1745,19 @@ export class DungeonScene extends Phaser.Scene {
       this.testEntryClosedFlags[index] = true;
     }
     this.spawnTestArenaWave();
+    if (
+      this.isMission &&
+      zone.isBossZone &&
+      this.activeStage?.bossInvincible &&
+      !this.karnakIntroShown
+    ) {
+      // T-146: Karnak's line when the hero walks into room 5.
+      this.karnakIntroShown = true;
+      const line = getDialogueLine(`${this.activeStage.id}_karnak`);
+      this.showTimedBanner(line?.text ?? line?.shortText ?? zone.banner, 5200);
+      this.cameras.main.shake(260, 0.004);
+      return;
+    }
     this.showTimedBanner(zone.banner, 2500);
   }
 
@@ -1588,9 +1779,891 @@ export class DungeonScene extends Phaser.Scene {
         `test_z${zone.id}_${i}_${sp.defId}`,
         spawnPos
       );
+      if (this.isMission) {
+        // T-157: the prologue does not count Souls.
+        monster.soulReward = 0;
+      }
       this.monsters.push(monster);
       this.createMonsterVisual(monster);
     });
+  }
+
+  /** T-151: prologue missions place every monster of the map at once (Decision #26). */
+  private usesPlacedMonsters(): boolean {
+    return this.isMission && this.dungeonMap?.spawnMode === 'placed';
+  }
+
+  /** Mission monster def with the stage's `difficultyScale` (HP and attack), like the old rooms. */
+  private scaledMissionDef(def: MonsterDef): MonsterDef {
+    const scale = this.activeStage?.difficultyScale ?? 1;
+    if (scale === 1 || (this.activeStage?.bossInvincible && def.id === this.activeStage.bossId)) {
+      return def;
+    }
+    return {
+      ...def,
+      maxHp: Math.max(1, Math.round(def.maxHp * scale)),
+      attack: Math.max(1, Math.round(def.attack * scale)),
+    };
+  }
+
+  /** Every zone's monsters, already on the map, asleep until the hero comes near (or hits them). */
+  private spawnPlacedMissionMonsters(): void {
+    const map = this.dungeonMap;
+    this.monsters = [];
+    this.monsterRoomIds.clear();
+    this.monsterZoneIds.clear();
+    if (!map) {
+      return;
+    }
+    for (const zone of map.zones) {
+      zone.spawns.forEach((sp, i) => {
+        const base = this.monsterDefMap.get(sp.defId);
+        if (!base) {
+          return;
+        }
+        const def = this.scaledMissionDef(base);
+        const pos: Vector2D = { x: sp.x, y: sp.y };
+        this.constrainPositionToTestArenaRoom(pos, false, zone.floorRoomId);
+        const monster = spawnMonster(def, `m_z${zone.id}_${i}_${sp.defId}`, pos);
+        // T-157: the prologue does not count Souls.
+        monster.soulReward = 0;
+        const isBoss = def.type === 'boss';
+        makeMonsterDormant(
+          monster,
+          isBoss ? MONSTER_AGGRO_RADIUS + 90 : MONSTER_AGGRO_RADIUS
+        );
+        this.monsterRoomIds.set(monster.instanceId, zone.floorRoomId);
+        this.monsterZoneIds.set(monster.instanceId, zone.id);
+        this.monsters.push(monster);
+        this.createMonsterVisual(monster);
+      });
+    }
+  }
+
+  /** Room id under the hero's feet (-1 in a corridor / outside). */
+  private heroRoomId(): number {
+    const map = this.dungeonMap;
+    if (!map || !this.hero) {
+      return -1;
+    }
+    const c = Math.floor(this.hero.position.x / MAP_TILE);
+    const r = Math.floor((this.hero.position.y + MAP_FEET_OFFSET) / MAP_TILE);
+    return c >= 0 && r >= 0 && c < map.cols && r < map.rows
+      ? map.roomIdAt[r * map.cols + c]
+      : -1;
+  }
+
+  /**
+   * Sleeping monsters wake when the hero comes within their aggro radius in the same room (or
+   * right at its door, from the corridor) or when they take damage; the group wakes together.
+   */
+  private updateMissionMonsterAwareness(): void {
+    if (!this.usesPlacedMonsters() || !this.hero?.isAlive) {
+      return;
+    }
+    const heroRoom = this.heroRoomId();
+    const giant = this.dungeonMap?.mode === 'giant';
+    updateMonsterAwareness(this.monsters, this.hero.position, (m) => {
+      if (giant) {
+        return true;
+      }
+      const room = this.monsterRoomIds.get(m.instanceId);
+      if (room === heroRoom) {
+        return true;
+      }
+      return (
+        heroRoom < 0 && distanceBetween(m.position, this.hero.position) <= 120
+      );
+    });
+  }
+
+  // ===========================================================================
+  // PROLOGUE MISSIONS on the continuous map (Decision #24, T-129 / T-146)
+  // ===========================================================================
+
+  /** Test arena and prologue missions run on the procedural continuous map. */
+  private usesMap(): boolean {
+    return this.isTestArena || this.isMission;
+  }
+
+  private mapBiomeId(): ArenaBiomeId {
+    return this.isMission ? this.activeStage.biome : this.testArenaBiome;
+  }
+
+  /** Builds the mission map (zones with the exact waves, sealed doors, collectibles, event). */
+  private setupMissionMap(): void {
+    this.isMission = false;
+    this.missionProgress = undefined;
+    this.missionFinished = false;
+    this.missionCompleteAtMs = undefined;
+    this.prologueEnded = false;
+    this.prologueEndAtMs = undefined;
+    this.karnakIntroShown = false;
+    this.missionCollectibleSprites.clear();
+    this.pickupCollectibleId = undefined;
+    this.autoWalk = undefined;
+    this.heroKilledBy = undefined;
+    this.minimapLayout = undefined;
+    this.monsterRoomIds.clear();
+    this.monsterZoneIds.clear();
+    if (this.isTestArena || this.activeStage.phase !== 'prologue') {
+      return;
+    }
+    const input = missionMapInputFromStage(this.activeStage);
+    if (!input) {
+      return;
+    }
+    this.isMission = true;
+    this.missionSeed = newMissionSeed();
+    const map = generateDungeonMap(this.missionSeed, missionMapOptions(input));
+    this.dungeonMap = map;
+    this.mapLayout = undefined;
+    this.testDoorOpenFlags = map.zones.map(() => false);
+    this.testEntryClosedFlags = map.zones.map(() => false);
+    this.sealedDoorIds.clear();
+    if (map.spawnMode !== 'placed') {
+      for (const zone of map.zones) {
+        for (const id of zone.exitDoorIds) {
+          this.sealedDoorIds.add(id);
+        }
+      }
+    }
+    // Decision #26: doors never seal (no waves); Karnak (invincible) does not count as a kill.
+    this.testDoorOpenFlags = map.zones.map(() => map.spawnMode === 'placed');
+    this.minimapLayout = mapMinimapLayout(map);
+    this.missionProgress = createMissionProgress(
+      map,
+      input.objective,
+      this.activeStage.bossInvincible && this.activeStage.bossId
+        ? [this.activeStage.bossId]
+        : []
+    );
+    this.cameras.main.setBackgroundColor('#000000');
+  }
+
+  private isInvincibleBoss(monster: MonsterInstance): boolean {
+    return (
+      this.isMission &&
+      Boolean(this.activeStage?.bossInvincible) &&
+      monster.defId === this.activeStage.bossId
+    );
+  }
+
+  /** T-146: Karnak takes the hits (numbers, flash) but his HP never drops. */
+  private lockInvincibleBosses(): void {
+    if (!this.isMission || !this.activeStage?.bossInvincible) {
+      return;
+    }
+    for (const monster of this.monsters) {
+      if (this.isInvincibleBoss(monster)) {
+        monster.hp = monster.maxHp;
+        monster.isAlive = true;
+      }
+    }
+  }
+
+  /** Prologue: the mission's `dropPolicy` (low chance, at most `magic`); otherwise the usual roll. */
+  private rollMonsterDrop(isBoss: boolean): ItemInstance | undefined {
+    const policy = this.isMission ? this.activeStage?.dropPolicy : undefined;
+    if (!policy) {
+      return shouldDropLoot(isBoss, Math.random, this.hero.luck)
+        ? generateItemDrop({ luck: this.hero.luck, isBoss })
+        : undefined;
+    }
+    if (Math.random() >= policy.chance) {
+      return undefined;
+    }
+    const order: Rarity[] = ['common', 'magic', 'rare', 'legendary'];
+    const max: Rarity = policy.maxRarity ?? 'magic';
+    const item = generateItemDrop({ luck: this.hero.luck, isBoss });
+    return order.indexOf(item.rarity) > order.indexOf(max)
+      ? generateItemDrop({ luck: this.hero.luck, isBoss, forcedRarity: max })
+      : item;
+  }
+
+  /** Collectibles (glow / picked) and the "algo estranho" point, rebuilt with the map visuals. */
+  private buildMissionObjects(): void {
+    this.missionCollectibleSprites.clear();
+    const map = this.dungeonMap;
+    const progress = this.missionProgress;
+    if (!this.isMission || !map || !progress) {
+      return;
+    }
+    for (const c of map.collectibles) {
+      const picked = Boolean(progress.objective?.collectedIds.includes(c.id));
+      const spec =
+        MISSION_COLLECTIBLE_TEXTURE[c.itemId] ?? MISSION_COLLECTIBLE_TEXTURE.herb;
+      const color = c.itemId === 'herb' ? 0x86efac : 0xfbbf24;
+      let main: Phaser.GameObjects.Sprite | Phaser.GameObjects.Graphics;
+      if (this.textures.exists(spec.key)) {
+        const sprite = this.trackTestObject(
+          this.add
+            .sprite(c.x, c.y, spec.key, picked ? spec.usedFrame : 0)
+            .setOrigin(0.5, 0.875)
+            .setDepth(5.6)
+        );
+        if (!picked && this.anims.exists(spec.anim)) {
+          sprite.play(spec.anim);
+        }
+        main = sprite;
+        if (!picked) {
+          sprite.setInteractive({
+            hitArea: new Phaser.Geom.Rectangle(-8, -8, 48, 48),
+            hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+            useHandCursor: true,
+          });
+        }
+      } else {
+        // Fallback (sheet not loaded yet): a small glowing marker.
+        const g = this.trackTestObject(this.add.graphics({ x: c.x, y: c.y }).setDepth(5.6));
+        g.fillStyle(color, picked ? 0.25 : 0.9);
+        if (c.itemId === 'herb') {
+          g.fillCircle(0, -8, 7);
+        } else {
+          g.fillRect(-7, -15, 14, 12);
+        }
+        main = g;
+        if (!picked) {
+          g.setInteractive({
+            hitArea: new Phaser.Geom.Circle(0, -8, 24),
+            hitAreaCallback: Phaser.Geom.Circle.Contains,
+            useHandCursor: true,
+          });
+        }
+      }
+      if (!picked) {
+        main.on(
+          'pointerdown',
+          (
+            _p: Phaser.Input.Pointer,
+            _x: number,
+            _y: number,
+            event: Phaser.Types.Input.EventData
+          ) => {
+            event?.stopPropagation();
+            this.handleCollectibleClick(c.id);
+          }
+        );
+      }
+      const light = picked
+        ? undefined
+        : this.addTestLight(c.x, c.y - 10, 70, 70, color, 0.32, true);
+      this.missionCollectibleSprites.set(c.id, { main, light });
+    }
+
+    const ep = map.eventPoint;
+    if (ep) {
+      if (this.textures.exists('mission_strange')) {
+        const sprite = this.trackTestObject(
+          this.add
+            .sprite(ep.x, ep.y, 'mission_strange', 0)
+            .setOrigin(0.5, 0.79)
+            .setDepth(5.6)
+        );
+        if (this.anims.exists('mission_strange_pulse')) {
+          sprite.play('mission_strange_pulse');
+        }
+      } else {
+        const g = this.trackTestObject(this.add.graphics({ x: ep.x, y: ep.y }).setDepth(5.6));
+        g.fillStyle(0xef4444, 0.35);
+        g.fillEllipse(0, -6, 46, 22);
+        g.fillStyle(0xfca5a5, 0.9);
+        g.fillCircle(0, -10, 6);
+        this.tweens.add({
+          targets: g,
+          alpha: 0.45,
+          duration: 700,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
+      this.addTestLight(ep.x, ep.y - 14, 150, 150, 0xef4444, 0.42, true);
+    }
+  }
+
+  private isCollectiblePicked(id: number): boolean {
+    return Boolean(this.missionProgress?.objective?.collectedIds.includes(id));
+  }
+
+  /** Nearest uncollected mission collectible to the hero's feet within the "Pegar" radius. */
+  private findNearestCollectible(): DungeonMap['collectibles'][number] | undefined {
+    const map = this.dungeonMap;
+    if (!this.isMission || !map || !this.hero || this.missionFinished) {
+      return undefined;
+    }
+    const fx = this.hero.position.x;
+    const fy = this.hero.position.y + MAP_FEET_OFFSET;
+    let best: DungeonMap['collectibles'][number] | undefined;
+    let bestDist = DROP_NEAREST_SEARCH_RADIUS;
+    for (const c of map.collectibles) {
+      if (this.isCollectiblePicked(c.id)) {
+        continue;
+      }
+      const d = Math.hypot(c.x - fx, c.y - fy);
+      if (d <= bestDist) {
+        best = c;
+        bestDist = d;
+      }
+    }
+    return best;
+  }
+
+  /** Click/tap/"Pegar" on a collectible: collect when near, otherwise walk to it. */
+  private handleCollectibleClick(id: number): boolean {
+    const c = this.dungeonMap?.collectibles.find((k) => k.id === id);
+    if (
+      !c ||
+      this.isCollectiblePicked(id) ||
+      !this.hero?.isAlive ||
+      this.missionFinished ||
+      this.inventoryModal?.isOpen() ||
+      this.runState.status !== 'in_progress'
+    ) {
+      return false;
+    }
+    const d = Math.hypot(
+      c.x - this.hero.position.x,
+      c.y - (this.hero.position.y + MAP_FEET_OFFSET)
+    );
+    if (d <= MISSION_COLLECT_REACH) {
+      this.cancelPickupWalk();
+      return this.collectMissionItem(id);
+    }
+    this.cancelPickupWalk();
+    this.pickupCollectibleId = id;
+    return true;
+  }
+
+  private collectMissionItem(id: number): boolean {
+    const progress = this.missionProgress;
+    const objective = progress?.objective;
+    const c = this.dungeonMap?.collectibles.find((k) => k.id === id);
+    if (!objective || !c || !collectAt(objective, id)) {
+      return false;
+    }
+    const visual = this.missionCollectibleSprites.get(id);
+    if (visual) {
+      const spec =
+        MISSION_COLLECTIBLE_TEXTURE[c.itemId] ?? MISSION_COLLECTIBLE_TEXTURE.herb;
+      const main = visual.main;
+      main.removeAllListeners('pointerdown');
+      main.disableInteractive();
+      if (main instanceof Phaser.GameObjects.Sprite) {
+        main.stop();
+        main.setFrame(spec.usedFrame);
+      } else {
+        main.setAlpha(0.25);
+      }
+      if (visual.light) {
+        this.freeTestObjects([visual.light]);
+        visual.light = undefined;
+      }
+    }
+    const meta = missionObjectiveLabel(objective.itemId);
+    // T-151: the "Ervas x/N" counter lives only in the HUD (no duplicated text in the world).
+    soundManager.play('loot_drop');
+    if (objective.collected >= objective.count) {
+      this.showTimedBanner(
+        `${meta.label} ${objective.count}/${objective.count} — objetivo cumprido`,
+        3200
+      );
+    }
+    this.updateHud(this.elapsedTimeMs);
+    return true;
+  }
+
+  private resolveCollectibleWalk(input: Vector2D, deltaMs: number): Vector2D {
+    const id = this.pickupCollectibleId;
+    const c = this.dungeonMap?.collectibles.find((k) => k.id === id);
+    if (
+      id === undefined ||
+      !c ||
+      input.x !== 0 ||
+      input.y !== 0 ||
+      !this.hero.isAlive ||
+      this.isCollectiblePicked(id)
+    ) {
+      this.cancelPickupWalk();
+      return input;
+    }
+    const dx = c.x - this.hero.position.x;
+    const dy = c.y - (this.hero.position.y + MAP_FEET_OFFSET);
+    const dist = Math.hypot(dx, dy);
+    if (dist <= MISSION_PICKUP_RADIUS * 0.8) {
+      this.cancelPickupWalk();
+      this.collectMissionItem(id);
+      return { x: 0, y: 0 };
+    }
+    if (this.pickupLastPos) {
+      const moved = distanceBetween(this.hero.position, this.pickupLastPos);
+      const expected = (this.hero.stats.moveSpeed * deltaMs) / 1000;
+      this.pickupStuckMs = moved < expected * 0.25 ? this.pickupStuckMs + deltaMs : 0;
+      if (this.pickupStuckMs > 500) {
+        this.cancelPickupWalk();
+        if (dist <= MISSION_COLLECT_REACH) {
+          this.collectMissionItem(id);
+        }
+        return { x: 0, y: 0 };
+      }
+    }
+    this.pickupLastPos = { ...this.hero.position };
+    return { x: dx / dist, y: dy / dist };
+  }
+
+  /** Mission zone flow: zone cleared -> exits open; hero death -> defeat (or the end of the prologue). */
+  private checkMissionRoomState(nowMs: number): void {
+    if (this.bannerText && nowMs >= this.bannerExpiresAtMs) {
+      this.bannerText = undefined;
+    }
+    const map = this.dungeonMap;
+    const progress = this.missionProgress;
+    if (!map || !progress || this.missionFinished || this.prologueEnded) {
+      return;
+    }
+    const idx = this.testArenaRoomIndex;
+    const zone = map.zones[idx];
+    if (!this.hero.isAlive) {
+      const killer = this.monsters.find((m) => m.instanceId === this.heroKilledBy);
+      const byKarnak = Boolean(killer && this.isInvincibleBoss(killer));
+      if (this.activeStage.endsPrologue && (byKarnak || zone?.isBossZone)) {
+        this.beginPrologueEnd();
+        return;
+      }
+      // Ordinary defeat: no cost (Decision #24), back to the Village to try again.
+      this.missionFinished = true;
+      this.autoWalk = undefined;
+      this.cancelPickupWalk();
+      this.runState.status = 'defeat';
+      this.finalizeRunOutcome(false);
+      return;
+    }
+    if (this.usesPlacedMonsters()) {
+      this.updatePlacedMissionKills(progress);
+      return;
+    }
+    if (!zone || progress.zonesCleared[idx]) {
+      return;
+    }
+    const cleared = this.monsters.every((m) => !m.isAlive);
+    if (!cleared) {
+      this.testRoomClearAtMs = undefined;
+      return;
+    }
+    if (this.testRoomClearAtMs === undefined) {
+      this.testRoomClearAtMs = nowMs + 650;
+      return;
+    }
+    if (nowMs < this.testRoomClearAtMs) {
+      return;
+    }
+    markZoneCleared(progress, idx);
+    // Cleared rooms reopen behind the hero, so a missed collectible can still be fetched.
+    for (const id of zone.entryDoorIds) {
+      this.setDoorSealed(id, false);
+    }
+    if (idx < map.zones.length - 1) {
+      this.openZoneExits(idx);
+      return;
+    }
+    // Last zone cleared: point at what is still missing.
+    const objective = progress.objective;
+    if (objective && objective.collected < objective.count) {
+      const meta = missionObjectiveLabel(objective.itemId);
+      this.showTimedBanner(
+        `Área limpa — ainda faltam ${meta.label.toLowerCase()}: ${objective.collected}/${objective.count}`,
+        6000
+      );
+    } else if (progress.eventRequired && !progress.eventVisited) {
+      this.showTimedBanner('Área limpa — há um brilho estranho no fundo da sala…', 6000);
+    }
+  }
+
+  /**
+   * T-151: "Elimine todos os monstros" — kill counter, zones cleared with their monsters and, when
+   * the last one falls, a hint pointing at what is still missing.
+   */
+  private updatePlacedMissionKills(progress: MissionProgress): void {
+    const map = this.dungeonMap;
+    if (!map) {
+      return;
+    }
+    let killed = 0;
+    const aliveByZone = map.zones.map(() => 0);
+    for (const m of this.monsters) {
+      if (this.isInvincibleBoss(m)) {
+        continue;
+      }
+      if (m.isAlive) {
+        const z = this.monsterZoneIds.get(m.instanceId);
+        if (z !== undefined) {
+          aliveByZone[z]++;
+        }
+      } else {
+        killed++;
+      }
+    }
+    const wasAllDead = monstersAlive(progress) === 0;
+    setMonstersKilled(progress, killed);
+    aliveByZone.forEach((alive, z) => {
+      if (alive === 0 && !progress.zonesCleared[z]) {
+        markZoneCleared(progress, z);
+      }
+    });
+    if (wasAllDead || monstersAlive(progress) > 0 || progress.monstersTotal === 0) {
+      return;
+    }
+    const objective = progress.objective;
+    if (objective && objective.collected < objective.count) {
+      const meta = missionObjectiveLabel(objective.itemId);
+      this.showTimedBanner(
+        `Todos os monstros eliminados — ainda faltam ${meta.label.toLowerCase()}: ${objective.collected}/${objective.count}`,
+        6000
+      );
+    } else if (progress.eventRequired && !progress.eventVisited) {
+      this.showTimedBanner('Todos os monstros eliminados — há um brilho estranho no fundo da mina…', 6000);
+    } else if (!this.activeStage.endsPrologue) {
+      this.showTimedBanner('Todos os monstros eliminados', 3000);
+    }
+  }
+
+  /** "Algo estranho" point and the completion rule (`isMissionComplete`). */
+  private updateMissionObjectives(nowMs: number): void {
+    const map = this.dungeonMap;
+    const progress = this.missionProgress;
+    if (!this.isMission || !map || !progress || this.missionFinished || this.prologueEnded) {
+      return;
+    }
+    if (
+      map.eventPoint &&
+      !progress.eventVisited &&
+      this.hero.isAlive &&
+      isEventUnlocked(map, progress) &&
+      isAtEventPoint(map, this.hero.position.x, this.hero.position.y + MAP_FEET_OFFSET)
+    ) {
+      markEventVisited(progress);
+      const line = getDialogueLine(`${this.activeStage.id}_strange`);
+      this.showTimedBanner(
+        line?.text ?? line?.shortText ?? 'Algo estranho pulsa no fundo da mina…',
+        MISSION_COMPLETE_AFTER_EVENT_MS + 400
+      );
+      this.cameras.main.flash(380, 120, 20, 20);
+      this.cameras.main.shake(320, 0.003);
+    }
+    if (this.activeStage.endsPrologue) {
+      // Mission 3 never ends in victory: only the hero's death to Karnak ends it (T-146).
+      return;
+    }
+    if (this.missionCompleteAtMs === undefined) {
+      if (isMissionComplete(progress)) {
+        this.missionCompleteAtMs =
+          nowMs +
+          (progress.eventRequired
+            ? MISSION_COMPLETE_AFTER_EVENT_MS
+            : MISSION_COMPLETE_DELAY_MS);
+      }
+    } else if (nowMs >= this.missionCompleteAtMs) {
+      this.completeMissionRun();
+    }
+  }
+
+  /** Mission done: `mission_*_complete`, victory applied (completeMission) and the victory panel. */
+  private completeMissionRun(): void {
+    if (this.missionFinished) {
+      return;
+    }
+    this.missionFinished = true;
+    this.missionCompleteAtMs = undefined;
+    this.autoWalk = undefined;
+    this.cancelPickupWalk();
+    this.runState.status = 'victory';
+    this.finalizeRunOutcome(true);
+    const line = getDialogueLine(`${this.activeStage.id}_complete`);
+    this.showTimedBanner(
+      line?.text ?? line?.shortText ?? dialoguesData.entries.run_victory.text,
+      60000
+    );
+    this.updateHud(this.elapsedTimeMs);
+  }
+
+  /** T-146: the hero fell to Karnak. Not a common defeat: the mission (and the prologue) ends. */
+  private beginPrologueEnd(): void {
+    if (this.prologueEnded) {
+      return;
+    }
+    this.prologueEnded = true;
+    this.missionFinished = true;
+    this.autoWalk = undefined;
+    this.cancelPickupWalk();
+    if (this.inventoryModal?.isOpen()) {
+      this.inventoryModal.close();
+    }
+    // applyStageOutcomeToCampaign -> completeMission('mission_depths') + save (Act 1 unlocked).
+    this.finalizeRunOutcome(true, false);
+    this.bannerText = undefined;
+    this.bannerExpiresAtMs = 0;
+    soundManager.play('defeat');
+    this.cameras.main.shake(420, 0.006);
+    this.prologueEndAtMs = this.elapsedTimeMs + PROLOGUE_END_DELAY_MS;
+  }
+
+  private showPrologueEndScreen(): void {
+    const title =
+      getDialogueLine('prologue_end_title')?.text ?? 'Fim do Prólogo';
+    const text =
+      getDialogueLine('prologue_end_text')?.text ??
+      'O Jovem Guerreiro tombou. A história não termina aqui.';
+    let continued = false;
+    const onContinue = () => {
+      if (continued) {
+        return;
+      }
+      continued = true;
+      // Act 1 as it is today (volta ao menu-hub).
+      this.returnToHub();
+    };
+    try {
+      PrologueEndScreen.show(this, { title, text, onContinue });
+    } catch {
+      // Fallback: plain screen, click or Enter to continue.
+      const w = this.scale.width || 960;
+      const h = this.scale.height || 540;
+      const bg = this.add
+        .rectangle(0, 0, w, h, 0x05060a, 1)
+        .setOrigin(0, 0)
+        .setDepth(5000)
+        .setScrollFactor(0)
+        .setInteractive();
+      this.add
+        .text(w / 2, h / 2 - 20, `${title}\n\n${text}`, {
+          fontFamily: DF_FONTS.TITLE,
+          fontSize: '20px',
+          color: '#f1d28a',
+          align: 'center',
+          wordWrap: { width: w - 64 },
+        })
+        .setOrigin(0.5)
+        .setDepth(5001)
+        .setScrollFactor(0);
+      bg.on('pointerdown', onContinue);
+      this.input.keyboard?.once('keydown-ENTER', onContinue);
+    }
+    this.cameraRig?.syncLayers();
+  }
+
+  // --- Debug autopilot (T-129 validation) -------------------------------------
+
+  /** BFS on the 16 px grid (same feet validity as the movement, sealed doors included). */
+  private startAutoWalk(feetX: number, feetY: number): number {
+    const map = this.dungeonMap;
+    if (!map || !this.hero) {
+      return -1;
+    }
+    const G = 16;
+    const nx = map.cols * 2 + 1;
+    const ny = map.rows * 2 + 1;
+    const valid = new Int8Array(nx * ny).fill(-1);
+    const isValid = (i: number, j: number): boolean => {
+      if (i < 0 || j < 0 || i >= nx || j >= ny) {
+        return false;
+      }
+      const k = j * nx + i;
+      if (valid[k] < 0) {
+        valid[k] = this.isFeetValid(i * G, j * G, null) ? 1 : 0;
+      }
+      return valid[k] === 1;
+    };
+    const nearestNode = (x: number, y: number): number => {
+      const i0 = Math.round(x / G);
+      const j0 = Math.round(y / G);
+      for (let r = 0; r <= 4; r++) {
+        for (let dj = -r; dj <= r; dj++) {
+          for (let di = -r; di <= r; di++) {
+            if (Math.max(Math.abs(di), Math.abs(dj)) === r && isValid(i0 + di, j0 + dj)) {
+              return (j0 + dj) * nx + (i0 + di);
+            }
+          }
+        }
+      }
+      return -1;
+    };
+    const start = nearestNode(this.hero.position.x, this.hero.position.y + MAP_FEET_OFFSET);
+    const goal = nearestNode(feetX, feetY);
+    if (start < 0 || goal < 0) {
+      return -1;
+    }
+    const prev = new Int32Array(nx * ny).fill(-1);
+    const q = new Int32Array(nx * ny);
+    let head = 0;
+    let tail = 0;
+    q[tail++] = start;
+    prev[start] = start;
+    while (head < tail) {
+      const k = q[head++];
+      if (k === goal) {
+        break;
+      }
+      const i = k % nx;
+      const j = (k / nx) | 0;
+      const nb: Array<[number, number]> = [
+        [i - 1, j],
+        [i + 1, j],
+        [i, j - 1],
+        [i, j + 1],
+      ];
+      for (const [a, b] of nb) {
+        if (isValid(a, b)) {
+          const n = b * nx + a;
+          if (prev[n] < 0) {
+            prev[n] = k;
+            q[tail++] = n;
+          }
+        }
+      }
+    }
+    if (prev[goal] < 0) {
+      return -1;
+    }
+    const path: Vector2D[] = [];
+    for (let k = goal; k !== start; k = prev[k]) {
+      path.push({ x: (k % nx) * G, y: ((k / nx) | 0) * G });
+    }
+    path.reverse();
+    this.cancelPickupWalk();
+    this.autoWalk = { path, index: 0, stuckMs: 0 };
+    return path.length * G;
+  }
+
+  private resolveAutoWalk(input: Vector2D, deltaMs: number): Vector2D {
+    const walk = this.autoWalk;
+    if (!walk) {
+      return input;
+    }
+    if (input.x !== 0 || input.y !== 0 || !this.hero.isAlive) {
+      this.autoWalk = undefined;
+      return input;
+    }
+    const fx = this.hero.position.x;
+    const fy = this.hero.position.y + MAP_FEET_OFFSET;
+    while (
+      walk.index < walk.path.length &&
+      Math.hypot(walk.path[walk.index].x - fx, walk.path[walk.index].y - fy) < 9
+    ) {
+      walk.index++;
+    }
+    if (walk.index >= walk.path.length) {
+      this.autoWalk = undefined;
+      return { x: 0, y: 0 };
+    }
+    const target = walk.path[walk.index];
+    // Gives up when the next node is not reached in time (blocked or sliding on a corner).
+    if (walk.lastIndex !== walk.index) {
+      walk.lastIndex = walk.index;
+      walk.stuckMs = 0;
+    } else {
+      walk.stuckMs += deltaMs;
+      if (walk.stuckMs > 1500) {
+        this.autoWalk = undefined;
+        return { x: 0, y: 0 };
+      }
+    }
+    const dx = target.x - fx;
+    const dy = target.y - fy;
+    const d = Math.hypot(dx, dy) || 1;
+    return { x: dx / d, y: dy / d };
+  }
+
+  /** Debug shortcut for e2e: finishes the mission as if played (or the Karnak death in mission 3). */
+  public completeMissionNow(): boolean {
+    const map = this.dungeonMap;
+    const progress = this.missionProgress;
+    if (!this.isMission || !map || !progress || this.missionFinished) {
+      return false;
+    }
+    // T-151: every monster dies (Karnak, invincible, stays) and the counter fills up.
+    for (const monster of this.monsters) {
+      if (!this.isInvincibleBoss(monster)) {
+        monster.hp = 0;
+        monster.isAlive = false;
+      }
+    }
+    setMonstersKilled(progress, progress.monstersTotal);
+    if (this.activeStage.endsPrologue) {
+      const last = map.zones.length - 1;
+      if (this.testArenaRoomIndex !== last) {
+        for (let i = this.testArenaRoomIndex; i < last; i++) {
+          markZoneCleared(progress, i);
+        }
+        this.enterZone(last, false);
+      }
+      this.hero.stats.hp = 0;
+      this.hero.isAlive = false;
+      this.beginPrologueEnd();
+      return true;
+    }
+    for (const monster of this.monsters) {
+      monster.hp = 0;
+      monster.isAlive = false;
+    }
+    progress.zonesCleared = progress.zonesCleared.map(() => true);
+    for (const c of map.collectibles) {
+      if (!this.isCollectiblePicked(c.id)) {
+        this.collectMissionItem(c.id);
+      }
+    }
+    if (progress.eventRequired) {
+      markEventVisited(progress);
+    }
+    this.completeMissionRun();
+    return true;
+  }
+
+  private getMissionDebugState(): MissionDebugState | null {
+    const map = this.dungeonMap;
+    const progress = this.missionProgress;
+    if (!this.isMission || !map || !progress || !this.hero) {
+      return null;
+    }
+    const obj = progress.objective;
+    return {
+      missionId: this.activeStage.id,
+      seed: this.missionSeed,
+      mapMode: map.mode,
+      zoneIndex: this.testArenaRoomIndex,
+      zoneCount: map.zones.length,
+      zonesCleared: [...progress.zonesCleared],
+      doorsOpen: [...this.testDoorOpenFlags],
+      zoneTriggers: map.zones.map((z) => {
+        const big = z.trigger.slice().sort((a, b) => b.w * b.h - a.w * a.h)[0];
+        return big ? { x: big.x + big.w / 2, y: big.y + big.h / 2 } : { x: 0, y: 0 };
+      }),
+      objective: obj ? { itemId: obj.itemId, collected: obj.collected, count: obj.count } : null,
+      collectibles: map.collectibles.map((c) => ({
+        id: c.id,
+        x: c.x,
+        y: c.y,
+        zoneId: c.zoneId,
+        picked: this.isCollectiblePicked(c.id),
+      })),
+      eventPoint: map.eventPoint
+        ? { x: map.eventPoint.x, y: map.eventPoint.y, visited: progress.eventVisited }
+        : null,
+      complete: isMissionComplete(progress),
+      finished: this.missionFinished,
+      prologueEnded: this.prologueEnded,
+      karnakIntroShown: this.karnakIntroShown,
+      heroFeet: { x: this.hero.position.x, y: this.hero.position.y + MAP_FEET_OFFSET },
+      heroHp: this.hero.stats.hp,
+      heroAlive: this.hero.isAlive,
+      runStatus: this.runState.status,
+      autoWalking: Boolean(this.autoWalk),
+      elapsedMs: this.elapsedTimeMs,
+      monstersAlive: this.usesPlacedMonsters()
+        ? this.monsters.filter((m) => m.isAlive && !this.isInvincibleBoss(m)).length
+        : monstersAlive(progress),
+      monstersTotal: progress.monstersTotal,
+      monstersDormant: this.monsters.filter((m) => m.isAlive && m.dormant).length,
+    };
   }
 
   // ===========================================================================
@@ -1609,7 +2682,7 @@ export class DungeonScene extends Phaser.Scene {
       this.trackTestObject(obj);
     this.lightingGraphics.clear();
 
-    const theme = getBiomeTheme(this.testArenaBiome, this.textures);
+    const theme = getBiomeTheme(this.mapBiomeId(), this.textures);
     const light = theme.lighting;
     const hasTiles =
       this.textures.exists(theme.tilesKey) &&
@@ -1747,6 +2820,7 @@ export class DungeonScene extends Phaser.Scene {
     for (const id of this.sealedDoorIds) {
       this.addDoorGlow(id);
     }
+    this.buildMissionObjects();
     this.applyTestArenaCameraBounds();
   }
 
@@ -1830,7 +2904,7 @@ export class DungeonScene extends Phaser.Scene {
       this.setDoorSealed(id, false);
     }
     this.showTimedBanner(
-      this.testArenaMapMode === 'giant'
+      (this.dungeonMap?.mode ?? this.testArenaMapMode) === 'giant'
         ? 'Zona limpa — siga em frente'
         : 'Sala limpa — siga pela porta',
       6000
@@ -1840,10 +2914,31 @@ export class DungeonScene extends Phaser.Scene {
   /** The next wave spawns only when the hero's feet WALK into the next zone's trigger. */
   private checkTestRoomEntry(): void {
     const map = this.dungeonMap;
-    if (!this.isTestArena || !map || this.testArenaFinished || !this.hero.isAlive) {
+    if (
+      !this.usesMap() ||
+      !map ||
+      this.testArenaFinished ||
+      this.missionFinished ||
+      !this.hero.isAlive
+    ) {
       return;
     }
     const idx = this.testArenaRoomIndex;
+    if (this.usesPlacedMonsters()) {
+      // T-151: no waves — the zone index only follows where the hero is (HUD "Sala x/y", Karnak line).
+      const fx = this.hero.position.x;
+      const fy = this.hero.position.y + MAP_FEET_OFFSET;
+      const heroRoom = map.mode === 'rooms' ? this.heroRoomId() : -2;
+      const at = map.zones.findIndex((z) =>
+        map.mode === 'rooms'
+          ? z.floorRoomId === heroRoom
+          : z.trigger.some((r) => fx > r.x && fx < r.x + r.w && fy > r.y && fy < r.y + r.h)
+      );
+      if (at >= 0 && at !== idx) {
+        this.enterZone(at, false);
+      }
+      return;
+    }
     const next = map.zones[idx + 1];
     if (!next || !this.testDoorOpenFlags[idx]) {
       return;
@@ -1896,7 +2991,7 @@ export class DungeonScene extends Phaser.Scene {
   /** Camera bounds = the whole map. */
   private applyTestArenaCameraBounds(): void {
     const map = this.dungeonMap;
-    if (!this.isTestArena || !map) {
+    if (!this.usesMap() || !map) {
       return;
     }
     const worldW = map.cols * MAP_TILE;
@@ -2062,11 +3157,19 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   /** Snaps a position (actor centre) onto valid floor: hero = map, monster = zone room. */
-  private constrainPositionToTestArenaRoom(pos: Vector2D, isHero = false): void {
+  private constrainPositionToTestArenaRoom(
+    pos: Vector2D,
+    isHero = false,
+    monsterRoomId?: number | null
+  ): void {
     if (!this.dungeonMap) {
       return;
     }
-    const roomId = isHero ? null : (this.currentZone()?.floorRoomId ?? null);
+    const roomId = isHero
+      ? null
+      : monsterRoomId !== undefined
+        ? monsterRoomId
+        : (this.currentZone()?.floorRoomId ?? null);
     const fy = pos.y + MAP_FEET_OFFSET;
     if (this.isFeetValid(pos.x, fy, roomId)) {
       return;
@@ -2077,7 +3180,7 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private constrainActorsToTestArenaRoom(): void {
-    if (!this.isTestArena || !this.dungeonMap) {
+    if (!this.usesMap() || !this.dungeonMap) {
       return;
     }
     if (this.hero) {
@@ -2086,7 +3189,13 @@ export class DungeonScene extends Phaser.Scene {
     const roomId = this.currentZone()?.floorRoomId ?? null;
     for (const monster of this.monsters) {
       if (monster.isAlive) {
-        this.constrainActor(monster.instanceId, monster.position, roomId);
+        // T-151: placed monsters keep to their own room's floor.
+        const own = this.monsterRoomIds.get(monster.instanceId);
+        this.constrainActor(
+          monster.instanceId,
+          monster.position,
+          own !== undefined ? own : roomId
+        );
       }
     }
   }
@@ -2098,7 +3207,7 @@ export class DungeonScene extends Phaser.Scene {
       return;
     }
     shadows.clear();
-    if (!this.isTestArena || !this.dungeonMap) {
+    if (!this.usesMap() || !this.dungeonMap) {
       return;
     }
 
@@ -2152,6 +3261,40 @@ export class DungeonScene extends Phaser.Scene {
     });
   }
 
+  /** True when the test arena was entered from the menu-hub (not by `?test` boot). */
+  private openedFromMenu(): boolean {
+    const menu = this.scene.manager.getScene('MenuHub');
+    // Phaser scene status: 0 = PENDING (never started); > 0 = the menu already ran.
+    return Boolean(menu) && menu.scene.settings.status > 0;
+  }
+
+  /** Builds, applies and persists the test-arena run report (once). No campaign progress. */
+  private endTestArenaRun(victory: boolean): void {
+    if (this.runLootResolved) {
+      return;
+    }
+    this.runLootResolved = true;
+    this.flushHeroImpacts();
+    if (victory) {
+      this.collectRemainingDropsOnVictory();
+    } else {
+      this.clearGroundDrops();
+    }
+    const { kept, lost } = resolveRunEndLoot(this.inventory, victory);
+    const report: RunEndReport = {
+      victory,
+      soulsGained: this.runState.soulsCollected,
+      essencesGained: this.essencesCollected,
+      monstersKilled: this.runState.monstersKilled,
+      bossDefeated: this.bossDefeated,
+      keptItems: kept.filter((item) => !this.startingHubItemIds.has(item.instanceId)),
+      lostItems: lost.filter((item) => !this.startingHubItemIds.has(item.instanceId)),
+    };
+    this.lastRunReport = report;
+    applyRunOutcomeToProfile(this.activeProfile, report);
+    persistProfile(this.activeProfile);
+  }
+
   private finishTestArena(): void {
     if (this.testArenaFinished) {
       return;
@@ -2181,7 +3324,7 @@ export class DungeonScene extends Phaser.Scene {
       .rectangle(0, 0, w, h, 0x05060a, 0.86)
       .setOrigin(0, 0)
       .setInteractive();
-    backdrop.on('pointerdown', () => this.restartTestArena());
+    backdrop.on('pointerdown', () => this.leaveTestArena());
 
     const ornament = this.add.graphics();
     ornament.lineStyle(1.5, 0xd4a95a, 0.85);
@@ -2207,7 +3350,7 @@ export class DungeonScene extends Phaser.Scene {
       .setShadow(0, 3, '#000000', 8, true, true);
 
     const hint = this.add
-      .text(w / 2, h / 2 + 58, 'Toque ou pressione Enter para reiniciar', {
+      .text(w / 2, h / 2 + 58, 'Toque ou pressione Enter para voltar ao menu', {
         fontFamily: DF_FONTS.BODY,
         fontSize: '16px',
         color: '#cbd5e1',
@@ -2217,8 +3360,24 @@ export class DungeonScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    const btnBg = this.add
+      .rectangle(w / 2, h / 2 + 108, 220, 44, 0x2a1f0e, 0.95)
+      .setStrokeStyle(2, 0xd4a95a, 0.95)
+      .setInteractive({ useHandCursor: true });
+    btnBg.on('pointerdown', () => this.leaveTestArena());
+    const btnLabel = this.add
+      .text(w / 2, h / 2 + 108, 'Voltar ao menu', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '18px',
+        fontStyle: 'bold',
+        color: '#f1d28a',
+        resolution: 2,
+      })
+      .setOrigin(0.5);
+    const button = this.add.container(0, 0, [btnBg, btnLabel]);
+
     const overlay = this.add
-      .container(0, 0, [backdrop, ornament, title, hint])
+      .container(0, 0, [backdrop, ornament, title, hint, button])
       .setDepth(3000);
     this.testArenaFinishOverlay = overlay;
 
@@ -2235,7 +3394,7 @@ export class DungeonScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     });
 
-    const onEnter = () => this.restartTestArena();
+    const onEnter = () => this.leaveTestArena();
     this.testArenaRestartKeyHandler = onEnter;
     this.input.keyboard?.on('keydown-ENTER', onEnter);
     this.cameraRig?.syncLayers();
@@ -2256,16 +3415,21 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
-  private restartTestArena(): void {
+  private leaveTestArena(): void {
     if (!this.isTestArena || !this.testArenaFinished) {
       return;
     }
     soundManager.play('ui_click');
     this.destroyTestArenaFinishOverlay();
-    this.scene.restart({ testArena: true });
+    this.endTestArenaRun(true);
+    this.returnToHub();
   }
 
   private checkAndUpdateRoomState(nowMs: number): void {
+    if (this.isMission) {
+      this.checkMissionRoomState(nowMs);
+      return;
+    }
     if (this.isTestArena) {
       if (this.bannerText && nowMs >= this.bannerExpiresAtMs) {
         this.bannerText = undefined;
@@ -2321,7 +3485,7 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
-  private finalizeRunOutcome(isVictory: boolean): void {
+  private finalizeRunOutcome(isVictory: boolean, playSound = true): void {
     // Deferred kill visuals may still hold loot: land them before resolving.
     this.flushHeroImpacts();
     if (isVictory) {
@@ -2330,7 +3494,9 @@ export class DungeonScene extends Phaser.Scene {
       this.clearGroundDrops();
     }
 
-    soundManager.play(isVictory ? 'victory' : 'defeat');
+    if (playSound) {
+      soundManager.play(isVictory ? 'victory' : 'defeat');
+    }
 
     if (!this.runLootResolved) {
       this.runLootResolved = true;
@@ -2355,7 +3521,13 @@ export class DungeonScene extends Phaser.Scene {
         }
         this.lootSummaryText = parts.join(' | ');
       } else {
-        const parts = [`Itens perdidos na incursão: ${runLostDrops.length}`];
+        // Decisão #26: na missão do prólogo os itens pegos ficam com o jogador também na derrota
+        // (o core devolve `lostItems` ao perfil).
+        const parts = [
+          this.isMission
+            ? `Itens mantidos no inventário: ${runLostDrops.length}`
+            : `Itens perdidos na incursão: ${runLostDrops.length}`,
+        ];
         if (preservedHubCount > 0) {
           parts.push(`Gear do Refúgio preservado: ${preservedHubCount}`);
         }
@@ -2370,8 +3542,9 @@ export class DungeonScene extends Phaser.Scene {
 
       const report: RunEndReport = {
         victory: isVictory,
-        soulsGained: this.runState.soulsCollected,
-        essencesGained: this.essencesCollected,
+        // T-157: the prologue does not count Souls nor Essences.
+        soulsGained: this.isMission ? 0 : this.runState.soulsCollected,
+        essencesGained: this.isMission ? 0 : this.essencesCollected,
         monstersKilled: this.runState.monstersKilled,
         bossDefeated: this.bossDefeated,
         keptItems: runKeptDrops,
@@ -2388,23 +3561,38 @@ export class DungeonScene extends Phaser.Scene {
       this.inventoryModal.close();
     }
 
+    // T-157: prologue missions get their own modal (Karnak's death goes to "Fim do Prólogo").
+    this.missionOutcomeModal = undefined;
+    if (this.isMission && !this.prologueEnded) {
+      const missionName = this.activeStage.name;
+      const giverNames: Record<string, string> = {
+        master: 'Mestre de Armas',
+        lyra: 'Lyra',
+        gorran: 'Gorran',
+      };
+      const defeatLine = getDialogueLine('mission_return_defeat');
+      const body = isVictory
+        ? (getDialogueLine(`${this.activeStage.id}_complete`)?.text ??
+          dialoguesData.entries.run_victory.text)
+        : (defeatLine?.shortText ?? defeatLine?.text ?? 'Você recuou ferido. Tente {mission} de novo.')
+            .replace(/\{mission\}/g, missionName)
+            .replace(/\{npc\}/g, giverNames[this.activeStage.giverNpcId ?? ''] ?? 'quem te pediu');
+      this.missionOutcomeModal = {
+        title: isVictory ? `${missionName} — Missão cumprida` : 'Derrotado',
+        body,
+        buttonLabel: 'Voltar ao menu',
+      };
+    }
+
     if (isVictory) {
-      if (this.lastRunReport?.triggeredVillageFall) {
-        const pactLine = getDialogueLine('village_fall_pact');
-        const fallBanner = pactLine?.shortText
-          ? `QUEDA DA VILA NATAL! ${pactLine.shortText} O Refúgio no Submundo (Ato 1) foi aberto.`
-          : 'QUEDA DA VILA NATAL! O Emissário Celestial selou sua alma no Refúgio do Submundo (Ato 1).';
-        this.showTimedBanner(fallBanner, 60000);
-      } else {
-        const firstVictoryId = this.activeStage.victoryDialogueIds[0];
-        const victoryLine = firstVictoryId
-          ? getDialogueLine(firstVictoryId)
-          : null;
-        this.showTimedBanner(
-          victoryLine?.text ?? dialoguesData.entries.run_victory.text,
-          60000
-        );
-      }
+      // T-151: no more "village_fall_pact" banner here (the old Arauto flow); Act 1 opens with
+      // `act1_arrival_*` (desligado do fluxo; Vila guardada).
+      const firstVictoryId = this.activeStage.victoryDialogueIds[0];
+      const victoryLine = firstVictoryId ? getDialogueLine(firstVictoryId) : null;
+      this.showTimedBanner(
+        victoryLine?.text ?? dialoguesData.entries.run_victory.text,
+        60000
+      );
     } else {
       this.showTimedBanner(dialoguesData.entries.run_death.text, 60000);
     }
@@ -2629,8 +3817,16 @@ export class DungeonScene extends Phaser.Scene {
 
   private updateHud(nowMs: number): void {
     const currentRoom = getCurrentRoom(this.runState);
+    // T-151: placed bosses (Chefe da Matilha, Karnak) only show their bar once awake and near.
+    const placed = this.usesPlacedMonsters();
     const livingBosses = this.monsters.filter(
-      (m) => m.isAlive && m.hp > 0 && m.type === 'boss'
+      (m) =>
+        m.isAlive &&
+        m.hp > 0 &&
+        m.type === 'boss' &&
+        (!placed ||
+          (!m.dormant &&
+            distanceBetween(this.hero.position, m.position) <= BOSS_BAR_RANGE))
     );
     let bossMonster: MonsterInstance | undefined;
     if (livingBosses.length > 0) {
@@ -2642,7 +3838,7 @@ export class DungeonScene extends Phaser.Scene {
           bossMonster = candidate;
         }
       }
-    } else if (currentRoom.isBossRoom) {
+    } else if (currentRoom.isBossRoom && !placed) {
       bossMonster =
         this.monsters.find((m) => m.type === 'boss') ??
         this.monsters.find((m) => m.defId === this.activeStage?.bossId);
@@ -2675,13 +3871,20 @@ export class DungeonScene extends Phaser.Scene {
           )
         : 0);
 
-    const testZone = this.isTestArena ? this.currentZone() : undefined;
-    const testMap = this.isTestArena ? this.dungeonMap : undefined;
-    const missionObjective = this.isTestArena
-      ? this.testArenaFinished
-        ? `Arena de Teste — ${TEST_ARENA_FINISHED_TEXT}`
-        : (testZone?.title ?? 'Arena de Teste')
-      : `${currentRoom.roomNumber}/${this.runState.totalRooms} — ${currentRoom.title}`;
+    const testZone = this.usesMap() ? this.currentZone() : undefined;
+    const testMap = this.usesMap() ? this.dungeonMap : undefined;
+    const zoneCount = testMap?.zones.length ?? 0;
+    const missionObjective = this.isMission
+      ? `${this.testArenaRoomIndex + 1}/${zoneCount} — ${testZone?.title ?? this.activeStage.name}`
+      : this.isTestArena
+        ? this.testArenaFinished
+          ? `Masmorra teste — ${TEST_ARENA_FINISHED_TEXT}`
+          : (testZone?.title ?? 'Masmorra teste')
+        : `${currentRoom.roomNumber}/${this.runState.totalRooms} — ${currentRoom.title}`;
+    const objectiveState = this.isMission ? this.missionProgress?.objective : null;
+    const objectiveMeta = objectiveState
+      ? missionObjectiveLabel(objectiveState.itemId)
+      : undefined;
 
     // Test arena: position relative to the whole map (world px).
     const minimap = {
@@ -2696,12 +3899,39 @@ export class DungeonScene extends Phaser.Scene {
           y: m.position.y,
           isBoss: m.type === 'boss',
         })),
+      // T-152: objective items still on the ground (world px).
+      ...(this.isMission && testMap
+        ? {
+            collectibles: testMap.collectibles
+              .filter((c) => !this.isCollectiblePicked(c.id))
+              .map((c) => ({ x: c.x, y: c.y })),
+          }
+        : {}),
     };
+    const progressForHud = this.isMission ? this.missionProgress : undefined;
 
     const nearestDrop = this.findNearestDrop();
+    const nearCollectible = this.findNearestCollectible() !== undefined;
     const snapshot: HudSnapshot = {
-      pickupAvailable: Boolean(nearestDrop),
+      pickupAvailable: Boolean(nearestDrop) || nearCollectible,
       pickupRarity: nearestDrop?.item.rarity,
+      ...(objectiveState && objectiveMeta
+        ? {
+            objectiveText: objectiveProgressText(objectiveState, objectiveMeta.label),
+            objectiveIcon: objectiveMeta.icon,
+          }
+        : {}),
+      // T-151/T-152: main objective of every mission and the map plan for the minimap.
+      ...(progressForHud && progressForHud.monstersTotal > 0
+        ? { killObjectiveText: killObjectiveText(progressForHud) }
+        : this.isTestArena && this.monsters.length > 0
+          ? {
+              killObjectiveText: `Elimine todos os monstros ${this.monsters.filter((m) => !m.isAlive).length}/${this.monsters.length}`,
+            }
+          : {}),
+      ...(this.isMission && this.minimapLayout
+        ? { minimapLayout: this.minimapLayout }
+        : {}),
       hp: this.hero.stats.hp,
       maxHp: this.hero.stats.maxHp,
       souls: this.hero.souls,
@@ -2713,14 +3943,16 @@ export class DungeonScene extends Phaser.Scene {
       isTestArena: this.isTestArena,
       missionObjective,
       minimap,
-      roomNumber: currentRoom.roomNumber,
-      totalRooms: this.runState.totalRooms,
+      roomNumber: this.isMission
+        ? this.testArenaRoomIndex + 1
+        : currentRoom.roomNumber,
+      totalRooms: this.isMission ? zoneCount : this.runState.totalRooms,
       isBossRoom:
         currentRoom.isBossRoom ||
         livingBosses.length > 0 ||
         Boolean(testZone?.isBossZone),
       roomTitle: testZone?.title ?? currentRoom.title,
-      stageName: this.activeStage?.name,
+      stageName: this.isTestArena ? 'Masmorra teste' : this.activeStage?.name,
       bossHp: bossMonster?.hp,
       bossMaxHp: bossMonster?.maxHp,
       bossName: bossMonster?.name,
@@ -2732,6 +3964,13 @@ export class DungeonScene extends Phaser.Scene {
       bagCount: this.inventory.bag.length,
       equippedCount,
       lootSummaryText: this.lootSummaryText,
+      // T-157: prologue end-of-mission modal and no Souls/Essences counter.
+      ...(this.isMission
+        ? {
+            hideCurrencies: true,
+            ...(this.missionOutcomeModal ? { outcomeModal: this.missionOutcomeModal } : {}),
+          }
+        : {}),
     };
 
     this.hud.update(snapshot);
@@ -2757,7 +3996,7 @@ export class DungeonScene extends Phaser.Scene {
       currentRoom.biome
     );
 
-    if (!this.isTestArena) {
+    if (!this.usesMap()) {
       this.hero.position.x = Math.max(
         ARENA_PADDING,
         Math.min(width - ARENA_PADDING, this.hero.position.x)
@@ -2779,7 +4018,7 @@ export class DungeonScene extends Phaser.Scene {
       }
     }
 
-    for (const drop of this.isTestArena ? [] : this.groundDrops) {
+    for (const drop of this.usesMap() ? [] : this.groundDrops) {
       drop.position.x = Math.max(
         ARENA_PADDING,
         Math.min(width - ARENA_PADDING, drop.position.x)
@@ -3027,10 +4266,10 @@ export class DungeonScene extends Phaser.Scene {
   private spawnGroundDrop(item: ItemInstance, rawPosition: Vector2D): void {
     const width = this.scale.width || 960;
     const height = this.scale.height || 540;
-    const x = this.isTestArena
+    const x = this.usesMap()
       ? rawPosition.x
       : Math.max(ARENA_PADDING, Math.min(width - ARENA_PADDING, rawPosition.x));
-    const y = this.isTestArena
+    const y = this.usesMap()
       ? rawPosition.y
       : Math.max(
           ARENA_PADDING + 24,
@@ -3174,11 +4413,23 @@ export class DungeonScene extends Phaser.Scene {
   /** "Pegar" button / E key: same as clicking the nearest item in range. */
   private pickUpNearestDrop(): boolean {
     const drop = this.findNearestDrop();
+    const collectible = this.findNearestCollectible();
+    if (collectible) {
+      const feetY = this.hero.position.y + MAP_FEET_OFFSET;
+      const cDist = Math.hypot(collectible.x - this.hero.position.x, collectible.y - feetY);
+      const dDist = drop
+        ? distanceBetween(this.hero.position, drop.position)
+        : Number.POSITIVE_INFINITY;
+      if (cDist <= dDist) {
+        return this.handleCollectibleClick(collectible.id);
+      }
+    }
     return drop ? this.handleDropClick(drop) : false;
   }
 
   private cancelPickupWalk(): void {
     this.pickupTarget = undefined;
+    this.pickupCollectibleId = undefined;
     this.pickupLastPos = undefined;
     this.pickupStuckMs = 0;
   }
@@ -3186,9 +4437,12 @@ export class DungeonScene extends Phaser.Scene {
   /** Player input beats the auto-walk; otherwise steer straight at the item. */
   private resolveMoveDir(deltaMs: number): Vector2D {
     const input = this.hud.getMoveVector();
+    if (this.pickupCollectibleId !== undefined) {
+      return this.resolveCollectibleWalk(input, deltaMs);
+    }
     const target = this.pickupTarget;
     if (!target) {
-      return input;
+      return this.resolveAutoWalk(input, deltaMs);
     }
     if (
       input.x !== 0 ||

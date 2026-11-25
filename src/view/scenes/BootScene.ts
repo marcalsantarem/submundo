@@ -6,6 +6,12 @@ import {
   VILLAGE_FRAME_SIZES,
   VILLAGE_TEXTURE_KEYS,
 } from './VillageAssets';
+import {
+  MISSION_ANIM_SPECS,
+  MISSION_FALLBACK_COLORS,
+  MISSION_FRAME_SIZES,
+  MISSION_TEXTURE_KEYS,
+} from './MissionAssets';
 
 interface SpritesheetSpec {
   key: string;
@@ -277,14 +283,23 @@ const VILLAGE_SPRITESHEET_SPECS: readonly SpritesheetSpec[] = VILLAGE_TEXTURE_KE
   fallbackColor: VILLAGE_FALLBACK_COLORS[key],
 }));
 
+// Missões do prólogo (T-148): contrato em MissionAssets.ts.
+const MISSION_SPRITESHEET_SPECS: readonly SpritesheetSpec[] = MISSION_TEXTURE_KEYS.map((key) => ({
+  key,
+  file: `assets/sprites/${key}.png`,
+  ...MISSION_FRAME_SIZES[key],
+  fallbackColor: MISSION_FALLBACK_COLORS[key],
+}));
+
 const ALL_SPRITESHEET_SPECS: readonly SpritesheetSpec[] = [
   ...SPRITESHEET_SPECS,
   ...BIOME_SPRITESHEET_SPECS,
   ...VILLAGE_SPRITESHEET_SPECS,
+  ...MISSION_SPRITESHEET_SPECS,
 ];
 
 /**
- * Entrada do jogo (T-140): a Vila (HubScene) por padrão; a testArena com `?test`,
+ * Entrada do jogo (Decisões #28/#29): o menu-hub (`MenuHub`) por padrão; a testArena com `?test`,
  * `?map=`, `?biome=` ou `?seed=` (URLs dos E2E da M6/M8).
  */
 export function shouldOpenTestArena(search: string): boolean {
@@ -342,8 +357,8 @@ export class BootScene extends Phaser.Scene {
     const wantsTestArena = shouldOpenTestArena(window.location.search);
     if (wantsTestArena && 'DungeonScene' in keys) {
       this.scene.start('DungeonScene', { testArena: true });
-    } else if ('HubScene' in keys) {
-      this.scene.start('HubScene');
+    } else if ('MenuHub' in keys) {
+      this.scene.start('MenuHub');
     } else if ('DungeonScene' in keys) {
       this.scene.start('DungeonScene', { testArena: true });
     }
@@ -389,7 +404,16 @@ export class BootScene extends Phaser.Scene {
 
   private createVillageAnimations(): void {
     // Mesmo guarda de fallback: só cria se a folha real (com o último frame) carregou.
-    for (const spec of VILLAGE_ANIM_SPECS) {
+    // Inclui as animações das missões do prólogo (T-148).
+    const specs: readonly {
+      key: string;
+      texture: string;
+      frames: readonly number[];
+      frameRate: number;
+      repeat: number;
+      repeatDelay?: number;
+    }[] = [...VILLAGE_ANIM_SPECS, ...MISSION_ANIM_SPECS];
+    for (const spec of specs) {
       const last = spec.frames[spec.frames.length - 1];
       if (
         this.anims.exists(spec.key) ||

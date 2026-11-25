@@ -29,6 +29,8 @@ import { ItemTooltipCard, calculateItemPower } from './ItemTooltipCard';
 export interface InventoryHudSnapshot {
   equipped: EquippedGear;
   bag: ItemInstance[];
+  /** Capacidade do baú (opcional): habilita o aviso "Baú cheio". */
+  bagCapacity?: number;
   heroStats: HeroStats;
   lifeSteal: number;
   cooldownReduction: number;
@@ -80,6 +82,7 @@ export class InventoryModal {
   };
 
   private viewport: ViewportConfig;
+  private displayScale = 1;
   private opened = false;
   private bagPage = 0;
   private lastSnapshot: InventoryHudSnapshot;
@@ -740,14 +743,21 @@ export class InventoryModal {
     this.renderSnapshot();
   }
 
+  /** Reduz o modal para caber em telas menores (ex.: menu-hub mobile 844x390). */
+  public setDisplayScale(scale: number): void {
+    this.displayScale = Math.max(0.3, Math.min(1, scale));
+    this.resize(this.viewport);
+  }
+
   public resize(viewport: ViewportConfig): void {
     this.viewport = viewport;
     this.tooltipCard.resize(viewport);
 
-    const w = viewport.width;
-    const h = viewport.height;
+    const w = viewport.width / this.displayScale;
+    const h = viewport.height / this.displayScale;
 
-    this.rootContainer.setPosition(w / 2, h / 2);
+    this.rootContainer.setPosition(viewport.width / 2, viewport.height / 2);
+    this.rootContainer.setScale(this.displayScale);
 
     this.backdropGraphic.clear();
     this.backdropGraphic.fillStyle(0x04060a, 0.84);
@@ -1028,7 +1038,14 @@ export class InventoryModal {
 
   private renderBagGrid(): void {
     const totalItems = this.lastSnapshot.bag.length;
-    this.bagHeaderText.setText(`MOCHILA (${totalItems})`);
+    const cap = this.lastSnapshot.bagCapacity;
+    if (cap !== undefined && totalItems >= cap) {
+      this.bagHeaderText.setText(`MOCHILA (${totalItems}/${cap}) · BAÚ CHEIO`);
+      this.bagHeaderText.setColor('#ff6b5a').setFontSize(16);
+    } else {
+      this.bagHeaderText.setText(`MOCHILA (${totalItems})`);
+      this.bagHeaderText.setColor(DF_PALETTE.textGold).setFontSize(13);
+    }
 
     const totalPages = this.getTotalPages();
     const startIdx = this.bagPage * BAG_PAGE_SIZE;

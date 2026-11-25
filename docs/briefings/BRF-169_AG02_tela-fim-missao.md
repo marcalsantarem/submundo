@@ -1,0 +1,12 @@
+# BRF-169 — AG02 — T-157 Tela de fim de missão do prólogo
+**Leia:** `docs/agentes/AG02_UI.md`, as decisões #24 e #26 em `docs/decisoes.md`, em `src/view/ui/DungeonHud.ts` o modal de fim de run (título, texto, "Almas preservadas" ~1191, botão "Nova Incursão" ~954, linha de itens) e o contador de Almas/Essências do topo, em `src/view/scenes/DungeonScene.ts` só `finalizeRunOutcome()` (~3400–3470: monta título/texto/linhas "Novos itens extraídos… Gear do Refúgio…") e as chaves `mission_*_complete`, `mission_return_victory/defeat` e `run_victory` em `src/data/dialogues.json`. **Regra:** respostas curtas; sem commit/push/branches (checkout na `dev`; não troque).
+**Feedback do dono (com captura):** ao cumprir a missão das Ervas, o modal mostra o título "Carcereiro Abatido — Extração Completa", "Almas preservadas: 120", "Novos itens extraídos: 0 | Gear do Refúgio mantido: 5" e o botão "Nova Incursão". Está errado: **Almas ainda não existem no prólogo**, o título não faz sentido, o botão não faz sentido e a relação de itens não precisa estar ali.
+**Fazer (só nas missões do prólogo; Ato 1 e testArena continuam como estão):**
+(1) Vitória: título "<nome da missão> — Missão cumprida"; texto = `mission_*_complete` da missão (o que já aparece hoje no corpo); **sem** linha de Almas e **sem** linha de itens; botão **"Voltar à Vila"** (volta pelo portão como hoje).
+(2) Derrota: título "Derrotado"; texto curto (use `mission_return_defeat` com `{mission}`); sem Almas e sem itens; botão "Voltar à Vila".
+(3) Morte para o Karnak continua sem esse modal (vai para "Fim do Prólogo").
+(4) Esconda o contador de Almas/Essências do topo do HUD durante as missões do prólogo (e confira que a Vila também não mostra Almas).
+(5) Você pode editar `finalizeRunOutcome()` na `DungeonScene` só para montar título/texto/linhas do modal no prólogo; não mexa em outras partes da cena.
+**Permitido:** `src/view/ui/DungeonHud.ts`, `src/view/ui/VillageHud.ts`, `src/view/scenes/DungeonScene.ts` (só `finalizeRunOutcome` e a chamada do modal). **Proibido:** `src/core/`, `src/data/`, assets, `tests/`, Git.
+**Pronto quando:** `npm test` e `npm run build` passam e no navegador (porta 5196, encerre depois) você viu o modal de vitória (Ervas), o de derrota e o HUD sem Almas. Capturas em `C:\Users\marca\AppData\Local\Temp\claude\6c0b19bfccb97544\a5a78be9-f64a-40a6-a789-0967cf940a2a\scratchpad\t157_*.png`.
+**Entrega:** até 5 linhas.

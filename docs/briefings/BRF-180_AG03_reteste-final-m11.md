@@ -1,0 +1,11 @@
+# BRF-180 — AG03 — T-168 Reteste final do M11 (menu-hub)
+**Leia:** `docs/agentes/AG03_QA.md`, `docs/metodo/Validacao.md` (**suíte 1×**, Decisão #25), `docs/qa/qa-M11.md`, `tests/e2e/m11-menu.spec.ts` (~685-733). **Regra:** respostas curtas; sem `git commit`/`push`/`branch`/`checkout`/`reset`/`stash`.
+**Contexto (`244a96c`):** G3 (`MenuHubScene.ts`) e G4 (`LootGenerator.ts`) foram corrigidos. O `m11-menu` passou **13/14**; apenas o teste #13 falhou em `m11-menu.spec.ts:702-711` porque, quando `seedSave` sorteia um Elmo Lendário, o botão `DESEQUIPAR` fica em `y ≈ 485–496` (fora da faixa `470..380`) e clicar `SLOT_HELM` a cada iteração fecha o tooltip ao acertar o backdrop.
+**Fazer:**
+(1) Em `tests/e2e/m11-menu.spec.ts` (~701-711), estabilize o clique em `DESEQUIPAR` no teste #13 (ex.: abrir o tooltip em `SLOT_HELM` uma vez e varrer `y` de `505` até `380`, ou garantir elmo consistente/reabrir só se fechado).
+(2) No PowerShell, prefixe com `$env:PATH = "C:\Users\msm\AppData\Local\Programs\nodejs;$env:PATH"` e use `npm.cmd`/`npx.cmd` (para Playwright, tente sandboxed e se bloquear use `BypassSandbox: true`). Rode **1×**: `npm.cmd run typecheck`, `npm.cmd test`, `npm.cmd run build`, `npx.cmd playwright test tests/e2e/m11-menu.spec.ts --workers=1` e regressão (`m1-dungeon`, `m2-loot`, `m6-monsters`, `m7-ui-landscape`, `--workers=1`). Se algum falhar, repita só o arquivo que falhou (Decisão #25).
+(3) Garanta que as capturas pendentes (`m11_painel_masmorras_pc/mobile`, `m11_inventario_pc/mobile`, `m11_dungeon_teste_pc/mobile`, `m11_bau_cheio_aviso`, `m11_volta_bau_cheio`) sejam regeradas sem apagar capturas de outros marcos.
+(4) Atualize `docs/qa/qa-M11.md` acrescentando a seção **Reteste final (T-168, commit `244a96c`)**, com veredito, tabela de resultados, confirmação de G3/G4 corrigidos, tamanho do build/chunks e roteiro curto atualizado para o dono.
+**Permitido:** `tests/`, `docs/qa/`. **Proibido:** `src/`, `public/`, `assets/`, configs de build, Git.
+**Pronto quando:** `typecheck`, `npm test` (165/165), `npm run build`, `m11-menu` (14/14) e regressão E2E passam, e `docs/qa/qa-M11.md` está atualizado.
+**Entrega:** até 8 linhas com veredito, contagem de testes, tamanho do build, capturas atualizadas e eventuais ressalvas.

@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import { resolveViewportConfig, type CampaignStageId, type ViewportConfig } from '../../core/index';
-import type { VillageDungeonEntry } from '../../core/progression/VillageHub';
 import {
   DF_FONTS,
   DF_PALETTE,
@@ -8,6 +7,19 @@ import {
   drawOrnateButton,
   drawOrnatePanel,
 } from './DarkFantasyUiBuilder';
+
+/** Missão listada no portão (T-147): aceita e ainda não cumprida. */
+export interface GateMissionEntry {
+  stageId: CampaignStageId;
+  title: string;
+  /** Quem pediu (ex.: "Lyra"). */
+  giverName?: string;
+  /** Ícone da folha `mission_icons`; sem ícone, desenha uma espada. */
+  icon?: 'herb' | 'tools' | null;
+}
+
+const MISSION_ICONS_TEXTURE = 'mission_icons';
+const MISSION_ICON_FRAME: Record<'herb' | 'tools', number> = { herb: 0, tools: 1 };
 
 export interface GateModalCallbacks {
   onSelectStage: (stageId: CampaignStageId) => void;
@@ -18,29 +30,31 @@ interface GateRowView {
   container: Phaser.GameObjects.Container;
   bg: Phaser.GameObjects.Graphics;
   icon: Phaser.GameObjects.Graphics;
+  iconImage: Phaser.GameObjects.Image;
   title: Phaser.GameObjects.Text;
+  giver: Phaser.GameObjects.Text;
   status: Phaser.GameObjects.Text;
   zone: Phaser.GameObjects.Zone;
-  entry: VillageDungeonEntry | null;
+  entry: GateMissionEntry | null;
   hovered: boolean;
 }
 
 const PANEL_W = 440;
 const ROW_W = 380;
-const ROW_H = 50;
+const ROW_H = 56;
 const ROW_GAP = 10;
 const MAX_ROWS = 4;
 
 /**
- * Tela do portão da Vila (T-139): lista das dungeons do prólogo.
- * Liberadas clicáveis, travadas com cadeado, concluídas marcadas.
+ * Tela do portão da Vila (T-139, T-147): lista as missões aceitas e ainda não
+ * cumpridas, com o ícone e quem pediu. Clicar (ou 1-4) entra na dungeon.
  */
 export class GateModal {
   private readonly scene: Phaser.Scene;
   private readonly callbacks: GateModalCallbacks;
   private viewport: ViewportConfig;
   private opened = false;
-  private entries: VillageDungeonEntry[] = [];
+  private entries: GateMissionEntry[] = [];
 
   private readonly root: Phaser.GameObjects.Container;
   private readonly backdrop: Phaser.GameObjects.Graphics;
@@ -79,7 +93,7 @@ export class GateModal {
       })
       .setOrigin(0.5);
     this.subtitle = scene.add
-      .text(0, 0, 'Escolha a missão', {
+      .text(0, 0, 'Missões aceitas', {
         fontFamily: DF_FONTS.BODY,
         fontSize: '12px',
         color: DF_PALETTE.textMuted,
@@ -136,7 +150,7 @@ export class GateModal {
         this.close();
       } else if (/^Digit[1-9]$/.test(event.code)) {
         const entry = this.entries[Number(event.code.slice(5)) - 1];
-        if (entry?.status === 'available') {
+        if (entry) {
           this.callbacks.onSelectStage(entry.stageId);
         }
       }
@@ -150,7 +164,7 @@ export class GateModal {
     return this.opened;
   }
 
-  public open(entries: VillageDungeonEntry[]): void {
+  public open(entries: GateMissionEntry[]): void {
     this.entries = entries.slice(0, MAX_ROWS);
     this.opened = true;
     this.layout();
@@ -186,12 +200,21 @@ export class GateModal {
     const scene = this.scene;
     const bg = scene.add.graphics();
     const icon = scene.add.graphics();
+    const iconImage = scene.add.image(-ROW_W / 2 + 28, 0, '__DEFAULT').setScale(2).setVisible(false);
     const title = scene.add
-      .text(-ROW_W / 2 + 52, 0, '', {
+      .text(-ROW_W / 2 + 52, -8, '', {
         fontFamily: DF_FONTS.TITLE,
         fontSize: '14px',
         color: DF_PALETTE.textParchment,
         fontStyle: 'bold',
+        resolution: 2,
+      })
+      .setOrigin(0, 0.5);
+    const giver = scene.add
+      .text(-ROW_W / 2 + 52, 11, '', {
+        fontFamily: DF_FONTS.BODY,
+        fontSize: '11px',
+        color: DF_PALETTE.textMuted,
         resolution: 2,
       })
       .setOrigin(0, 0.5);
@@ -205,8 +228,19 @@ export class GateModal {
       })
       .setOrigin(1, 0.5);
     const zone = scene.add.zone(0, 0, ROW_W, ROW_H).setInteractive({ useHandCursor: true });
-    const container = scene.add.container(0, 0, [bg, icon, title, status, zone]);
-    const row: GateRowView = { container, bg, icon, title, status, zone, entry: null, hovered: false };
+    const container = scene.add.container(0, 0, [bg, icon, iconImage, title, giver, status, zone]);
+    const row: GateRowView = {
+      container,
+      bg,
+      icon,
+      iconImage,
+      title,
+      giver,
+      status,
+      zone,
+      entry: null,
+      hovered: false,
+    };
 
     zone.on('pointerover', () => {
       row.hovered = true;
@@ -220,7 +254,7 @@ export class GateModal {
       'pointerdown',
       (_p: Phaser.Input.Pointer, _x: number, _y: number, event?: Phaser.Types.Input.EventData) => {
         event?.stopPropagation?.();
-        if (row.entry?.status === 'available') {
+        if (row.entry) {
           this.callbacks.onSelectStage(row.entry.stageId);
         }
       }
@@ -273,7 +307,8 @@ export class GateModal {
       row.container.setPosition(0, listTop + i * (ROW_H + ROW_GAP) + ROW_H / 2);
       if (entry) {
         row.title.setText(`${i + 1}. ${entry.title}`);
-        row.zone.input!.cursor = entry.status === 'available' ? 'pointer' : 'default';
+        row.giver.setText(entry.giverName ? `Pedido de ${entry.giverName}` : '');
+        row.title.setY(entry.giverName ? -8 : 0);
         this.drawRow(row);
       }
     });
@@ -289,52 +324,47 @@ export class GateModal {
     if (!entry) {
       return;
     }
-    const available = entry.status === 'available';
-    const completed = entry.status === 'completed';
-    const variant = available ? 'gold' : completed ? 'emerald' : 'iron';
     drawOrnateButton(row.bg, -ROW_W / 2, -ROW_H / 2, ROW_W, ROW_H, {
-      variant,
+      variant: 'gold',
       bevel: 8,
-      hovered: available && row.hovered,
-      disabled: entry.status === 'locked',
+      hovered: row.hovered,
       clear: true,
     });
-
-    row.title.setColor(
-      available ? DF_PALETTE.textParchment : completed ? '#d1fae5' : DF_PALETTE.textMuted
-    );
-    row.status
-      .setText(available ? 'Entrar ›' : completed ? 'Concluída' : 'Travada')
-      .setColor(available ? DF_PALETTE.textGold : completed ? DF_PALETTE.textSuccess : DF_PALETTE.textMuted);
+    row.title.setColor(DF_PALETTE.textParchment);
+    row.status.setText('Entrar ›').setColor(DF_PALETTE.textGold);
 
     const g = row.icon;
     g.clear();
     const ix = -ROW_W / 2 + 28;
     g.fillStyle(DF_PALETTE.deepRecess, 0.95);
-    g.fillCircle(ix, 0, 15);
-    g.lineStyle(1.5, available ? DF_PALETTE.agedGold : completed ? 0x34a875 : DF_PALETTE.metalBorder, 0.95);
-    g.strokeCircle(ix, 0, 15);
-    if (entry.status === 'locked') {
-      // Cadeado.
-      g.lineStyle(2, 0x94a3b8, 1);
-      g.beginPath();
-      g.arc(ix, -3, 5, Math.PI, 0, false);
-      g.strokePath();
+    g.fillCircle(ix, 0, 17);
+    g.lineStyle(1.5, DF_PALETTE.agedGold, 0.95);
+    g.strokeCircle(ix, 0, 17);
+
+    const iconFrame = entry.icon ? MISSION_ICON_FRAME[entry.icon] : -1;
+    const tex = this.scene.textures.exists(MISSION_ICONS_TEXTURE)
+      ? this.scene.textures.get(MISSION_ICONS_TEXTURE)
+      : null;
+    if (iconFrame >= 0 && tex?.has(String(iconFrame))) {
+      row.iconImage.setTexture(MISSION_ICONS_TEXTURE, iconFrame).setPosition(ix, 0).setVisible(true);
+      return;
+    }
+    row.iconImage.setVisible(false);
+    if (entry.icon === 'herb') {
+      // Reserva: folhas verdes.
+      g.fillStyle(0x4ade80, 1);
+      g.fillEllipse(ix - 4, 0, 7, 12);
+      g.fillEllipse(ix + 4, 0, 7, 12);
+      g.fillStyle(0x166534, 1);
+      g.fillRect(ix - 0.8, 2, 1.6, 7);
+    } else if (entry.icon === 'tools') {
+      // Reserva: martelo.
       g.fillStyle(0x94a3b8, 1);
-      g.fillRoundedRect(ix - 7, -3, 14, 11, 2);
-      g.fillStyle(DF_PALETTE.deepRecess, 1);
-      g.fillCircle(ix, 1.5, 1.8);
-      g.fillRect(ix - 0.8, 1.5, 1.6, 4);
-    } else if (completed) {
-      // Marca de concluída.
-      g.lineStyle(3, 0x4ade80, 1);
-      g.beginPath();
-      g.moveTo(ix - 7, 0);
-      g.lineTo(ix - 2, 5);
-      g.lineTo(ix + 7, -5);
-      g.strokePath();
+      g.fillRect(ix - 7, -7, 12, 5);
+      g.fillStyle(0x92400e, 1);
+      g.fillRect(ix - 2, -2, 3, 11);
     } else {
-      // Espada (liberada).
+      // Espada (missão sem item).
       g.lineStyle(2.4, 0xf1d28a, 1);
       g.lineBetween(ix - 6, 6, ix + 6, -6);
       g.lineStyle(2, 0xd4a95a, 1);

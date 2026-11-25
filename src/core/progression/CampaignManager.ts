@@ -9,6 +9,7 @@ import type {
   DialogueLine,
   SaveProfile,
 } from '../index';
+import { completeMission, getGateMissions, isPrologueMissionId } from './PrologueQuests';
 
 export interface StageOutcomeResult {
   stage: CampaignStageDef;
@@ -32,7 +33,7 @@ export function getCampaignStage(stageId: CampaignStageId): CampaignStageDef {
 export function createDefaultCampaignProgress(): CampaignProgress {
   return {
     phase: 'prologue',
-    currentStageId: 'prologue_grotto',
+    currentStageId: 'mission_herbs',
     completedStages: [],
     seenDialogues: [],
     villageFallTriggered: false,
@@ -62,13 +63,16 @@ export function getAvailableStages(profile: SaveProfile): CampaignStageDef[] {
     stagesByOrder.map((stage) => [stage.id, stage])
   );
 
-  const unlocked = new Set<CampaignStageId>(['prologue_grotto']);
-  unlocked.add(campaign.currentStageId);
+  // Prólogo (T-142): só as missões aceitas e não cumpridas (as do portão).
+  const unlocked = new Set<CampaignStageId>(getGateMissions(profile).map((stage) => stage.id));
 
   for (const completedId of campaign.completedStages) {
-    unlocked.add(completedId);
     const completedDef = stageMap.get(completedId);
-    if (completedDef?.unlocksStageId) {
+    if (!completedDef || completedDef.phase === 'prologue') {
+      continue;
+    }
+    unlocked.add(completedId);
+    if (completedDef.unlocksStageId) {
       unlocked.add(completedDef.unlocksStageId);
     }
   }
@@ -108,6 +112,19 @@ export function applyStageOutcomeToCampaign(
 ): StageOutcomeResult {
   const campaign = ensureCampaignProgress(profile);
   const stage = getCampaignStage(stageId);
+
+  // Missões do prólogo (T-142): vitória marca como cumprida; derrota não muda nada.
+  if (isPrologueMissionId(stageId)) {
+    const result = victory
+      ? completeMission(profile, stageId)
+      : { changed: false, endedPrologue: false };
+    return {
+      stage,
+      ...(result.endedPrologue ? { unlockedStageId: campaign.currentStageId } : {}),
+      triggeredVillageFall: result.endedPrologue,
+      newlyCompleted: result.changed,
+    };
+  }
 
   if (!victory) {
     return {
@@ -168,7 +185,7 @@ export function setCampaignStageOrPhase(
   } else {
     const currentDef = getCampaignStage(campaign.currentStageId);
     if (currentDef.phase !== 'prologue') {
-      campaign.currentStageId = 'prologue_grotto';
+      campaign.currentStageId = 'mission_herbs';
     }
   }
 }
