@@ -697,13 +697,19 @@ test.describe('SUBMUNDO M11 — Inventário e mochila cheia', () => {
 
     // Desequipar com o Baú cheio: bloqueado, item continua equipado, nada some, aviso aparece.
     await clearTexts(page);
-    // A altura do tooltip varia com o nº de afixos: tenta alturas do botão "Desequipar" até o aviso.
+    // A altura do tooltip varia com o nº de afixos (até ~496px no Lendário): reseta o modal a cada tentativa para nunca fechar o tooltip ao clicar SLOT_HELM.
     let warned = false;
-    for (let y = 470; y >= 380 && !warned; y -= 10) {
+    for (let y = 505; y >= 380 && !warned; y -= 10) {
+      await page.evaluate(() => {
+        const d = window.__SUBMUNDO_MENU_DEBUG__!;
+        d.closeInventory();
+        d.openInventory();
+      });
+      await page.waitForTimeout(150);
       await tap(page, SLOT_HELM);
       await page.waitForTimeout(200);
       await tap(page, { x: TOOLTIP_PRIMARY.x, y });
-      warned = await seenText(page, /Ba. cheio/, 500).then(
+      warned = await seenText(page, /Ba. cheio/, 450).then(
         () => true,
         () => false
       );

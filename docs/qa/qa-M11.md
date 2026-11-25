@@ -6,7 +6,7 @@
 - **Commit validado:** `24bd676` (branch `dev`) + specs desta validação (não commitados)
 - **Escopo (Decisões #28/#29):** o jogo abre no `MenuHubScene`; a Vila saiu do fluxo; Forja, Personagem, Habilidades e Configurações bloqueados ("Em breve"); painel "Escolher dungeon" com a "Masmorra teste" (testArena); Inventário dentro do menu; todo fim de dungeon volta ao menu (`returnToHub`); `?test`/`?map`/`?biome`/`?seed` abrem a testArena direto; `SaveProfile.menuUnlocks`.
 - **Rodadas:** **1 rodada completa** (Decisão #25); só o `m2-loot` foi repetido (falha de ambiente: "Timed out waiting 15000ms from config.webServer" na subida do preview) e passou.
-- **Veredito (T-164, histórico):** PASSA COM RESSALVAS (ver **Seção 9 — Reteste T-166**, commit `9caa6f6`, abaixo: veredito atual **NÃO PASSA** — 0 bloqueantes, 2 graves ativos: G3 não corrigido + G4 colisão de `instanceId` entre sessões).
+- **Veredito (T-164, histórico):** PASSA COM RESSALVAS → **T-166:** NÃO PASSA → **T-168 (atual):** **PASSA** (*0 bloqueantes, 0 graves, 0 menores pendentes graves*). G1, G2, G3 e G4 corrigidos.
 
 ---
 
@@ -175,3 +175,45 @@ Task de ressalvas T-165 (G1 AG04/AG02, G2 AG01, G3 AG02, M1-M5 ao gosto do líde
 ### Próximo passo após T-166
 
 Corrigir **G3** (`MenuHubScene.ts`: não chamar `removeInteractive()` + `setInteractive()` dentro do mesmo `pointerdown`, ou apenas atualizar texturas/estilos dos filhos sem remover a área interativa / agendar para depois) e **G4** (`LootGenerator.ts:244`: gerar `instanceId` único persistente entre sessões, ex. `crypto.randomUUID()` ou prefixo com timestamp/contador único), seguido de novo reteste de `m11-menu` antes do fechamento do marco.
+
+---
+
+## 10. Reteste final (T-168, commit `244a96c`)
+
+- **Data:** 2026-11-25
+- **Briefing:** `BRF-180_AG03_reteste-final-m11.md` (`T-168`)
+- **Commit validado:** `244a96c` (branch `dev`) + ajuste no teste #13 em `tests/e2e/m11-menu.spec.ts:700-715`
+- **Veredito final:** **PASSA** — *0 bloqueantes, 0 graves, 0 menores críticos pendentes*. Todos os graves (**G1**, **G2**, **G3**, **G4**) e menores (**M1–M5**) do M11 estão corrigidos e validados.
+- **Rodadas (Decisão #25):** 1 rodada de `typecheck`, `npm test`, `npm run build`, `m11-menu` e regressão E2E (`m1`, `m2`, `m6`, `m7`). Sem repetições por falha. (Ajuste pontual no teste #13 de `m11-menu.spec.ts` para resetar o modal antes de cada tentativa e varrer `y` de `505` a `380`, cobrindo tooltip de Elmo Lendário até `~496 px`).
+
+### Resultados do reteste final
+
+| Item | Resultado |
+| :--- | :--- |
+| `npm run typecheck` (`tsc --noEmit`) | **OK** (0 erros) |
+| `npm test` (Vitest) | **165/165** (23 arquivos, 21,10 s) |
+| `npm run build` (`tsc --noEmit` + `vite build`) | **OK**; `dist/` **4,22 MB** (`4.220.570` bytes / `4,03 MiB`); `dist/index.html` **6,06 kB** (gzip **2,02 kB**); `dist/assets/index-DC6Jfqx3.js` **1.823,98 kB** (gzip **441,99 kB**). Apenas aviso padrão de chunk > 500 kB |
+| E2E `m11-menu` (`--workers=1`) | **14/14 passam** (2,8 min) |
+| E2E regressão (`m1-dungeon`, `m2-loot`, `m6-monsters`, `m7-ui-landscape`, `--workers=1`) | **6/6 passam** (48,0 s): `m1` 1/1, `m2` 1/1, `m6` 1/1, `m7` 3/3 |
+
+### Confirmação de G3 e G4 corrigidos
+
+| Item | Status | Evidência |
+| :--- | :--- | :--- |
+| **G3** — Botão "Masmorras" após "Voltar" (`MenuHubScene.ts`) | ✅ **Corrigido** | Testes #1, #2 (PC) e #3 (Mobile) passam: clicar/tocar em **Voltar** fecha o painel e clicar/tocar em **Masmorras** reabre normalmente (`m11_painel_masmorras_pc.png`, `m11_painel_masmorras_mobile.png`). |
+| **G4** — Colisão de `instanceId` entre sessões (`LootGenerator.ts`) | ✅ **Corrigido** | Teste #14 passa: mesmo após reload com Baú 30/30, novo drop tem `instanceId` único; ao vencer a run, o menu exibe `"Baú cheio: 1 item(ns) não couberam."` (`m11_volta_bau_cheio.png`, M3 também efetivo). |
+
+### Capturas atualizadas (`docs/qa/screenshots/`)
+
+- Todas as 18 capturas `m11_*.png` foram regeradas nesta rodada (incluindo `m11_painel_masmorras_pc/mobile`, `m11_inventario_pc/mobile`, `m11_dungeon_teste_pc/mobile`, `m11_bau_cheio_aviso`, `m11_volta_bau_cheio`), além das capturas de regressão `m1-*`, `m2-*`, `m6-*` e `m7-*`. Nenhuma captura de outros marcos foi apagada.
+
+### Roteiro curto para o dono (aparelho real)
+
+1. Abra o jogo em paisagem no celular (`~844×390`): toque em **Voltar** no painel "Escolher dungeon" e depois em **Masmorras** — o painel deve reabrir normalmente.
+2. Toque em **Forja/Personagem/Habilidades/Configurações**: devem exibir **"Em breve"** sem abrir nada.
+3. Abra **Inventário**, equipe/desequipe um item e feche no **X**; com Baú 30/30, confirme **`MOCHILA (30/30) · BAÚ CHEIO`** e o aviso ao tentar desequipar.
+4. Entre em **Masmorra teste → Entrar**, jogue até o fim e toque em **"Voltar ao menu"**; em nova sessão com Baú 30/30 e drop novo, confirme o aviso `"Baú cheio: 1 item(ns) não couberam."` ao voltar.
+
+### Ressalva / Próximo passo
+
+- Aparelho físico real (toque, áudio, orientação) não verificado automaticamente; aviso de chunk > 500 kB mantido. M11 aprovado para fechamento pelo AG00.
